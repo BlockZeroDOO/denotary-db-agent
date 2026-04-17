@@ -53,10 +53,13 @@
         "slot_name": "denotary_slot",
         "publication_name": "denotary_pub",
         "output_plugin": "test_decoding",
+        "logical_runtime_mode": "peek",
         "auto_create_slot": true,
         "auto_create_publication": true,
         "replica_identity_full": true,
         "logical_wait_poll_sec": 0.5,
+        "logical_stream_timeout_sec": 2.0,
+        "logical_stream_idle_timeout_sec": 0.5,
         "logical_warn_retained_wal_bytes": 268435456,
         "logical_warn_flush_lag_bytes": 67108864
       }

@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from typing import Any, Iterator
 
 from denotary_db_agent.adapters.base import AdapterCapabilities, BaseAdapter
+from denotary_db_agent.adapters.postgres_replication import PostgresReplicationSession
 from denotary_db_agent.models import ChangeEvent, SourceCheckpoint
 
 try:
@@ -79,8 +80,8 @@ class PostgresAdapter(BaseAdapter):
                 else (
                     (
                         "Logical decoding / WAL CDC is enabled through a logical replication slot and "
-                        "pgoutput publication setup. Runtime binary polling is implemented through "
-                        "pg_logical_slot_peek_binary_changes(); replication-protocol streaming is not enabled yet."
+                        "pgoutput publication setup. Runtime binary capture supports both "
+                        "pg_logical_slot_peek_binary_changes() and optional bounded replication-protocol streaming."
                     )
                     if logical_plugin == "pgoutput"
                     else "Logical decoding / WAL CDC is enabled through a logical replication slot and test_decoding output."
@@ -224,11 +225,15 @@ class PostgresAdapter(BaseAdapter):
                 last_xid, last_event_index, _commit_lsn, _advance_lsn = self._parse_logical_checkpoint_state(checkpoint)
                 row_limit = int(self.config.options.get("row_limit", self.config.batch_size))
                 plugin = self._logical_output_plugin()
-                decoded_rows = (
-                    self._fetch_pgoutput_decoded_rows(connection, spec_map, row_limit)
-                    if plugin == "pgoutput"
-                    else self._fetch_logical_decoded_rows(connection, spec_map, row_limit)
-                )
+                runtime_mode = self._logical_runtime_mode()
+                if plugin == "pgoutput" and runtime_mode == "stream":
+                    decoded_rows = self._fetch_pgoutput_stream_rows(spec_map, row_limit, self._parse_logical_checkpoint(checkpoint))
+                else:
+                    decoded_rows = (
+                        self._fetch_pgoutput_decoded_rows(connection, spec_map, row_limit)
+                        if plugin == "pgoutput"
+                        else self._fetch_logical_decoded_rows(connection, spec_map, row_limit)
+                    )
                 processed_count = 0
                 for xid, lsn, commit_lsn, advance_lsn, event_index, spec, operation, before_row, after_row in decoded_rows:
                     if xid == last_xid and event_index <= last_event_index:
@@ -805,6 +810,65 @@ class PostgresAdapter(BaseAdapter):
 
             fetch_limit *= 2
 
+    def _fetch_pgoutput_stream_rows(
+        self,
+        spec_map: dict[str, PostgresTableSpec],
+        row_limit: int,
+        start_lsn: str,
+    ) -> list[tuple[str, str, str, bool, int, PostgresTableSpec, str, dict[str, Any] | None, dict[str, Any] | None]]:
+        max_messages = max(row_limit * 8, row_limit + 8)
+        total_timeout_sec = float(self.config.options.get("logical_stream_timeout_sec", 2.0))
+        idle_timeout_sec = float(self.config.options.get("logical_stream_idle_timeout_sec", 0.5))
+        with PostgresReplicationSession(
+            conninfo=self._replication_conninfo(),
+            slot_name=self._logical_slot_name(),
+            publication_name=self._logical_publication_name(),
+            start_lsn=start_lsn or "0/0",
+        ) as session:
+            frames = session.read_messages(
+                max_messages=max_messages,
+                total_timeout_sec=total_timeout_sec,
+                idle_timeout_sec=idle_timeout_sec,
+            )
+
+        entries: list[dict[str, Any]] = []
+        current_xid = ""
+        for frame in frames:
+            if frame.kind != "xlogdata" or not frame.payload:
+                continue
+            parsed = self._parse_pgoutput_message(frame.payload, spec_map)
+            if parsed is None:
+                continue
+            kind = str(parsed["kind"])
+            if kind == "begin":
+                current_xid = str(parsed["xid"])
+                entries.append({"kind": "begin", "xid": current_xid, "lsn": frame.wal_start_lsn})
+                continue
+            if kind == "commit":
+                entries.append(
+                    {
+                        "kind": "commit",
+                        "xid": current_xid,
+                        "lsn": parsed["commit_lsn"] or frame.wal_end_lsn,
+                    }
+                )
+                current_xid = ""
+                continue
+            if kind != "data":
+                continue
+            entries.append(
+                {
+                    "kind": "data",
+                    "xid": current_xid,
+                    "lsn": frame.wal_start_lsn,
+                    "spec": parsed["spec"],
+                    "operation": parsed["operation"],
+                    "before_row": parsed["before_row"],
+                    "after_row": parsed["after_row"],
+                }
+            )
+        return self._materialize_logical_entries(entries)
+
     def _materialize_logical_entries(
         self,
         entries: list[dict[str, Any]],
@@ -1185,8 +1249,26 @@ class PostgresAdapter(BaseAdapter):
     def _logical_output_plugin(self) -> str:
         return str(self.config.options.get("output_plugin", "test_decoding"))
 
+    def _logical_runtime_mode(self) -> str:
+        return str(self.config.options.get("logical_runtime_mode", "peek")).lower()
+
     def _logical_publication_name(self) -> str:
         return str(self.config.options.get("publication_name", f"denotary_{self.config.id}_pub"))
+
+    def _replication_conninfo(self) -> str:
+        parts = [
+            f"host={self.config.connection.get('host')}",
+            f"port={self.config.connection.get('port')}",
+            f"user={self.config.connection.get('username')}",
+            f"dbname={self.config.connection.get('database')}",
+        ]
+        if self.config.connection.get("password"):
+            parts.append(f"password={self.config.connection.get('password')}")
+        if self.config.connection.get("sslmode"):
+            parts.append(f"sslmode={self.config.connection.get('sslmode')}")
+        if self.config.connection.get("connect_timeout"):
+            parts.append(f"connect_timeout={self.config.connection.get('connect_timeout')}")
+        return " ".join(parts)
 
     def _parse_test_decoding_change(
         self,

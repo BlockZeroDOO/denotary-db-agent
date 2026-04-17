@@ -196,6 +196,7 @@ The current PostgreSQL adapter is the first live implementation and works as:
 - in logical mode, surface slot backlog and WAL lag in `inspect`
 - in logical mode, wake daemon loops when the logical slot already has pending changes
 - in `pgoutput` mode, manage the publication lifecycle inside the agent
+- in `pgoutput` mode, support both default SQL peeking and optional bounded replication-protocol streaming
 
 Expected source options:
 
@@ -206,11 +207,14 @@ Expected source options:
 - optional `cleanup_processed_events` for trigger mode, default `true`
 - optional `slot_name` for logical mode
 - optional `output_plugin`, default `test_decoding`
+- optional `logical_runtime_mode`, default `peek`
 - optional `publication_name` for `output_plugin = "pgoutput"`
 - optional `auto_create_slot`, default `true`
 - optional `auto_create_publication`, default `true`
 - optional `replica_identity_full`, default `true`
 - optional `logical_wait_poll_sec`, default `0.5`
+- optional `logical_stream_timeout_sec`, default `2.0`
+- optional `logical_stream_idle_timeout_sec`, default `0.5`
 - optional `logical_warn_retained_wal_bytes`, default `268435456`
 - optional `logical_warn_flush_lag_bytes`, default `67108864`
 

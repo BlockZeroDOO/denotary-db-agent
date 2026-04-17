@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import json
+import struct
 import unittest
 from contextlib import contextmanager
 from unittest.mock import patch
 
 from denotary_db_agent.adapters.postgres import PostgresAdapter, PostgresTableSpec
+from denotary_db_agent.adapters.postgres_replication import parse_copy_data_frame
 from denotary_db_agent.config import SourceConfig
 from denotary_db_agent.models import SourceCheckpoint
 
@@ -434,3 +436,61 @@ class PostgresAdapterTest(unittest.TestCase):
 
         self.assertTrue(changed)
         has_pending.assert_called_once()
+
+    def test_stream_runtime_uses_pgoutput_replication_session(self) -> None:
+        config = self.make_config()
+        config.options["capture_mode"] = "logical"
+        config.options["output_plugin"] = "pgoutput"
+        config.options["logical_runtime_mode"] = "stream"
+        adapter = PostgresAdapter(config)
+        spec = PostgresTableSpec(
+            schema_name="public",
+            table_name="invoices",
+            watermark_column="updated_at",
+            commit_timestamp_column="updated_at",
+            primary_key_columns=["id"],
+            selected_columns=["id", "updated_at", "status"],
+        )
+
+        @contextmanager
+        def dummy_connect():
+            yield object()
+
+        with patch.object(adapter, "_connect", dummy_connect), patch.object(
+            adapter, "_load_table_specs", return_value=[spec]
+        ), patch.object(adapter, "_ensure_logical_cdc_setup"), patch.object(
+            adapter,
+            "_fetch_pgoutput_stream_rows",
+            return_value=[
+                (
+                    "736",
+                    "0/16B6A28",
+                    "0/16B6A40",
+                    True,
+                    1,
+                    spec,
+                    "insert",
+                    None,
+                    {"id": 1, "status": "draft", "updated_at": "2026-04-17T12:00:01Z"},
+                )
+            ],
+        ) as fetch_stream:
+            events = list(adapter.start_stream(None))
+
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].operation, "insert")
+        fetch_stream.assert_called_once()
+
+    def test_parse_replication_frame_xlogdata(self) -> None:
+        payload = (
+            b"w"
+            + struct.pack("!Q", 0x0000000100000002)
+            + struct.pack("!Q", 0x0000000100000003)
+            + struct.pack("!Q", 123456789)
+            + b"ABC"
+        )
+        frame = parse_copy_data_frame(payload)
+        self.assertEqual(frame.kind, "xlogdata")
+        self.assertEqual(frame.wal_start_lsn, "1/2")
+        self.assertEqual(frame.wal_end_lsn, "1/3")
+        self.assertEqual(frame.payload, b"ABC")

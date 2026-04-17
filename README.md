@@ -42,7 +42,9 @@ Current PostgreSQL status:
   - watcher inclusion/finality
   - receipt + audit proof-chain export
 - current logical polling supports both PostgreSQL `test_decoding` and `pgoutput`
-- `pgoutput` currently uses `pg_logical_slot_peek_binary_changes()` with an in-agent binary parser, not replication-protocol streaming yet
+- `pgoutput` supports both:
+  - default `logical_runtime_mode = "peek"` via `pg_logical_slot_peek_binary_changes()`
+  - optional bounded `logical_runtime_mode = "stream"` via low-level replication protocol
 
 ## Quick Start
 
@@ -104,6 +106,7 @@ Note:
 - when `output_plugin = "pgoutput"`, `inspect` shows publication state and tracked publication tables
 - `run --once` uses the configured `dnanchor` private key to sign `verifbill::submit` inside the agent
 - `run` without `--once` keeps the agent in daemon mode and, for PostgreSQL trigger sources, waits on `LISTEN/NOTIFY` before the fallback interval elapses
+- for PostgreSQL `pgoutput`, `logical_runtime_mode = "stream"` enables bounded replication-protocol reads instead of SQL slot peeking
 - finalized receipts and proof chains are exported under `storage.proof_dir`
 
 ## Live PostgreSQL Harness
