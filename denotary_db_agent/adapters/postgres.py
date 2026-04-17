@@ -229,12 +229,14 @@ class PostgresAdapter(BaseAdapter):
                 plugin = self._logical_output_plugin()
                 runtime_mode = self._logical_runtime_mode()
                 if plugin == "pgoutput" and runtime_mode == "stream":
-                    session = self._ensure_replication_session(self._parse_logical_checkpoint(checkpoint) or "0/0")
+                    restart_lsn = self._parse_logical_checkpoint(checkpoint) or "0/0"
+                    session = self._ensure_replication_session(restart_lsn)
                     try:
                         decoded_rows = self._fetch_pgoutput_stream_rows(session, spec_map, row_limit)
                     except Exception:
                         self._close_replication_session(send_feedback=False)
-                        raise
+                        session = self._ensure_replication_session(restart_lsn)
+                        decoded_rows = self._fetch_pgoutput_stream_rows(session, spec_map, row_limit)
                     processed_count = 0
                     for xid, lsn, commit_lsn, advance_lsn, event_index, spec, operation, before_row, after_row in decoded_rows:
                         if xid == last_xid and event_index <= last_event_index:
@@ -1320,7 +1322,7 @@ class PostgresAdapter(BaseAdapter):
     def _ensure_replication_session(self, start_lsn: str) -> PostgresReplicationSession:
         desired_lsn = start_lsn or "0/0"
         if self._active_replication_session is not None:
-            if self._active_replication_start_lsn == desired_lsn:
+            if self._active_replication_session.is_open and self._active_replication_start_lsn == desired_lsn:
                 return self._active_replication_session
             self._close_replication_session(send_feedback=True)
         session = PostgresReplicationSession(

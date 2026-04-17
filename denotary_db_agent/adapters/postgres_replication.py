@@ -79,6 +79,10 @@ class PostgresReplicationSession:
         self._pgconn = None
         self._closed = True
 
+    @property
+    def is_open(self) -> bool:
+        return (not self._closed) and self._connection is not None and self._pgconn is not None
+
     def read_messages(
         self,
         *,

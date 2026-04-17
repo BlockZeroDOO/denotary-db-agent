@@ -521,6 +521,64 @@ class PostgresAdapterTest(unittest.TestCase):
 
         fake_session.update_acknowledged_lsn.assert_called_once_with("0/16B6A40")
 
+    def test_stream_runtime_reconnects_after_fetch_failure(self) -> None:
+        config = self.make_config()
+        config.options["capture_mode"] = "logical"
+        config.options["output_plugin"] = "pgoutput"
+        config.options["logical_runtime_mode"] = "stream"
+        adapter = PostgresAdapter(config)
+        spec = PostgresTableSpec(
+            schema_name="public",
+            table_name="invoices",
+            watermark_column="updated_at",
+            commit_timestamp_column="updated_at",
+            primary_key_columns=["id"],
+            selected_columns=["id", "updated_at", "status"],
+        )
+
+        @contextmanager
+        def dummy_connect():
+            yield object()
+
+        first_session = unittest.mock.Mock()
+        first_session.is_open = True
+        first_session.close = unittest.mock.Mock()
+        second_session = unittest.mock.Mock()
+        second_session.is_open = True
+        second_session.close = unittest.mock.Mock()
+
+        with patch.object(adapter, "_connect", dummy_connect), patch.object(
+            adapter, "_load_table_specs", return_value=[spec]
+        ), patch.object(adapter, "_ensure_logical_cdc_setup"), patch.object(
+            adapter,
+            "_ensure_replication_session",
+            side_effect=[first_session, second_session],
+        ) as ensure_session, patch.object(
+            adapter,
+            "_fetch_pgoutput_stream_rows",
+            side_effect=[
+                RuntimeError("broken stream"),
+                [
+                    (
+                        "736",
+                        "0/16B6A28",
+                        "0/16B6A40",
+                        True,
+                        1,
+                        spec,
+                        "insert",
+                        None,
+                        {"id": 1, "status": "draft", "updated_at": "2026-04-17T12:00:01Z"},
+                    )
+                ],
+            ],
+        ):
+            events = list(adapter.start_stream(None))
+
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].operation, "insert")
+        self.assertEqual(ensure_session.call_count, 2)
+
     def test_parse_replication_frame_xlogdata(self) -> None:
         payload = (
             b"w"

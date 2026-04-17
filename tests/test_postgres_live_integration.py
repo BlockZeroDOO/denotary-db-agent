@@ -809,3 +809,62 @@ class PostgresLiveIntegrationTest(unittest.TestCase):
 
         deliveries = engine.store.list_deliveries("pg-core-ledger")
         self.assertEqual(len(deliveries), 2)
+
+    def test_live_postgres_pgoutput_stream_recovers_after_session_close(self) -> None:
+        self._write_config(capture_mode="logical", backfill_mode="none")
+        config = json.loads(self.config_path.read_text(encoding="utf-8"))
+        config["sources"][0]["options"]["output_plugin"] = "pgoutput"
+        config["sources"][0]["options"]["logical_runtime_mode"] = "stream"
+        config["sources"][0]["options"]["logical_stream_timeout_sec"] = 2.0
+        config["sources"][0]["options"]["logical_stream_idle_timeout_sec"] = 0.5
+        self.config_path.write_text(json.dumps(config), encoding="utf-8")
+
+        engine = AgentEngine(load_config(self.config_path))
+        engine.validate()
+        engine.bootstrap("pg-core-ledger")
+
+        with psycopg.connect(
+            host="127.0.0.1",
+            port=55432,
+            user="denotary",
+            password="denotarypw",
+            dbname="ledger",
+        ) as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    insert into public.invoices (id, status, amount, updated_at)
+                    values (7201, 'draft', 55.00, '2026-04-17T15:20:01Z')
+                    """
+                )
+            connection.commit()
+
+        first_result = engine.run_once()
+        self.assertEqual(first_result["processed"], 1)
+        self.assertEqual(first_result["failed"], 0)
+
+        runtime = engine.runtimes()[0]
+        runtime.adapter._close_replication_session(send_feedback=False)
+
+        with psycopg.connect(
+            host="127.0.0.1",
+            port=55432,
+            user="denotary",
+            password="denotarypw",
+            dbname="ledger",
+        ) as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    insert into public.invoices (id, status, amount, updated_at)
+                    values (7202, 'draft', 56.00, '2026-04-17T15:20:02Z')
+                    """
+                )
+            connection.commit()
+
+        second_result = engine.run_once()
+        self.assertEqual(second_result["processed"], 1)
+        self.assertEqual(second_result["failed"], 0)
+
+        deliveries = engine.store.list_deliveries("pg-core-ledger")
+        self.assertEqual(len(deliveries), 2)
