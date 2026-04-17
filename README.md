@@ -78,6 +78,7 @@ See:
 - [docs/config-reference.md](docs/config-reference.md)
 - [docs/architecture.md](docs/architecture.md)
 - [docs/operator-guide.md](docs/operator-guide.md)
+- [docs/deployment-guide.md](docs/deployment-guide.md)
 - [docs/supported-databases.md](docs/supported-databases.md)
 - [docs/verifbill-permission-model.md](docs/verifbill-permission-model.md)
 - [docs/verifbill-permission-commands.md](docs/verifbill-permission-commands.md)
@@ -159,6 +160,21 @@ This harness:
 - inserts live rows
 - runs `denotary-db-agent` against the live database
 - verifies watcher registration, checkpoint resume behavior, cleanup of processed trigger CDC rows, and logical decoding capture
+
+## Deployment
+
+Production packaging templates are included for:
+
+- `systemd`
+- Windows Service
+- Docker Compose
+
+See:
+
+- [docs/deployment-guide.md](docs/deployment-guide.md)
+- [deploy/systemd/denotary-db-agent.service.example](deploy/systemd/denotary-db-agent.service.example)
+- [deploy/docker-compose.example.yml](deploy/docker-compose.example.yml)
+- [scripts/install-windows-service.ps1](scripts/install-windows-service.ps1)
 
 ## Full-Cycle Result
 

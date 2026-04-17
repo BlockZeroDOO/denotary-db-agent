@@ -12,8 +12,8 @@ services:
       - --config
       - /app/config/agent.json
       - run
-      - --once
+      - --interval-sec
+      - "5"
 
 volumes:
   denotary-db-agent-state:
-

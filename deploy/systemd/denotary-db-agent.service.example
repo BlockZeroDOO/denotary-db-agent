@@ -1,0 +1,18 @@
+[Unit]
+Description=deNotary DB Agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=denotary
+Group=denotary
+WorkingDirectory=/opt/denotary-db-agent
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/denotary-db-agent/.venv/bin/denotary-db-agent --config /etc/denotary-db-agent/agent.json run --interval-sec 5
+Restart=always
+RestartSec=5
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target
