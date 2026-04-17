@@ -6,7 +6,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator
 
-from denotary_db_agent.models import DeliveryAttempt, SourceCheckpoint
+from denotary_db_agent.models import DeliveryAttempt, ProofArtifact, SourceCheckpoint
 
 
 class CheckpointStore:
@@ -53,6 +53,15 @@ class CheckpointStore:
                     reason text not null,
                     payload_json text not null,
                     created_at text not null
+                );
+
+                create table if not exists proofs (
+                    request_id text primary key,
+                    source_id text not null,
+                    receipt_json text,
+                    audit_chain_json text,
+                    export_path text,
+                    updated_at text not null
                 );
                 """
             )
@@ -143,6 +152,64 @@ class CheckpointStore:
                 ).fetchall()
         return [dict(row) for row in rows]
 
+    def upsert_proof(self, artifact: ProofArtifact) -> None:
+        with self._connect() as connection:
+            connection.execute(
+                """
+                insert into proofs (
+                    request_id, source_id, receipt_json, audit_chain_json, export_path, updated_at
+                ) values (?, ?, ?, ?, ?, ?)
+                on conflict(request_id) do update set
+                    source_id = excluded.source_id,
+                    receipt_json = excluded.receipt_json,
+                    audit_chain_json = excluded.audit_chain_json,
+                    export_path = excluded.export_path,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    artifact.request_id,
+                    artifact.source_id,
+                    json.dumps(artifact.receipt, sort_keys=True) if artifact.receipt else None,
+                    json.dumps(artifact.audit_chain, sort_keys=True) if artifact.audit_chain else None,
+                    artifact.export_path,
+                    artifact.updated_at,
+                ),
+            )
+
+    def get_proof(self, request_id: str) -> dict[str, str | None] | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                select request_id, source_id, receipt_json, audit_chain_json, export_path, updated_at
+                from proofs
+                where request_id = ?
+                """,
+                (request_id,),
+            ).fetchone()
+        return dict(row) if row is not None else None
+
+    def list_proofs(self, source_id: str | None = None) -> list[dict[str, str | None]]:
+        with self._connect() as connection:
+            if source_id:
+                rows = connection.execute(
+                    """
+                    select request_id, source_id, export_path, updated_at
+                    from proofs
+                    where source_id = ?
+                    order by updated_at desc
+                    """,
+                    (source_id,),
+                ).fetchall()
+            else:
+                rows = connection.execute(
+                    """
+                    select request_id, source_id, export_path, updated_at
+                    from proofs
+                    order by updated_at desc
+                    """
+                ).fetchall()
+        return [dict(row) for row in rows]
+
     def push_dlq(self, source_id: str, reason: str, payload: dict, created_at: str) -> None:
         with self._connect() as connection:
             connection.execute(
@@ -162,4 +229,3 @@ class CheckpointStore:
                     "select id, source_id, reason, payload_json, created_at from dlq order by id desc"
                 ).fetchall()
         return [dict(row) for row in rows]
-

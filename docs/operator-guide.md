@@ -13,6 +13,8 @@ Checks:
 - config shape
 - adapter availability
 - live PostgreSQL connectivity for the configured source
+- chain RPC connectivity when `chain_rpc_url` is configured
+- Receipt Service and Audit API health when their URLs are configured
 - tracked table introspection and key column discovery
 
 ### Run One Pass
@@ -25,7 +27,8 @@ In the current scaffold this is intended for:
 
 - PostgreSQL watermark polling
 - snapshot/bootstrap testing
-- local integration with `Ingress API` and `Finality Watcher`
+- local integration with `Ingress API`, `Finality Watcher`, `Receipt Service`, and `Audit API`
+- built-in `verifbill` signing/broadcast using the configured hot permission key
 
 ### Status
 
@@ -39,7 +42,16 @@ Returns:
 - configured adapters
 - current checkpoints
 - delivery count
+- proof bundle count
 - DLQ count
+
+### Proof
+
+```bash
+denotary-db-agent --config examples/agent.example.json proof --request-id <request_id>
+```
+
+Returns stored proof metadata for a finalized request, including the exported proof bundle path.
 
 ### Replay / Reset Checkpoint
 
@@ -69,6 +81,10 @@ The current PostgreSQL adapter is the first live implementation and works as:
 - read included tables from a live PostgreSQL database
 - order rows by a configured watermark column plus primary key
 - emit deterministic `snapshot` events
+- prepare and sign `verifbill::submit` inside the agent
+- advance watcher state from registration to included/finalized
+- fetch finalized receipt and audit proof chain
+- export a local proof bundle JSON file
 - persist per-table checkpoints in the local SQLite state store
 - resume from the last delivered watermark/primary-key position
 
@@ -109,6 +125,24 @@ The harness validates:
 - checkpoint persistence
 - incremental resume after new rows are inserted
 
+## Enterprise Signer Permission
+
+Recommended config:
+
+- `submitter`: enterprise payer account
+- `submitter_permission`: `dnanchor`
+
+Recommended security model:
+
+- no `owner` key on the DB Agent host
+- no `active` key on the DB Agent host
+- no `eosio.token::transfer` permission on the hot broadcaster key
+
+Helper scripts that print `updateauth` / `linkauth` commands:
+
+- [scripts/print-verifbill-permission-commands.ps1](../scripts/print-verifbill-permission-commands.ps1)
+- [scripts/print-verifbill-permission-commands.sh](../scripts/print-verifbill-permission-commands.sh)
+
 ## Permissions Planning
 
 Per-database operator docs still need to be expanded in later waves, but the expected direction is:
@@ -123,6 +157,7 @@ The local SQLite state file stores:
 
 - source checkpoints
 - delivery attempts
+- proof bundle metadata
 - DLQ records
 
 Back up this file if replay/recovery history matters operationally.

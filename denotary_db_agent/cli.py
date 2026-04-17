@@ -24,6 +24,9 @@ def build_parser() -> argparse.ArgumentParser:
     checkpoint_parser = subparsers.add_parser("checkpoint", help="List or reset checkpoints")
     checkpoint_parser.add_argument("--source", help="Source id")
     checkpoint_parser.add_argument("--reset", action="store_true", help="Reset the source checkpoint")
+
+    proof_parser = subparsers.add_parser("proof", help="Show stored proof bundle metadata")
+    proof_parser.add_argument("--request-id", required=True, help="Request id")
     return parser
 
 
@@ -60,5 +63,8 @@ def main(argv: list[str] | None = None) -> int:
             checkpoints = [item for item in checkpoints if item["source_id"] == args.source]
         print(json.dumps({"checkpoints": checkpoints}, indent=2))
         return 0
+    if args.command == "proof":
+        proof = engine.store.get_proof(args.request_id)
+        print(json.dumps({"proof": proof}, indent=2))
+        return 0
     raise SystemExit("unsupported command")
-

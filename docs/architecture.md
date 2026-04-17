@@ -11,6 +11,12 @@ The package assumes:
 - `Receipt Service` and `Audit API` expose finalized read models
 - enterprise writes flow through `verifbill` into internal registry `verif`
 
+The intended enterprise signer model is:
+
+- `submitter` account is the enterprise payer
+- `submitter_permission` is a custom hot permission such as `dnanchor`
+- `owner` and `active` remain outside the DB Agent runtime
+
 ## Core Components
 
 - `adapters`
@@ -26,9 +32,11 @@ The package assumes:
   - SQLite persistence for source cursors, delivery attempts, and DLQ records
 - `transport`
   - `Ingress API` prepare requests
-  - Finality Watcher registration handoff
+  - enterprise signing and broadcast into `verifbill`
+  - Finality Watcher registration / inclusion / finality polling
+  - Receipt Service and Audit API retrieval
 - `engine`
-  - orchestration, retries, checkpoint updates, and delivery bookkeeping
+  - orchestration, retries, checkpoint updates, proof export, and delivery bookkeeping
 - `cli`
   - operator entrypoints
 
@@ -43,13 +51,14 @@ Implemented now:
 - capability registry for PostgreSQL, MySQL, MariaDB, SQL Server, Oracle, and MongoDB
 - deterministic canonicalization
 - checkpoint store and DLQ
-- enterprise prepare + watcher registration clients
+- enterprise prepare + built-in signing/broadcast client
+- watcher/receipt/audit clients
 - CLI and tests
 - PostgreSQL watermark-based snapshot/poll adapter with per-table checkpoint state
+- local proof bundle export after finalized requests
 
 Not implemented yet:
 
 - live CDC streaming drivers for PostgreSQL logical decoding and the remaining databases
-- enterprise transaction signing/broadcast inside the agent
 - batching into `Ingress API /v1/batch/prepare`
 - production metrics export

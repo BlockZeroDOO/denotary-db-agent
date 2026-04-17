@@ -5,13 +5,22 @@
     "ingress_url": "http://127.0.0.1:8080",
     "watcher_url": "http://127.0.0.1:8081",
     "watcher_auth_token": "integration-shared-token",
+    "receipt_url": "http://127.0.0.1:8082",
+    "audit_url": "http://127.0.0.1:8083",
+    "chain_rpc_url": "https://history.denotary.io",
     "submitter": "enterpriseac1",
+    "submitter_permission": "dnanchor",
+    "submitter_private_key": "REPLACE_WITH_DNANCHOR_WIF",
     "schema_id": 1,
     "policy_id": 1,
-    "billing_account": "verifbill"
+    "billing_account": "verifbill",
+    "wait_for_finality": true,
+    "finality_timeout_sec": 180,
+    "finality_poll_interval_sec": 3.0
   },
   "storage": {
-    "state_db": "./data/agent-state.sqlite3"
+    "state_db": "./data/agent-state.sqlite3",
+    "proof_dir": "./data/proofs"
   },
   "sources": [
     {

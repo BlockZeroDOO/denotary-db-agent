@@ -28,12 +28,20 @@ class MockIngressHandler(BaseHTTPRequestHandler):
         response = {
             "request_id": "request-1",
             "trace_id": "trace-1",
-            "external_ref_hash": "ref-hash-1",
-            "object_hash": "object-hash-1",
+            "external_ref_hash": "1" * 64,
+            "object_hash": "2" * 64,
+            "verification_account": "verif",
             "prepared_action": {
-                "account": "verifbill",
-                "name": "submit",
-                "data": {"submitter": payload["submitter"]},
+                "contract": "verifbill",
+                "action": "submit",
+                "data": {
+                    "payer": payload["submitter"],
+                    "submitter": payload["submitter"],
+                    "schema_id": 1,
+                    "policy_id": 1,
+                    "object_hash": "2" * 64,
+                    "external_ref": "1" * 64,
+                },
             },
         }
         body_out = json.dumps(response).encode("utf-8")
@@ -149,4 +157,3 @@ class EngineTest(unittest.TestCase):
         deliveries = engine.store.list_deliveries("pg-core-ledger")
         self.assertEqual(len(deliveries), 1)
         self.assertEqual(deliveries[0]["status"], "prepared_registered")
-

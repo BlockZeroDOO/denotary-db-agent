@@ -138,6 +138,16 @@ class DeliveryAttempt:
     updated_at: str
 
 
+@dataclass
+class ProofArtifact:
+    request_id: str
+    source_id: str
+    receipt: dict[str, Any] | None
+    audit_chain: dict[str, Any] | None
+    export_path: str | None
+    updated_at: str
+
+
 def event_identity_payload(event: ChangeEvent) -> dict[str, Any]:
     return {
         "source_type": event.source_type,

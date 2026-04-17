@@ -30,14 +30,23 @@ class DenotaryConfig:
     watcher_url: str
     watcher_auth_token: str
     submitter: str
+    submitter_permission: str
     schema_id: int
     policy_id: int
+    receipt_url: str = ""
+    audit_url: str = ""
+    chain_rpc_url: str = ""
+    submitter_private_key: str = ""
     billing_account: str = "verifbill"
+    wait_for_finality: bool = False
+    finality_timeout_sec: int = 120
+    finality_poll_interval_sec: float = 2.0
 
 
 @dataclass
 class StorageConfig:
     state_db: str
+    proof_dir: str = "runtime/proofs"
 
 
 @dataclass
@@ -89,12 +98,23 @@ def load_config(path: str | Path) -> AgentConfig:
         ingress_url=_require_non_empty_string(denotary_raw, "ingress_url"),
         watcher_url=_require_non_empty_string(denotary_raw, "watcher_url"),
         watcher_auth_token=str(denotary_raw.get("watcher_auth_token", "")),
+        receipt_url=str(denotary_raw.get("receipt_url", "")),
+        audit_url=str(denotary_raw.get("audit_url", "")),
+        chain_rpc_url=str(denotary_raw.get("chain_rpc_url", "")),
         submitter=_require_non_empty_string(denotary_raw, "submitter"),
+        submitter_permission=str(denotary_raw.get("submitter_permission", "dnanchor")),
+        submitter_private_key=str(denotary_raw.get("submitter_private_key", "")),
         schema_id=_require_int(denotary_raw, "schema_id"),
         policy_id=_require_int(denotary_raw, "policy_id"),
         billing_account=str(denotary_raw.get("billing_account", "verifbill")),
+        wait_for_finality=_require_bool(denotary_raw, "wait_for_finality", False),
+        finality_timeout_sec=int(denotary_raw.get("finality_timeout_sec", 120)),
+        finality_poll_interval_sec=float(denotary_raw.get("finality_poll_interval_sec", 2.0)),
     )
-    storage = StorageConfig(state_db=_require_non_empty_string(storage_raw, "state_db"))
+    storage = StorageConfig(
+        state_db=_require_non_empty_string(storage_raw, "state_db"),
+        proof_dir=str(storage_raw.get("proof_dir", "runtime/proofs")),
+    )
 
     sources: list[SourceConfig] = []
     for index, item in enumerate(sources_raw):

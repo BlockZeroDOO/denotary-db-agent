@@ -38,12 +38,20 @@ class MockIngressHandler(BaseHTTPRequestHandler):
         response = {
             "request_id": f"request-{MockIngressHandler.counter}",
             "trace_id": f"trace-{MockIngressHandler.counter}",
-            "external_ref_hash": f"ref-hash-{MockIngressHandler.counter}",
-            "object_hash": f"object-hash-{MockIngressHandler.counter}",
+            "external_ref_hash": f"{MockIngressHandler.counter:064x}",
+            "object_hash": f"{MockIngressHandler.counter + 1000:064x}",
+            "verification_account": "verif",
             "prepared_action": {
-                "account": "verifbill",
-                "name": "submit",
-                "data": {"submitter": payload["submitter"]},
+                "contract": "verifbill",
+                "action": "submit",
+                "data": {
+                    "payer": payload["submitter"],
+                    "submitter": payload["submitter"],
+                    "schema_id": 1,
+                    "policy_id": 1,
+                    "object_hash": f"{MockIngressHandler.counter + 1000:064x}",
+                    "external_ref": f"{MockIngressHandler.counter:064x}",
+                },
             },
         }
         body_out = json.dumps(response).encode("utf-8")
