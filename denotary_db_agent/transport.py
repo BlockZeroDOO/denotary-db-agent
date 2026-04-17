@@ -310,3 +310,52 @@ def export_proof_bundle(
     }
     export_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
     return str(export_path)
+
+
+def export_batch_proof_bundle(
+    proof_dir: str,
+    source_id: str,
+    request_id: str,
+    envelopes: list[CanonicalEnvelope],
+    prepared: PreparedRequest,
+    broadcast: BroadcastResult,
+    receipt: dict[str, Any],
+    audit_chain: dict[str, Any],
+) -> str:
+    export_root = Path(proof_dir)
+    export_root.mkdir(parents=True, exist_ok=True)
+    export_path = export_root / source_id / f"{request_id}.json"
+    export_path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "request_id": request_id,
+        "trace_id": prepared.trace_id,
+        "mode": "batch",
+        "members": [
+            {
+                "source_type": envelope.source_type,
+                "source_instance": envelope.source_instance,
+                "database_name": envelope.database_name,
+                "schema_or_namespace": envelope.schema_or_namespace,
+                "table_or_collection": envelope.table_or_collection,
+                "operation": envelope.operation,
+                "primary_key": envelope.primary_key,
+                "change_version": envelope.change_version,
+                "commit_timestamp": envelope.commit_timestamp,
+                "before_hash": envelope.before_hash,
+                "after_hash": envelope.after_hash,
+                "metadata_hash": envelope.metadata_hash,
+                "external_ref": envelope.external_ref,
+                "trace_id": envelope.trace_id,
+            }
+            for envelope in envelopes
+        ],
+        "prepared_action": prepared.prepared_action,
+        "broadcast": {
+            "tx_id": broadcast.tx_id,
+            "block_num": broadcast.block_num,
+        },
+        "receipt": receipt,
+        "audit_chain": audit_chain,
+    }
+    export_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+    return str(export_path)

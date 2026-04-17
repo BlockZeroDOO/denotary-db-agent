@@ -91,6 +91,23 @@ class CanonicalEnvelope:
     external_ref: str
     trace_id: str
 
+    def document_payload(self) -> dict[str, Any]:
+        return {
+            "source_type": self.source_type,
+            "source_instance": self.source_instance,
+            "database_name": self.database_name,
+            "schema_or_namespace": self.schema_or_namespace,
+            "table_or_collection": self.table_or_collection,
+            "operation": self.operation,
+            "primary_key": self.primary_key,
+            "change_version": self.change_version,
+            "commit_timestamp": self.commit_timestamp,
+            "before_hash": self.before_hash,
+            "after_hash": self.after_hash,
+            "metadata_hash": self.metadata_hash,
+            "trace_id": self.trace_id,
+        }
+
     def to_prepare_payload(self, submitter: str, schema_id: int, policy_id: int) -> dict[str, Any]:
         return {
             "submitter": submitter,
@@ -107,21 +124,13 @@ class CanonicalEnvelope:
                 "allow_single": True,
                 "allow_batch": False,
             },
-            "document": {
-                "source_type": self.source_type,
-                "source_instance": self.source_instance,
-                "database_name": self.database_name,
-                "schema_or_namespace": self.schema_or_namespace,
-                "table_or_collection": self.table_or_collection,
-                "operation": self.operation,
-                "primary_key": self.primary_key,
-                "change_version": self.change_version,
-                "commit_timestamp": self.commit_timestamp,
-                "before_hash": self.before_hash,
-                "after_hash": self.after_hash,
-                "metadata_hash": self.metadata_hash,
-                "trace_id": self.trace_id,
-            },
+            "document": self.document_payload(),
+        }
+
+    def to_batch_item(self) -> dict[str, Any]:
+        return {
+            "external_leaf_ref": self.external_ref,
+            "payload": self.document_payload(),
         }
 
 

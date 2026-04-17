@@ -26,6 +26,13 @@ def build_trace_id() -> str:
     return str(uuid.uuid4())
 
 
+def build_batch_external_ref(envelopes: list[CanonicalEnvelope]) -> str:
+    if not envelopes:
+        raise ValueError("batch envelopes must not be empty")
+    ordered = sorted(envelope.external_ref for envelope in envelopes)
+    return sha256_hex(canonical_json({"leaf_external_refs": ordered, "count": len(ordered)}))
+
+
 def canonicalize_event(event: ChangeEvent) -> CanonicalEnvelope:
     return CanonicalEnvelope(
         source_type=event.source_type,
@@ -43,4 +50,3 @@ def canonicalize_event(event: ChangeEvent) -> CanonicalEnvelope:
         external_ref=build_external_ref(event),
         trace_id=build_trace_id(),
     )
-

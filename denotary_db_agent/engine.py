@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 from denotary_db_agent.adapters.base import BaseAdapter
 from denotary_db_agent.adapters.registry import build_adapter
-from denotary_db_agent.canonical import canonicalize_event
+from denotary_db_agent.canonical import build_batch_external_ref, canonicalize_event
 from denotary_db_agent.checkpoint_store import CheckpointStore
 from denotary_db_agent.config import AgentConfig, SourceConfig
 from denotary_db_agent.models import DeliveryAttempt, ProofArtifact, event_debug_dict, utc_now
@@ -15,6 +15,7 @@ from denotary_db_agent.transport import (
     IngressClient,
     ReceiptClient,
     WatcherClient,
+    export_batch_proof_bundle,
     export_proof_bundle,
 )
 
@@ -123,7 +124,20 @@ class AgentEngine:
             event_iter = runtime.adapter.read_snapshot(checkpoint)
             if runtime.config.options.get("capture_mode") == "trigger":
                 event_iter = runtime.adapter.start_stream(checkpoint)
-            for event in event_iter:
+            events = list(event_iter)
+            if runtime.config.batch_enabled and events:
+                chunk_size = max(1, runtime.config.batch_size)
+                for start in range(0, len(events), chunk_size):
+                    chunk = events[start : start + chunk_size]
+                    try:
+                        self._process_batch(runtime, chunk)
+                        processed += len(chunk)
+                    except Exception as exc:  # noqa: BLE001
+                        failed += len(chunk)
+                        for event in chunk:
+                            self.store.push_dlq(runtime.config.id, str(exc), event_debug_dict(event), utc_now().isoformat())
+                continue
+            for event in events:
                 try:
                     self._process_event(runtime, event)
                     processed += 1
@@ -273,6 +287,130 @@ class AgentEngine:
             )
         )
         raise RuntimeError(last_error or "unknown delivery failure")
+
+    def _process_batch(self, runtime: SourceRuntime, events) -> None:
+        envelopes = [canonicalize_event(event) for event in events]
+        payload = {
+            "submitter": self.config.denotary.submitter,
+            "external_ref": build_batch_external_ref(envelopes),
+            "schema": {
+                "id": self.config.denotary.schema_id,
+                "version": "1.0.0",
+                "active": True,
+                "canonicalization_profile": "json-sorted-v1",
+            },
+            "policy": {
+                "id": self.config.denotary.policy_id,
+                "active": True,
+                "allow_single": False,
+                "allow_batch": True,
+            },
+            "items": [envelope.to_batch_item() for envelope in envelopes],
+        }
+
+        last_error: str | None = None
+        prepared = None
+        for delay in [0.0, *self.retry_policy.delays()]:
+            if delay:
+                time.sleep(delay)
+            try:
+                prepared = self.ingress.prepare_batch(payload)
+                self.watcher.register(prepared, envelopes[0])
+                now = utc_now().isoformat()
+                self.store.upsert_delivery(
+                    DeliveryAttempt(
+                        request_id=prepared.request_id,
+                        trace_id=prepared.trace_id,
+                        source_id=runtime.config.id,
+                        external_ref=payload["external_ref"],
+                        tx_id=None,
+                        status="prepared_registered",
+                        prepared_action=prepared.prepared_action,
+                        last_error=None,
+                        updated_at=now,
+                    )
+                )
+
+                if self.chain is None:
+                    token = runtime.adapter.serialize_checkpoint(events[-1])
+                    self.store.set_checkpoint(runtime.config.id, token, now)
+                    return
+
+                broadcast = self.chain.push_prepared_action(prepared.prepared_action)
+                self.watcher.mark_included(prepared.request_id, broadcast.tx_id, broadcast.block_num)
+                now = utc_now().isoformat()
+                self.store.upsert_delivery(
+                    DeliveryAttempt(
+                        request_id=prepared.request_id,
+                        trace_id=prepared.trace_id,
+                        source_id=runtime.config.id,
+                        external_ref=payload["external_ref"],
+                        tx_id=broadcast.tx_id,
+                        status="broadcast_included",
+                        prepared_action=prepared.prepared_action,
+                        last_error=None,
+                        updated_at=now,
+                    )
+                )
+
+                if self.config.denotary.wait_for_finality and self.receipt is not None and self.audit is not None:
+                    self.watcher.wait_for_finalized(
+                        prepared.request_id,
+                        self.config.denotary.finality_timeout_sec,
+                        self.config.denotary.finality_poll_interval_sec,
+                    )
+                    receipt = self.receipt.get_receipt(prepared.request_id)
+                    audit_chain = self.audit.get_chain(prepared.request_id)
+                    export_path = export_batch_proof_bundle(
+                        self.config.storage.proof_dir,
+                        runtime.config.id,
+                        prepared.request_id,
+                        envelopes,
+                        prepared,
+                        broadcast,
+                        receipt,
+                        audit_chain,
+                    )
+                    self.store.upsert_proof(
+                        ProofArtifact(
+                            request_id=prepared.request_id,
+                            source_id=runtime.config.id,
+                            receipt=receipt,
+                            audit_chain=audit_chain,
+                            export_path=export_path,
+                            updated_at=utc_now().isoformat(),
+                        )
+                    )
+                    now = utc_now().isoformat()
+                    self.store.upsert_delivery(
+                        DeliveryAttempt(
+                            request_id=prepared.request_id,
+                            trace_id=prepared.trace_id,
+                            source_id=runtime.config.id,
+                            external_ref=payload["external_ref"],
+                            tx_id=broadcast.tx_id,
+                            status="finalized_exported",
+                            prepared_action=prepared.prepared_action,
+                            last_error=None,
+                            updated_at=now,
+                        )
+                    )
+
+                token = runtime.adapter.serialize_checkpoint(events[-1])
+                self.store.set_checkpoint(runtime.config.id, token, now)
+                return
+            except Exception as exc:  # noqa: BLE001
+                last_error = str(exc)
+                try:
+                    if prepared is not None:
+                        self.watcher.mark_failed(
+                            prepared.request_id,
+                            "db_agent_batch_delivery_failed",
+                            {"source_id": runtime.config.id, "error": last_error},
+                        )
+                except Exception:
+                    pass
+        raise RuntimeError(last_error or "unknown batch delivery failure")
 
     def reset_checkpoint(self, source_id: str) -> None:
         self.store.reset_checkpoint(source_id)

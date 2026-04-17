@@ -28,25 +28,50 @@ class MockIngressHandler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:  # noqa: N802
         body = self.rfile.read(int(self.headers.get("Content-Length", "0"))).decode("utf-8")
         payload = json.loads(body)
-        response = {
-            "request_id": "request-full-cycle-1",
-            "trace_id": "trace-full-cycle-1",
-            "external_ref_hash": "a" * 64,
-            "object_hash": "b" * 64,
-            "verification_account": "verif",
-            "prepared_action": {
-                "contract": "verifbill",
-                "action": "submit",
-                "data": {
-                    "payer": payload["submitter"],
-                    "submitter": payload["submitter"],
-                    "schema_id": 1,
-                    "policy_id": 1,
-                    "object_hash": "b" * 64,
-                    "external_ref": "a" * 64,
+        if self.path.endswith("/v1/batch/prepare"):
+            response = {
+                "request_id": "request-full-cycle-batch-1",
+                "trace_id": "trace-full-cycle-batch-1",
+                "external_ref_hash": "d" * 64,
+                "root_hash": "e" * 64,
+                "manifest_hash": "f" * 64,
+                "leaf_count": len(payload["items"]),
+                "verification_account": "verif",
+                "prepared_action": {
+                    "contract": "verifbill",
+                    "action": "submitroot",
+                    "data": {
+                        "payer": payload["submitter"],
+                        "submitter": payload["submitter"],
+                        "schema_id": 1,
+                        "policy_id": 2,
+                        "root_hash": "e" * 64,
+                        "leaf_count": len(payload["items"]),
+                        "manifest_hash": "f" * 64,
+                        "external_ref": "d" * 64,
+                    },
                 },
-            },
-        }
+            }
+        else:
+            response = {
+                "request_id": "request-full-cycle-1",
+                "trace_id": "trace-full-cycle-1",
+                "external_ref_hash": "a" * 64,
+                "object_hash": "b" * 64,
+                "verification_account": "verif",
+                "prepared_action": {
+                    "contract": "verifbill",
+                    "action": "submit",
+                    "data": {
+                        "payer": payload["submitter"],
+                        "submitter": payload["submitter"],
+                        "schema_id": 1,
+                        "policy_id": 1,
+                        "object_hash": "b" * 64,
+                        "external_ref": "a" * 64,
+                    },
+                },
+            }
         encoded = json.dumps(response).encode("utf-8")
         self.send_response(HTTPStatus.OK)
         self.send_header("Content-Type", "application/json")
@@ -176,25 +201,48 @@ class MockReceiptHandler(BaseHTTPRequestHandler):
             if state.get("status") != "finalized":
                 self.send_error(HTTPStatus.CONFLICT)
                 return
-            payload = {
-                "request_id": request_id,
-                "trace_id": state["trace_id"],
-                "mode": "single",
-                "submitter": state["submitter"],
-                "contract": state["contract"],
-                "object_hash": state["anchor"]["object_hash"],
-                "external_ref_hash": state["anchor"]["external_ref_hash"],
-                "tx_id": state["tx_id"],
-                "block_num": state["block_num"],
-                "finality_flag": True,
-                "finalized_at": state["finalized_at"],
-                "trust_state": "finalized_verified",
-                "receipt_available": True,
-                "inclusion_verified": True,
-                "verification_policy": "single-provider",
-                "verification_min_success": 1,
-                "provider_disagreement": False,
-            }
+            if state["mode"] == "batch":
+                payload = {
+                    "request_id": request_id,
+                    "trace_id": state["trace_id"],
+                    "mode": "batch",
+                    "submitter": state["submitter"],
+                    "contract": state["contract"],
+                    "root_hash": state["anchor"]["root_hash"],
+                    "manifest_hash": state["anchor"]["manifest_hash"],
+                    "external_ref_hash": state["anchor"]["external_ref_hash"],
+                    "leaf_count": state["anchor"]["leaf_count"],
+                    "tx_id": state["tx_id"],
+                    "block_num": state["block_num"],
+                    "finality_flag": True,
+                    "finalized_at": state["finalized_at"],
+                    "trust_state": "finalized_verified",
+                    "receipt_available": True,
+                    "inclusion_verified": True,
+                    "verification_policy": "single-provider",
+                    "verification_min_success": 1,
+                    "provider_disagreement": False,
+                }
+            else:
+                payload = {
+                    "request_id": request_id,
+                    "trace_id": state["trace_id"],
+                    "mode": "single",
+                    "submitter": state["submitter"],
+                    "contract": state["contract"],
+                    "object_hash": state["anchor"]["object_hash"],
+                    "external_ref_hash": state["anchor"]["external_ref_hash"],
+                    "tx_id": state["tx_id"],
+                    "block_num": state["block_num"],
+                    "finality_flag": True,
+                    "finalized_at": state["finalized_at"],
+                    "trust_state": "finalized_verified",
+                    "receipt_available": True,
+                    "inclusion_verified": True,
+                    "verification_policy": "single-provider",
+                    "verification_min_success": 1,
+                    "provider_disagreement": False,
+                }
         else:
             self.send_error(HTTPStatus.NOT_FOUND)
             return
@@ -359,3 +407,55 @@ class FullCycleEngineTest(unittest.TestCase):
         self.assertEqual(proof_payload["request_id"], "request-full-cycle-1")
         self.assertEqual(proof_payload["receipt"]["tx_id"], "c" * 64)
         self.assertEqual(proof_payload["audit_chain"]["record"]["status"], "finalized")
+
+    def test_run_once_executes_batch_cycle_and_exports_batch_bundle(self) -> None:
+        config = json.loads(self.config_path.read_text(encoding="utf-8"))
+        config["denotary"]["policy_id"] = 2
+        config["sources"][0]["batch_enabled"] = True
+        config["sources"][0]["batch_size"] = 10
+        config["sources"][0]["options"]["dry_run_events"] = [
+            {
+                "schema_or_namespace": "public",
+                "table_or_collection": "invoices",
+                "operation": "insert",
+                "primary_key": {"id": 1},
+                "change_version": "lsn:1",
+                "checkpoint_token": "lsn:1",
+                "commit_timestamp": "2026-04-17T10:11:12Z",
+                "after": {"id": 1, "status": "issued"},
+                "before": None,
+                "metadata": {"txid": 100},
+            },
+            {
+                "schema_or_namespace": "public",
+                "table_or_collection": "payments",
+                "operation": "insert",
+                "primary_key": {"id": 2},
+                "change_version": "lsn:2",
+                "checkpoint_token": "lsn:2",
+                "commit_timestamp": "2026-04-17T10:11:13Z",
+                "after": {"id": 2, "status": "posted"},
+                "before": None,
+                "metadata": {"txid": 101},
+            },
+        ]
+        self.config_path.write_text(json.dumps(config), encoding="utf-8")
+
+        engine = AgentEngine(load_config(self.config_path))
+        result = engine.run_once()
+
+        self.assertEqual(result["processed"], 2)
+        self.assertEqual(result["failed"], 0)
+        deliveries = engine.store.list_deliveries("pg-core-ledger")
+        self.assertEqual(len(deliveries), 1)
+        self.assertEqual(deliveries[0]["status"], "finalized_exported")
+
+        proofs = engine.store.list_proofs("pg-core-ledger")
+        self.assertEqual(len(proofs), 1)
+        export_path = proofs[0]["export_path"]
+        self.assertTrue(export_path)
+
+        proof_payload = json.loads(Path(str(export_path)).read_text(encoding="utf-8"))
+        self.assertEqual(proof_payload["request_id"], "request-full-cycle-batch-1")
+        self.assertEqual(proof_payload["mode"], "batch")
+        self.assertEqual(len(proof_payload["members"]), 2)
