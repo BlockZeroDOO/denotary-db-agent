@@ -1,0 +1,19 @@
+services:
+  denotary-db-agent:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: denotary-db-agent
+    restart: unless-stopped
+    volumes:
+      - ../examples/agent.example.json:/app/config/agent.json:ro
+      - denotary-db-agent-state:/data
+    command:
+      - --config
+      - /app/config/agent.json
+      - run
+      - --once
+
+volumes:
+  denotary-db-agent-state:
+

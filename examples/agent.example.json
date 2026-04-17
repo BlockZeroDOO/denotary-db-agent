@@ -1,0 +1,45 @@
+{
+  "agent_name": "denotary-db-agent",
+  "log_level": "INFO",
+  "denotary": {
+    "ingress_url": "http://127.0.0.1:8080",
+    "watcher_url": "http://127.0.0.1:8081",
+    "watcher_auth_token": "integration-shared-token",
+    "submitter": "enterpriseac1",
+    "schema_id": 1,
+    "policy_id": 1,
+    "billing_account": "verifbill"
+  },
+  "storage": {
+    "state_db": "./data/agent-state.sqlite3"
+  },
+  "sources": [
+    {
+      "id": "pg-core-ledger",
+      "adapter": "postgresql",
+      "enabled": true,
+      "source_instance": "erp-eu-1",
+      "database_name": "ledger",
+      "include": {
+        "public": ["invoices", "payments"]
+      },
+      "exclude": {},
+      "checkpoint_policy": "after_ack",
+      "backfill_mode": "none",
+      "batch_enabled": false,
+      "batch_size": 100,
+      "flush_interval_ms": 1000,
+      "connection": {
+        "host": "127.0.0.1",
+        "port": 5432,
+        "username": "denotary",
+        "database": "ledger"
+      },
+      "options": {
+        "slot_name": "denotary_slot",
+        "publication_name": "denotary_pub"
+      }
+    }
+  ]
+}
+

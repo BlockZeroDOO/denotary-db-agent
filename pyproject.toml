@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "denotary-db-agent"
+version = "0.1.0"
+description = "Sidecar CDC agent for sending canonical database change events into deNotary enterprise anchoring flow."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "Proprietary" }
+authors = [
+  { name = "BlockZero DOO" }
+]
+dependencies = []
+
+[project.scripts]
+denotary-db-agent = "denotary_db_agent.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["denotary_db_agent*"]
