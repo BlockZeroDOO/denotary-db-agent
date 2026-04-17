@@ -182,3 +182,10 @@ class EngineTest(unittest.TestCase):
         resumed_result = engine.run_once()
         self.assertEqual(resumed_result["processed"], 1)
         self.assertEqual(resumed_result["failed"], 0)
+
+    def test_run_once_stores_runtime_signature(self) -> None:
+        engine = AgentEngine(load_config(self.config_path))
+        self.assertIsNone(engine.store.get_runtime_signature("pg-core-ledger"))
+        result = engine.run_once()
+        self.assertEqual(result["processed"], 1)
+        self.assertIsNotNone(engine.store.get_runtime_signature("pg-core-ledger"))

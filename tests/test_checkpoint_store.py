@@ -50,3 +50,11 @@ class CheckpointStoreTest(unittest.TestCase):
         self.assertEqual(int(controls[0]["paused"]), 1)
         self.store.set_source_paused("source-1", False, "2026-04-17T10:10:00Z")
         self.assertFalse(self.store.is_source_paused("source-1"))
+
+    def test_runtime_signature_roundtrip(self) -> None:
+        self.assertIsNone(self.store.get_runtime_signature("source-1"))
+        self.store.set_runtime_signature("source-1", "sig-1", "2026-04-17T10:00:00Z")
+        self.assertEqual(self.store.get_runtime_signature("source-1"), "sig-1")
+        rows = self.store.list_runtime_signatures()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["signature"], "sig-1")

@@ -308,3 +308,39 @@ class PostgresAdapterTest(unittest.TestCase):
         self.assertEqual(token["xid"], "736")
         self.assertEqual(token["event_index"], 1)
         self.assertFalse(token["advance_lsn"])
+
+    def test_runtime_signature_changes_with_table_shape(self) -> None:
+        config = self.make_config()
+        adapter = PostgresAdapter(config)
+        spec_v1 = PostgresTableSpec(
+            schema_name="public",
+            table_name="invoices",
+            watermark_column="updated_at",
+            commit_timestamp_column="updated_at",
+            primary_key_columns=["id"],
+            selected_columns=["id", "updated_at", "status"],
+        )
+        spec_v2 = PostgresTableSpec(
+            schema_name="public",
+            table_name="invoices",
+            watermark_column="updated_at",
+            commit_timestamp_column="updated_at",
+            primary_key_columns=["id"],
+            selected_columns=["id", "updated_at", "status", "amount"],
+        )
+
+        @contextmanager
+        def dummy_connect():
+            yield object()
+
+        with patch.object(adapter, "_connect", dummy_connect), patch.object(
+            adapter, "_load_table_specs", return_value=[spec_v1]
+        ):
+            signature_v1 = adapter.runtime_signature()
+
+        with patch.object(adapter, "_connect", dummy_connect), patch.object(
+            adapter, "_load_table_specs", return_value=[spec_v2]
+        ):
+            signature_v2 = adapter.runtime_signature()
+
+        self.assertNotEqual(signature_v1, signature_v2)

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -80,3 +81,16 @@ class BaseAdapter(ABC):
             "operations": list(capabilities.operations),
             "notes": capabilities.notes,
         }
+
+    def runtime_signature(self) -> str:
+        payload = {
+            "adapter": self.config.adapter,
+            "source_id": self.config.id,
+            "include": self.config.include,
+            "exclude": self.config.exclude,
+            "options": self.config.options,
+        }
+        return json.dumps(payload, sort_keys=True)
+
+    def refresh_runtime(self) -> dict:
+        return self.bootstrap()

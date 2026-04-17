@@ -69,6 +69,12 @@ class CheckpointStore:
                     paused integer not null default 0,
                     updated_at text not null
                 );
+
+                create table if not exists source_runtime (
+                    source_id text primary key,
+                    signature text not null,
+                    updated_at text not null
+                );
                 """
             )
 
@@ -261,5 +267,33 @@ class CheckpointStore:
         with self._connect() as connection:
             rows = connection.execute(
                 "select source_id, paused, updated_at from source_controls order by source_id"
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def get_runtime_signature(self, source_id: str) -> str | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                "select signature from source_runtime where source_id = ?",
+                (source_id,),
+            ).fetchone()
+        return str(row["signature"]) if row is not None else None
+
+    def set_runtime_signature(self, source_id: str, signature: str, updated_at: str) -> None:
+        with self._connect() as connection:
+            connection.execute(
+                """
+                insert into source_runtime (source_id, signature, updated_at)
+                values (?, ?, ?)
+                on conflict(source_id) do update set
+                    signature = excluded.signature,
+                    updated_at = excluded.updated_at
+                """,
+                (source_id, signature, updated_at),
+            )
+
+    def list_runtime_signatures(self) -> list[dict[str, str]]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                "select source_id, signature, updated_at from source_runtime order by source_id"
             ).fetchall()
         return [dict(row) for row in rows]

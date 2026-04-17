@@ -283,6 +283,30 @@ class PostgresLiveIntegrationTest(unittest.TestCase):
                 )
             connection.commit()
 
+    def _alter_invoices_add_column(self, column_name: str) -> None:
+        with psycopg.connect(
+            host="127.0.0.1",
+            port=55432,
+            user="denotary",
+            password="denotarypw",
+            dbname="ledger",
+        ) as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(f"alter table public.invoices add column {column_name} text")
+            connection.commit()
+
+    def _alter_invoices_drop_column(self, column_name: str) -> None:
+        with psycopg.connect(
+            host="127.0.0.1",
+            port=55432,
+            user="denotary",
+            password="denotarypw",
+            dbname="ledger",
+        ) as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(f"alter table public.invoices drop column if exists {column_name}")
+            connection.commit()
+
     def test_live_postgres_snapshot_and_resume(self) -> None:
         self._seed_initial_rows()
         engine = AgentEngine(load_config(self.config_path))
@@ -490,3 +514,33 @@ class PostgresLiveIntegrationTest(unittest.TestCase):
 
         deliveries = engine.store.list_deliveries("pg-core-ledger")
         self.assertEqual(len(deliveries), 2)
+
+    def test_live_postgres_trigger_cdc_auto_refreshes_runtime_signature_after_schema_drift(self) -> None:
+        self._write_config(capture_mode="trigger", backfill_mode="none")
+        engine = AgentEngine(load_config(self.config_path))
+        bootstrap = engine.bootstrap("pg-core-ledger")
+        self.assertEqual(bootstrap["sources"][0]["capture_mode"], "trigger")
+
+        original_signature = engine.store.get_runtime_signature("pg-core-ledger")
+        self.assertIsNotNone(original_signature)
+
+        drift_column = "denotary_runtime_drift_note"
+        try:
+            self._alter_invoices_add_column(drift_column)
+            refresh_result = engine.run_once()
+            self.assertEqual(refresh_result["processed"], 0)
+            self.assertEqual(refresh_result["failed"], 0)
+
+            refreshed_signature = engine.store.get_runtime_signature("pg-core-ledger")
+            self.assertIsNotNone(refreshed_signature)
+            self.assertNotEqual(original_signature, refreshed_signature)
+
+            inspect = engine.inspect("pg-core-ledger")
+            invoices = next(
+                item
+                for item in inspect["sources"][0]["tracked_tables"]
+                if item["schema"] == "public" and item["table"] == "invoices"
+            )
+            self.assertIn(drift_column, invoices["selected_columns"])
+        finally:
+            self._alter_invoices_drop_column(drift_column)

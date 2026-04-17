@@ -61,6 +61,16 @@ class PostgresAdapter(BaseAdapter):
         )
 
     def bootstrap(self) -> dict:
+        if self.config.options.get("dry_run_events"):
+            summary = super().bootstrap()
+            summary.update(
+                {
+                    "capture_mode": self._capture_mode(),
+                    "tracked_tables": [],
+                    "cdc": None,
+                }
+            )
+            return summary
         self.validate_connection()
         with self._connect() as connection:
             specs = self._load_table_specs(connection)
@@ -74,6 +84,16 @@ class PostgresAdapter(BaseAdapter):
         }
 
     def inspect(self) -> dict:
+        if self.config.options.get("dry_run_events"):
+            details = super().inspect()
+            details.update(
+                {
+                    "capture_mode": self._capture_mode(),
+                    "tracked_tables": [],
+                    "cdc": None,
+                }
+            )
+            return details
         capabilities = self.discover_capabilities()
         with self._connect() as connection:
             specs = self._load_table_specs(connection)
@@ -89,6 +109,25 @@ class PostgresAdapter(BaseAdapter):
             "cdc": cdc_state,
             "notes": capabilities.notes,
         }
+
+    def runtime_signature(self) -> str:
+        if self.config.options.get("dry_run_events"):
+            return super().runtime_signature()
+        with self._connect() as connection:
+            specs = self._load_table_specs(connection)
+        payload = {
+            "adapter": self.config.adapter,
+            "source_id": self.config.id,
+            "capture_mode": self._capture_mode(),
+            "tracked_tables": [self._spec_signature_entry(spec) for spec in specs],
+            "include": self.config.include,
+        }
+        return json.dumps(payload, sort_keys=True)
+
+    def refresh_runtime(self) -> dict:
+        if self.config.options.get("dry_run_events"):
+            return self.bootstrap()
+        return self.bootstrap()
 
     def validate_connection(self) -> None:
         required = ("host", "port", "username", "database")
@@ -975,6 +1014,17 @@ class PostgresAdapter(BaseAdapter):
             "watermark_column": spec.watermark_column,
             "commit_timestamp_column": spec.commit_timestamp_column,
             "primary_key_columns": spec.primary_key_columns,
+            "selected_columns": spec.selected_columns,
+        }
+
+    def _spec_signature_entry(self, spec: PostgresTableSpec) -> dict[str, Any]:
+        return {
+            "schema": spec.schema_name,
+            "table": spec.table_name,
+            "watermark_column": spec.watermark_column,
+            "commit_timestamp_column": spec.commit_timestamp_column,
+            "primary_key_columns": spec.primary_key_columns,
+            "selected_columns": spec.selected_columns,
         }
 
     def _ensure_listener(self) -> Any:

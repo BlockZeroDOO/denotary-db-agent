@@ -12,7 +12,7 @@ Current scope:
 - built-in enterprise signing and broadcast through `verifbill`
 - Finality Watcher registration and inclusion/finality updates
 - receipt / audit-chain retrieval and local proof bundle export
-- CLI for run / validate / status / health / bootstrap / inspect / pause / resume / replay / checkpoint / proof
+- CLI for run / validate / status / health / bootstrap / inspect / refresh / pause / resume / replay / checkpoint / proof
 
 The first wave of database targets is:
 
@@ -50,6 +50,7 @@ denotary-db-agent status --config examples/agent.example.json
 denotary-db-agent health --config examples/agent.example.json
 denotary-db-agent bootstrap --config examples/agent.example.json --source pg-core-ledger
 denotary-db-agent inspect --config examples/agent.example.json --source pg-core-ledger
+denotary-db-agent refresh --config examples/agent.example.json --source pg-core-ledger
 denotary-db-agent pause --config examples/agent.example.json --source pg-core-ledger
 denotary-db-agent resume --config examples/agent.example.json --source pg-core-ledger
 denotary-db-agent run --config examples/agent.example.json --once
@@ -75,6 +76,7 @@ python -m denotary_db_agent --config examples/agent.example.json status
 python -m denotary_db_agent --config examples/agent.example.json health
 python -m denotary_db_agent --config examples/agent.example.json bootstrap --source pg-core-ledger
 python -m denotary_db_agent --config examples/agent.example.json inspect --source pg-core-ledger
+python -m denotary_db_agent --config examples/agent.example.json refresh --source pg-core-ledger
 python -m denotary_db_agent --config examples/agent.example.json proof --request-id <request_id>
 ```
 
@@ -84,8 +86,10 @@ Note:
 - `status` is safe to run without a live database
 - `health` shows local source state and best-effort health for configured chain/receipt/audit services
 - `bootstrap` installs or refreshes source-side runtime artifacts such as PostgreSQL trigger CDC objects or logical replication slot setup
-- `inspect` shows tracked tables and live PostgreSQL CDC state for a source
+- `inspect` shows tracked tables, selected columns, and live PostgreSQL CDC state for a source
+- `refresh` forces runtime artifact refresh and stores the new runtime signature
 - `pause` / `resume` let operators stop one source without changing the config file
+- `run_once` and daemon mode now auto-refresh PostgreSQL runtime artifacts when tracked table shape changes, including `ALTER TABLE` column drift
 - `run --once` uses the configured `dnanchor` private key to sign `verifbill::submit` inside the agent
 - `run` without `--once` keeps the agent in daemon mode and, for PostgreSQL trigger sources, waits on `LISTEN/NOTIFY` before the fallback interval elapses
 - finalized receipts and proof chains are exported under `storage.proof_dir`

@@ -98,6 +98,23 @@ For PostgreSQL this returns:
 - logical slot status when `capture_mode = "logical"`
 - installed trigger count or slot state, depending on mode
 
+### Refresh
+
+```bash
+denotary-db-agent --config examples/agent.example.json refresh --source pg-core-ledger
+```
+
+Use this when:
+
+- tracked tables gained or lost columns
+- `ALTER TABLE` changed the selected column set you want notarized
+- primary key or watermark assumptions changed
+- you want to force a runtime artifact reinstall before restarting the daemon
+
+The agent also performs this refresh automatically when the stored runtime signature no longer
+matches the live PostgreSQL table shape. `inspect` now reports the live `selected_columns`
+per tracked table, so operators can confirm what the current runtime will hash and send.
+
 ### Pause / Resume
 
 ```bash

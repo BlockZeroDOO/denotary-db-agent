@@ -111,6 +111,7 @@ class AgentEngine:
                     "source_id": runtime.config.id,
                     "adapter": runtime.config.adapter,
                     "paused": self._is_paused(runtime.config.id),
+                    "runtime_signature_stored": self.store.get_runtime_signature(runtime.config.id) is not None,
                     "checkpoint": self._checkpoint_value(runtime.config.id),
                     "deliveries": len(self.store.list_deliveries(runtime.config.id)),
                     "proofs": len(self.store.list_proofs(runtime.config.id)),
@@ -152,6 +153,7 @@ class AgentEngine:
                     "source_id": runtime.config.id,
                     "adapter": runtime.config.adapter,
                     "paused": self._is_paused(runtime.config.id),
+                    "runtime_signature_stored": self.store.get_runtime_signature(runtime.config.id) is not None,
                     "checkpoint": self._checkpoint_value(runtime.config.id),
                     "deliveries": len(self.store.list_deliveries(runtime.config.id)),
                     "proofs": len(self.store.list_proofs(runtime.config.id)),
@@ -166,7 +168,9 @@ class AgentEngine:
         for runtime in self.runtimes():
             if source_id and runtime.config.id != source_id:
                 continue
-            results.append(runtime.adapter.bootstrap())
+            summary = runtime.adapter.bootstrap()
+            self.store.set_runtime_signature(runtime.config.id, runtime.adapter.runtime_signature(), utc_now().isoformat())
+            results.append(summary)
         return {"agent_name": self.config.agent_name, "sources": results}
 
     def inspect(self, source_id: str | None = None) -> dict:
@@ -186,6 +190,7 @@ class AgentEngine:
         for runtime in runtimes:
             if self._is_paused(runtime.config.id):
                 continue
+            self._ensure_runtime_ready(runtime)
             checkpoint = self.store.get_checkpoint(runtime.config.id)
             runtime.adapter.resume_from_checkpoint(checkpoint)
             event_iter = runtime.adapter.read_snapshot(checkpoint)
@@ -500,6 +505,16 @@ class AgentEngine:
     def resume_source(self, source_id: str) -> None:
         self.store.set_source_paused(source_id, False, utc_now().isoformat())
 
+    def refresh_source(self, source_id: str | None = None) -> dict:
+        results = []
+        for runtime in self.runtimes():
+            if source_id and runtime.config.id != source_id:
+                continue
+            summary = runtime.adapter.refresh_runtime()
+            self.store.set_runtime_signature(runtime.config.id, runtime.adapter.runtime_signature(), utc_now().isoformat())
+            results.append(summary)
+        return {"agent_name": self.config.agent_name, "sources": results}
+
     def checkpoint_summary(self) -> list[dict[str, str]]:
         return [dict(item.__dict__) for item in self.store.list_checkpoints()]
 
@@ -524,3 +539,12 @@ class AgentEngine:
                     return
                 if runtime.adapter.wait_for_changes(min(slice_timeout, remaining)):
                     return
+
+    def _ensure_runtime_ready(self, runtime: SourceRuntime) -> None:
+        current_signature = runtime.adapter.runtime_signature()
+        stored_signature = self.store.get_runtime_signature(runtime.config.id)
+        if stored_signature == current_signature:
+            return
+        runtime.adapter.refresh_runtime()
+        refreshed_signature = runtime.adapter.runtime_signature()
+        self.store.set_runtime_signature(runtime.config.id, refreshed_signature, utc_now().isoformat())

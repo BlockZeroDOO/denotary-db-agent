@@ -23,6 +23,8 @@ def build_parser() -> argparse.ArgumentParser:
     bootstrap_parser.add_argument("--source", help="Source id")
     inspect_parser = subparsers.add_parser("inspect", help="Inspect source configuration and live runtime state")
     inspect_parser.add_argument("--source", help="Source id")
+    refresh_parser = subparsers.add_parser("refresh", help="Refresh source runtime artifacts and store runtime signature")
+    refresh_parser.add_argument("--source", help="Source id")
     pause_parser = subparsers.add_parser("pause", help="Pause a source without editing config")
     pause_parser.add_argument("--source", required=True, help="Source id")
     resume_parser = subparsers.add_parser("resume", help="Resume a paused source")
@@ -60,6 +62,9 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "inspect":
         print(json.dumps(engine.inspect(args.source), indent=2))
+        return 0
+    if args.command == "refresh":
+        print(json.dumps(engine.refresh_source(args.source), indent=2))
         return 0
     if args.command == "pause":
         engine.pause_source(args.source)
