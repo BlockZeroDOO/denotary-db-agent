@@ -79,6 +79,7 @@ Returns:
 
 ```bash
 denotary-db-agent --config examples/agent.example.json diagnostics --source pg-core-ledger
+denotary-db-agent --config examples/agent.example.json diagnostics --source pg-core-ledger --save-snapshot
 ```
 
 Returns a compact operator-focused report with:
@@ -88,6 +89,9 @@ Returns a compact operator-focused report with:
 - reconnect / fallback / probation state
 - recent stream error history
 - logical slot progress markers and lag counters
+
+With `--save-snapshot`, the command also writes the same JSON payload to a timestamped file under the
+local runtime directory. Use `--output <path>` when you want a deterministic file path for automation.
 
 ### Bootstrap
 

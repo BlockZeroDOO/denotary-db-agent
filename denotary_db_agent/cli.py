@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import argparse
 import json
+from datetime import datetime, timezone
+from pathlib import Path
 
 from denotary_db_agent.config import load_config
 from denotary_db_agent.engine import AgentEngine
@@ -21,6 +23,12 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("health", help="Show service and source health")
     diagnostics_parser = subparsers.add_parser("diagnostics", help="Show compact stream/runtime diagnostics")
     diagnostics_parser.add_argument("--source", help="Source id")
+    diagnostics_parser.add_argument("--output", help="Write diagnostics JSON to this file")
+    diagnostics_parser.add_argument(
+        "--save-snapshot",
+        action="store_true",
+        help="Save diagnostics snapshot to a timestamped JSON file under the local runtime directory",
+    )
     bootstrap_parser = subparsers.add_parser("bootstrap", help="Install or refresh source-side runtime artifacts")
     bootstrap_parser.add_argument("--source", help="Source id")
     inspect_parser = subparsers.add_parser("inspect", help="Inspect source configuration and live runtime state")
@@ -44,6 +52,21 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def default_diagnostics_snapshot_path(config_path: str, state_db: str, source_id: str | None) -> Path:
+    del config_path
+    base_dir = Path(state_db).resolve().parent / "diagnostics"
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    suffix = source_id or "all"
+    return base_dir / f"diagnostics-{suffix}-{timestamp}.json"
+
+
+def write_json_snapshot(payload: dict, output_path: str | Path) -> Path:
+    path = Path(output_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    return path
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -60,7 +83,17 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(engine.health(), indent=2))
         return 0
     if args.command == "diagnostics":
-        print(json.dumps(engine.diagnostics(args.source), indent=2))
+        diagnostics = engine.diagnostics(args.source)
+        if args.output:
+            snapshot_path = write_json_snapshot(diagnostics, args.output)
+            diagnostics["snapshot_path"] = str(snapshot_path)
+        elif args.save_snapshot:
+            snapshot_path = write_json_snapshot(
+                diagnostics,
+                default_diagnostics_snapshot_path(args.config, config.storage.state_db, args.source),
+            )
+            diagnostics["snapshot_path"] = str(snapshot_path)
+        print(json.dumps(diagnostics, indent=2))
         return 0
     if args.command == "bootstrap":
         print(json.dumps(engine.bootstrap(args.source), indent=2))

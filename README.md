@@ -57,6 +57,7 @@ pip install -e .
 denotary-db-agent status --config examples/agent.example.json
 denotary-db-agent health --config examples/agent.example.json
 denotary-db-agent diagnostics --config examples/agent.example.json --source pg-core-ledger
+denotary-db-agent diagnostics --config examples/agent.example.json --source pg-core-ledger --save-snapshot
 denotary-db-agent bootstrap --config examples/agent.example.json --source pg-core-ledger
 denotary-db-agent inspect --config examples/agent.example.json --source pg-core-ledger
 denotary-db-agent refresh --config examples/agent.example.json --source pg-core-ledger
@@ -84,6 +85,7 @@ python -m unittest discover -s tests -v
 python -m denotary_db_agent --config examples/agent.example.json status
 python -m denotary_db_agent --config examples/agent.example.json health
 python -m denotary_db_agent --config examples/agent.example.json diagnostics --source pg-core-ledger
+python -m denotary_db_agent --config examples/agent.example.json diagnostics --source pg-core-ledger --save-snapshot
 python -m denotary_db_agent --config examples/agent.example.json bootstrap --source pg-core-ledger
 python -m denotary_db_agent --config examples/agent.example.json inspect --source pg-core-ledger
 python -m denotary_db_agent --config examples/agent.example.json refresh --source pg-core-ledger
@@ -98,6 +100,7 @@ Note:
 - `health` now also surfaces logical slot warnings such as publication drift, REPLICA IDENTITY drift, and WAL lag thresholds
 - `health` now classifies each source as `healthy`, `degraded`, `critical`, or `error`
 - `diagnostics` gives a compact stream/logical-slot focused report per source
+- `diagnostics --save-snapshot` writes the report to a timestamped JSON file under the local runtime directory
 - `inspect` / `health` now surface PostgreSQL stream runtime stats such as active session state, acknowledged LSN, reconnect counters, reconnect reasons, and last stream errors
 - `inspect` now also exposes a short ring buffer of recent PostgreSQL stream errors
 - after repeated stream failures, PostgreSQL `pgoutput` can temporarily fall back from `stream` to `peek`
