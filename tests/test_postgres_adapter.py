@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import struct
+import time
 import unittest
 from contextlib import contextmanager
 from unittest.mock import patch
@@ -414,6 +415,14 @@ class PostgresAdapterTest(unittest.TestCase):
                 "stream_reconnect_count": 0,
                 "stream_last_connect_at": "",
                 "stream_last_reconnect_at": "",
+                "stream_last_reconnect_reason": "",
+                "stream_last_error": "",
+                "stream_last_error_kind": "",
+                "stream_last_error_at": "",
+                "stream_failure_streak": 0,
+                "stream_backoff_active": False,
+                "stream_backoff_remaining_sec": 0.0,
+                "stream_backoff_until": "",
             },
         ):
             details = adapter.inspect()
@@ -427,6 +436,7 @@ class PostgresAdapterTest(unittest.TestCase):
         self.assertFalse(details["cdc"]["pending_changes"])
         self.assertTrue(details["cdc"]["replica_identity_in_sync"])
         self.assertEqual(details["cdc"]["retained_wal_bytes"], 0)
+        self.assertEqual(details["cdc"]["stream_backoff_remaining_sec"], 0.0)
 
     def test_wait_for_changes_detects_logical_pending_changes(self) -> None:
         config = self.make_config()
@@ -617,8 +627,77 @@ class PostgresAdapterTest(unittest.TestCase):
 
         self.assertEqual(adapter._stream_connect_count, 2)
         self.assertEqual(adapter._stream_reconnect_count, 1)
+        self.assertEqual(adapter._stream_last_reconnect_reason, "session_reopen")
         self.assertTrue(adapter._stream_last_connect_at)
         self.assertTrue(adapter._stream_last_reconnect_at)
+
+    def test_stream_runtime_records_last_error_and_enters_backoff_after_repeated_failures(self) -> None:
+        config = self.make_config()
+        config.options["capture_mode"] = "logical"
+        config.options["output_plugin"] = "pgoutput"
+        config.options["logical_runtime_mode"] = "stream"
+        config.options["logical_stream_reconnect_base_delay_sec"] = 0.25
+        adapter = PostgresAdapter(config)
+        spec = PostgresTableSpec(
+            schema_name="public",
+            table_name="invoices",
+            watermark_column="updated_at",
+            commit_timestamp_column="updated_at",
+            primary_key_columns=["id"],
+            selected_columns=["id", "updated_at", "status"],
+        )
+
+        @contextmanager
+        def dummy_connect():
+            yield object()
+
+        session_one = unittest.mock.MagicMock()
+        session_one.is_open = True
+        session_one.close = unittest.mock.Mock()
+        session_two = unittest.mock.MagicMock()
+        session_two.is_open = True
+        session_two.close = unittest.mock.Mock()
+
+        with patch.object(adapter, "_connect", dummy_connect), patch.object(
+            adapter, "_load_table_specs", return_value=[spec]
+        ), patch.object(adapter, "_ensure_logical_cdc_setup"), patch.object(
+            adapter,
+            "_ensure_replication_session",
+            side_effect=[session_one, session_two],
+        ), patch.object(
+            adapter,
+            "_fetch_pgoutput_stream_rows",
+            side_effect=[RuntimeError("broken connection"), RuntimeError("broken connection again")],
+        ):
+            events = list(adapter.start_stream(None))
+
+        self.assertEqual(events, [])
+        self.assertEqual(adapter._stream_failure_streak, 2)
+        self.assertEqual(adapter._stream_last_error_kind, "connection_lost")
+        self.assertIn("broken connection again", adapter._stream_last_error)
+        self.assertGreater(adapter._stream_backoff_remaining_sec(), 0.0)
+        self.assertTrue(adapter._stream_backoff_until)
+
+    def test_stream_runtime_skips_fetch_during_backoff_window(self) -> None:
+        config = self.make_config()
+        config.options["capture_mode"] = "logical"
+        config.options["output_plugin"] = "pgoutput"
+        config.options["logical_runtime_mode"] = "stream"
+        adapter = PostgresAdapter(config)
+        adapter._stream_backoff_until_monotonic = time.monotonic() + 1.0
+        adapter._stream_backoff_until = "2026-04-18T12:00:01Z"
+
+        with patch.object(
+            adapter,
+            "_connect",
+            side_effect=AssertionError("start_stream should not connect during backoff"),
+        ), patch.object(
+            adapter, "_ensure_replication_session"
+        ) as ensure_session:
+            events = list(adapter.start_stream(None))
+
+        self.assertEqual(events, [])
+        ensure_session.assert_not_called()
 
     def test_parse_replication_frame_xlogdata(self) -> None:
         payload = (

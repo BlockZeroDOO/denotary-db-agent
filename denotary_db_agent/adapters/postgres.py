@@ -70,6 +70,13 @@ class PostgresAdapter(BaseAdapter):
         self._stream_reconnect_count = 0
         self._stream_last_connect_at = ""
         self._stream_last_reconnect_at = ""
+        self._stream_last_reconnect_reason = ""
+        self._stream_last_error = ""
+        self._stream_last_error_kind = ""
+        self._stream_last_error_at = ""
+        self._stream_failure_streak = 0
+        self._stream_backoff_until_monotonic = 0.0
+        self._stream_backoff_until = ""
 
     def discover_capabilities(self) -> AdapterCapabilities:
         capture_mode = str(self.config.options.get("capture_mode", "watermark")).lower()
@@ -185,6 +192,13 @@ class PostgresAdapter(BaseAdapter):
 
     def start_stream(self, checkpoint: SourceCheckpoint | None) -> Iterable[ChangeEvent]:
         capture_mode = self._capture_mode()
+        if (
+            capture_mode == "logical"
+            and self._logical_output_plugin() == "pgoutput"
+            and self._logical_runtime_mode() == "stream"
+            and self._stream_backoff_remaining_sec() > 0
+        ):
+            return
         with self._connect() as connection:
             specs = self._load_table_specs(connection)
             if capture_mode == "trigger":
@@ -234,13 +248,21 @@ class PostgresAdapter(BaseAdapter):
                 runtime_mode = self._logical_runtime_mode()
                 if plugin == "pgoutput" and runtime_mode == "stream":
                     restart_lsn = self._parse_logical_checkpoint(checkpoint) or "0/0"
-                    session = self._ensure_replication_session(restart_lsn)
                     try:
-                        decoded_rows = self._fetch_pgoutput_stream_rows(session, spec_map, row_limit)
-                    except Exception:
-                        self._close_replication_session(send_feedback=False)
                         session = self._ensure_replication_session(restart_lsn)
                         decoded_rows = self._fetch_pgoutput_stream_rows(session, spec_map, row_limit)
+                        self._clear_stream_runtime_failure()
+                    except Exception as exc:
+                        reconnect_reason = self._record_stream_runtime_failure(exc)
+                        self._close_replication_session(send_feedback=False)
+                        try:
+                            session = self._ensure_replication_session(restart_lsn, reconnect_reason=reconnect_reason)
+                            decoded_rows = self._fetch_pgoutput_stream_rows(session, spec_map, row_limit)
+                            self._clear_stream_runtime_failure()
+                        except Exception as retry_exc:
+                            self._record_stream_runtime_failure(retry_exc)
+                            self._close_replication_session(send_feedback=False)
+                            return
                     processed_count = 0
                     for xid, lsn, commit_lsn, advance_lsn, event_index, spec, operation, before_row, after_row in decoded_rows:
                         if xid == last_xid and event_index <= last_event_index:
@@ -428,6 +450,10 @@ class PostgresAdapter(BaseAdapter):
 
     def wait_for_changes(self, timeout_sec: float) -> bool:
         if self._capture_mode() == "logical":
+            backoff_remaining = self._stream_backoff_remaining_sec()
+            if backoff_remaining > 0:
+                time.sleep(min(timeout_sec, backoff_remaining))
+                return False
             deadline = time.monotonic() + max(timeout_sec, 0.0)
             poll_interval = float(self.config.options.get("logical_wait_poll_sec", 0.5))
             poll_interval = max(0.05, poll_interval)
@@ -1296,6 +1322,14 @@ class PostgresAdapter(BaseAdapter):
             "stream_reconnect_count": self._stream_reconnect_count,
             "stream_last_connect_at": self._stream_last_connect_at,
             "stream_last_reconnect_at": self._stream_last_reconnect_at,
+            "stream_last_reconnect_reason": self._stream_last_reconnect_reason,
+            "stream_last_error": self._stream_last_error,
+            "stream_last_error_kind": self._stream_last_error_kind,
+            "stream_last_error_at": self._stream_last_error_at,
+            "stream_failure_streak": self._stream_failure_streak,
+            "stream_backoff_active": self._stream_backoff_remaining_sec() > 0,
+            "stream_backoff_remaining_sec": round(self._stream_backoff_remaining_sec(), 3),
+            "stream_backoff_until": self._stream_backoff_until,
         }
 
     def _sort_key(self, spec: PostgresTableSpec, row: dict[str, Any]) -> tuple[Any, ...]:
@@ -1341,7 +1375,7 @@ class PostgresAdapter(BaseAdapter):
     def _logical_publication_name(self) -> str:
         return str(self.config.options.get("publication_name", f"denotary_{self.config.id}_pub"))
 
-    def _ensure_replication_session(self, start_lsn: str) -> PostgresReplicationSession:
+    def _ensure_replication_session(self, start_lsn: str, reconnect_reason: str = "") -> PostgresReplicationSession:
         desired_lsn = start_lsn or "0/0"
         if self._active_replication_session is not None:
             if self._active_replication_session.is_open and self._active_replication_start_lsn == desired_lsn:
@@ -1362,6 +1396,7 @@ class PostgresAdapter(BaseAdapter):
         if self._stream_connect_count > 1:
             self._stream_reconnect_count += 1
             self._stream_last_reconnect_at = now
+            self._stream_last_reconnect_reason = reconnect_reason or "session_reopen"
         return session
 
     def _close_replication_session(self, *, send_feedback: bool) -> None:
@@ -1369,6 +1404,52 @@ class PostgresAdapter(BaseAdapter):
             self._active_replication_session.close(send_feedback=send_feedback)
         self._active_replication_session = None
         self._active_replication_start_lsn = "0/0"
+
+    def _classify_stream_runtime_error(self, exc: Exception) -> str:
+        message = str(exc).lower()
+        if "timeout" in message:
+            return "timeout"
+        if "copy_both" in message or "replication frame" in message or "unsupported postgres replication frame" in message:
+            return "protocol_error"
+        if "publication" in message or "replica identity" in message:
+            return "publication_error"
+        if "slot" in message and ("active" in message or "in use" in message):
+            return "slot_conflict"
+        if "connection" in message or "closed" in message or "broken pipe" in message or "eof" in message:
+            return "connection_lost"
+        return "runtime_error"
+
+    def _record_stream_runtime_failure(self, exc: Exception) -> str:
+        reason = self._classify_stream_runtime_error(exc)
+        now = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+        self._stream_last_error = str(exc)
+        self._stream_last_error_kind = reason
+        self._stream_last_error_at = now
+        self._stream_failure_streak += 1
+        delay_sec = self._stream_backoff_delay_sec()
+        if delay_sec > 0:
+            self._stream_backoff_until_monotonic = time.monotonic() + delay_sec
+            self._stream_backoff_until = datetime.fromtimestamp(
+                time.time() + delay_sec, timezone.utc
+            ).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+        return reason
+
+    def _clear_stream_runtime_failure(self) -> None:
+        self._stream_failure_streak = 0
+        self._stream_backoff_until_monotonic = 0.0
+        self._stream_backoff_until = ""
+
+    def _stream_backoff_delay_sec(self) -> float:
+        if self._stream_failure_streak <= 0:
+            return 0.0
+        base_delay = float(self.config.options.get("logical_stream_reconnect_base_delay_sec", 0.5))
+        max_delay = float(self.config.options.get("logical_stream_reconnect_max_delay_sec", 10.0))
+        return min(max_delay, base_delay * (2 ** max(self._stream_failure_streak - 1, 0)))
+
+    def _stream_backoff_remaining_sec(self) -> float:
+        if self._stream_backoff_until_monotonic <= 0:
+            return 0.0
+        return max(0.0, self._stream_backoff_until_monotonic - time.monotonic())
 
     def _replication_conninfo(self) -> str:
         parts = [

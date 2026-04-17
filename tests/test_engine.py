@@ -204,6 +204,11 @@ class EngineTest(unittest.TestCase):
                     "slot_exists": True,
                     "publication_in_sync": False,
                     "replica_identity_in_sync": False,
+                    "stream_backoff_active": True,
+                    "stream_backoff_remaining_sec": 3.5,
+                    "stream_backoff_until": "2026-04-18T12:00:01Z",
+                    "stream_last_error_kind": "connection_lost",
+                    "stream_failure_streak": 2,
                     "retained_wal_bytes": 128,
                     "flush_lag_bytes": 64,
                 },
@@ -222,6 +227,10 @@ class EngineTest(unittest.TestCase):
         self.assertIn("pgoutput publication tables are out of sync with tracked tables", health["sources"][0]["warnings"])
         self.assertIn(
             "tracked logical tables are out of sync with expected REPLICA IDENTITY mode",
+            health["sources"][0]["warnings"],
+        )
+        self.assertIn(
+            "postgres stream is in reconnect cooldown after connection_lost; retry after 2026-04-18T12:00:01Z",
             health["sources"][0]["warnings"],
         )
 

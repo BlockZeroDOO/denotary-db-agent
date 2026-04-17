@@ -215,6 +215,15 @@ class AgentEngine:
             warnings.append("pgoutput publication tables are out of sync with tracked tables")
         if cdc.get("replica_identity_in_sync") is False:
             warnings.append("tracked logical tables are out of sync with expected REPLICA IDENTITY mode")
+        if cdc.get("stream_backoff_active") is True:
+            error_kind = cdc.get("stream_last_error_kind") or "runtime_error"
+            backoff_until = cdc.get("stream_backoff_until") or "unknown"
+            warnings.append(f"postgres stream is in reconnect cooldown after {error_kind}; retry after {backoff_until}")
+        elif isinstance(cdc.get("stream_failure_streak"), int) and int(cdc["stream_failure_streak"]) > 0:
+            error_kind = cdc.get("stream_last_error_kind") or "runtime_error"
+            warnings.append(
+                f"postgres stream has {int(cdc['stream_failure_streak'])} consecutive failure(s); last error kind: {error_kind}"
+            )
         if isinstance(retained_wal_bytes, int) and retained_wal_bytes > retained_warn_bytes:
             warnings.append(
                 f"logical slot retained WAL is above threshold: {retained_wal_bytes} bytes > {retained_warn_bytes} bytes"

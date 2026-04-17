@@ -94,7 +94,7 @@ Note:
 - `status` is safe to run without a live database
 - `health` shows local source state and best-effort health for configured chain/receipt/audit services
 - `health` now also surfaces logical slot warnings such as publication drift, REPLICA IDENTITY drift, and WAL lag thresholds
-- `inspect` / `health` now surface PostgreSQL stream runtime stats such as active session state, acknowledged LSN, and reconnect counters
+- `inspect` / `health` now surface PostgreSQL stream runtime stats such as active session state, acknowledged LSN, reconnect counters, reconnect reasons, and last stream errors
 - `bootstrap` installs or refreshes source-side runtime artifacts such as PostgreSQL trigger CDC objects, logical replication slot setup, and `pgoutput` publications
 - `inspect` shows tracked tables, selected columns, and live PostgreSQL CDC state for a source
 - for `pgoutput`, `inspect` also shows whether publication tables are in sync with tracked tables
@@ -113,6 +113,7 @@ Note:
 - `logical_runtime_mode = "peek"` remains available as an explicit fallback
 - streaming feedback only reports already acknowledged LSNs, so it doesn't replace post-delivery checkpoint advancement
 - in stream mode, that post-delivery checkpoint advancement feeds the active session ack directly; SQL slot advance remains the fallback for non-stream paths
+- stream mode now classifies reconnect/runtime failures, exposes `stream_last_error*` and `stream_last_reconnect_reason`, and applies bounded reconnect cooldown after repeated failures
 - finalized receipts and proof chains are exported under `storage.proof_dir`
 
 ## Live PostgreSQL Harness

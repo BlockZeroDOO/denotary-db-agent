@@ -60,6 +60,8 @@
         "logical_wait_poll_sec": 0.5,
         "logical_stream_timeout_sec": 2.0,
         "logical_stream_idle_timeout_sec": 0.5,
+        "logical_stream_reconnect_base_delay_sec": 0.5,
+        "logical_stream_reconnect_max_delay_sec": 10.0,
         "logical_warn_retained_wal_bytes": 268435456,
         "logical_warn_flush_lag_bytes": 67108864
       }

@@ -111,6 +111,9 @@ For PostgreSQL this returns:
 - `current_wal_lsn`, `retained_wal_bytes`, and `flush_lag_bytes` for logical slots
 - `stream_session_active`, `stream_start_lsn`, and `stream_acknowledged_lsn` for PostgreSQL stream mode
 - `stream_connect_count`, `stream_reconnect_count`, `stream_last_connect_at`, and `stream_last_reconnect_at`
+- `stream_last_reconnect_reason`
+- `stream_last_error`, `stream_last_error_kind`, and `stream_last_error_at`
+- `stream_failure_streak`, `stream_backoff_active`, and `stream_backoff_until`
 - installed trigger count or logical/publication state, depending on mode
 
 ### Refresh
@@ -220,6 +223,8 @@ Expected source options:
 - optional `logical_wait_poll_sec`, default `0.5`
 - optional `logical_stream_timeout_sec`, default `2.0`
 - optional `logical_stream_idle_timeout_sec`, default `0.5`
+- optional `logical_stream_reconnect_base_delay_sec`, default `0.5`
+- optional `logical_stream_reconnect_max_delay_sec`, default `10.0`
 - optional `logical_warn_retained_wal_bytes`, default `268435456`
 - optional `logical_warn_flush_lag_bytes`, default `67108864`
 
