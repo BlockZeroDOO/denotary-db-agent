@@ -82,6 +82,7 @@ For PostgreSQL sources this:
 - discovers tracked tables
 - for `capture_mode = "trigger"`, creates or refreshes `denotary_cdc` schema objects and table triggers
 - for `capture_mode = "logical"`, ensures logical prerequisites such as `wal_level=logical`, `REPLICA IDENTITY FULL`, and logical slot setup
+- when `output_plugin = "pgoutput"`, also creates or refreshes the configured publication
 
 ### Inspect
 
@@ -93,10 +94,12 @@ For PostgreSQL this returns:
 
 - capture mode
 - tracked tables
+- selected columns per tracked table
 - primary key and watermark settings
 - trigger CDC schema status when `capture_mode = "trigger"`
 - logical slot status when `capture_mode = "logical"`
-- installed trigger count or slot state, depending on mode
+- `pgoutput` publication state and publication tables when `output_plugin = "pgoutput"`
+- installed trigger count or logical/publication state, depending on mode
 
 ### Refresh
 
@@ -174,8 +177,10 @@ The current PostgreSQL adapter is the first live implementation and works as:
 - wake daemon loops through PostgreSQL `LISTEN/NOTIFY`
 - optionally delete processed rows from `denotary_cdc.events` after checkpoint advancement
 - in logical mode, read `insert/update/delete` from a PostgreSQL logical replication slot
+- in logical mode, support both `test_decoding` and `pgoutput`
 - in logical mode, advance the logical slot only after a successful delivery checkpoint
 - in logical mode, keep a transaction-safe cursor so multi-row transactions are replayed correctly even with a small `row_limit`
+- in `pgoutput` mode, manage the publication lifecycle inside the agent
 
 Expected source options:
 
@@ -186,7 +191,9 @@ Expected source options:
 - optional `cleanup_processed_events` for trigger mode, default `true`
 - optional `slot_name` for logical mode
 - optional `output_plugin`, default `test_decoding`
+- optional `publication_name` for `output_plugin = "pgoutput"`
 - optional `auto_create_slot`, default `true`
+- optional `auto_create_publication`, default `true`
 - optional `replica_identity_full`, default `true`
 
 Recommended first-run behavior:
@@ -221,6 +228,8 @@ The harness validates:
 - trigger CDC cleanup after processed events are checkpointed
 - logical decoding capture through a live replication slot
 - preservation of multi-row logical transactions when `row_limit = 1`
+- `pgoutput` publication bootstrap / inspect with live PostgreSQL state
+- `pgoutput` live insert/update/delete capture through `pg_logical_slot_peek_binary_changes()`
 
 ## Enterprise Signer Permission
 

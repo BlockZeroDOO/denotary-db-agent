@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import struct
 from contextlib import contextmanager
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -33,6 +34,26 @@ class PostgresTableSpec:
         return f"{self.schema_name}.{self.table_name}"
 
 
+@dataclass
+class PostgresLogicalRelationColumn:
+    name: str
+    type_oid: int
+    type_modifier: int
+
+
+@dataclass
+class PostgresLogicalRelation:
+    relid: int
+    schema_name: str
+    table_name: str
+    replica_identity: str
+    columns: list[PostgresLogicalRelationColumn]
+
+    @property
+    def key(self) -> str:
+        return f"{self.schema_name}.{self.table_name}"
+
+
 class PostgresAdapter(BaseAdapter):
     source_type = "postgresql"
 
@@ -40,9 +61,11 @@ class PostgresAdapter(BaseAdapter):
         super().__init__(config)
         self._listener_connection: Any | None = None
         self._logical_warning_emitted = False
+        self._logical_relation_cache: dict[int, PostgresLogicalRelation] = {}
 
     def discover_capabilities(self) -> AdapterCapabilities:
         capture_mode = str(self.config.options.get("capture_mode", "watermark")).lower()
+        logical_plugin = self._logical_output_plugin()
         return AdapterCapabilities(
             source_type=self.source_type,
             minimum_version="14",
@@ -53,7 +76,13 @@ class PostgresAdapter(BaseAdapter):
                 "Trigger-based built-in CDC is enabled for PostgreSQL with optional LISTEN/NOTIFY wakeups."
                 if capture_mode == "trigger"
                 else (
-                    "Logical decoding / WAL CDC is enabled through a logical replication slot and test_decoding output."
+                    (
+                        "Logical decoding / WAL CDC is enabled through a logical replication slot and "
+                        "pgoutput publication setup. Runtime binary decoding is not yet implemented, "
+                        "so pgoutput is currently bootstrap/inspect ready only."
+                    )
+                    if logical_plugin == "pgoutput"
+                    else "Logical decoding / WAL CDC is enabled through a logical replication slot and test_decoding output."
                     if capture_mode == "logical"
                     else "Live baseline implementation uses watermark-based snapshot polling."
                 )
@@ -193,7 +222,12 @@ class PostgresAdapter(BaseAdapter):
                 spec_map = {spec.key: spec for spec in specs}
                 last_xid, last_event_index, _commit_lsn, _advance_lsn = self._parse_logical_checkpoint_state(checkpoint)
                 row_limit = int(self.config.options.get("row_limit", self.config.batch_size))
-                decoded_rows = self._fetch_logical_decoded_rows(connection, spec_map, row_limit)
+                plugin = self._logical_output_plugin()
+                decoded_rows = (
+                    self._fetch_pgoutput_decoded_rows(connection, spec_map, row_limit)
+                    if plugin == "pgoutput"
+                    else self._fetch_logical_decoded_rows(connection, spec_map, row_limit)
+                )
                 processed_count = 0
                 for xid, lsn, commit_lsn, advance_lsn, event_index, spec, operation, before_row, after_row in decoded_rows:
                     if xid == last_xid and event_index <= last_event_index:
@@ -539,6 +573,7 @@ class PostgresAdapter(BaseAdapter):
                 )
 
     def _ensure_logical_cdc_setup(self, connection: Any, specs: list[PostgresTableSpec]) -> None:
+        plugin = self._logical_output_plugin()
         with connection.cursor() as cursor:
             wal_level_row = cursor.execute("show wal_level").fetchone()
             if str(wal_level_row["wal_level"]).lower() != "logical":
@@ -554,6 +589,10 @@ class PostgresAdapter(BaseAdapter):
                     )
                 connection.commit()
 
+            if plugin == "pgoutput":
+                self._ensure_pgoutput_publication(cursor, specs)
+                connection.commit()
+
             slot_row = cursor.execute(
                 """
                 select slot_name, plugin, confirmed_flush_lsn, restart_lsn
@@ -565,8 +604,40 @@ class PostgresAdapter(BaseAdapter):
             if slot_row is None and bool(self.config.options.get("auto_create_slot", True)):
                 cursor.execute(
                     "select slot_name, lsn from pg_create_logical_replication_slot(%s, %s)",
-                    (self._logical_slot_name(), self._logical_output_plugin()),
+                    (self._logical_slot_name(), plugin),
                 )
+            elif slot_row is not None and str(slot_row["plugin"]) != plugin:
+                raise ValueError(
+                    f"postgresql logical slot {self._logical_slot_name()} exists with plugin {slot_row['plugin']}, expected {plugin}"
+                )
+
+    def _ensure_pgoutput_publication(self, cursor: Any, specs: list[PostgresTableSpec]) -> None:
+        publication_name = self._logical_publication_name()
+        publication_row = cursor.execute(
+            """
+            select pubname
+            from pg_publication
+            where pubname = %s
+            """,
+            (publication_name,),
+        ).fetchone()
+        table_sql = ", ".join(
+            f"{self._quote_identifier(spec.schema_name)}.{self._quote_identifier(spec.table_name)}"
+            for spec in specs
+        )
+        if publication_row is None:
+            if not bool(self.config.options.get("auto_create_publication", True)):
+                raise ValueError(
+                    f"postgresql publication {publication_name} does not exist and auto_create_publication is disabled"
+                )
+            cursor.execute(
+                f"create publication {self._quote_identifier(publication_name)} for table {table_sql}"
+            )
+            return
+
+        cursor.execute(
+            f"alter publication {self._quote_identifier(publication_name)} set table {table_sql}"
+        )
 
     def _fetch_logical_changes(self, connection: Any, fetch_limit: int | None = None) -> list[dict[str, Any]]:
         row_limit = fetch_limit or int(self.config.options.get("row_limit", self.config.batch_size))
@@ -575,13 +646,24 @@ class PostgresAdapter(BaseAdapter):
         options = []
         if plugin == "test_decoding":
             options = ["include-xids", "0", "skip-empty-xacts", "1"]
-        placeholders = ", ".join(["%s"] * len(options))
-        sql = (
-            f"select lsn, xid, data from pg_logical_slot_peek_changes(%s, null, %s"
-            + (f", {placeholders}" if placeholders else "")
-            + ")"
-        )
-        params: list[Any] = [slot_name, row_limit, *options]
+            placeholders = ", ".join(["%s"] * len(options))
+            sql = (
+                f"select lsn, xid, data from pg_logical_slot_peek_changes(%s, null, %s"
+                + (f", {placeholders}" if placeholders else "")
+                + ")"
+            )
+            params: list[Any] = [slot_name, row_limit, *options]
+        elif plugin == "pgoutput":
+            options = ["proto_version", "1", "publication_names", self._logical_publication_name()]
+            placeholders = ", ".join(["%s"] * len(options))
+            sql = (
+                f"select lsn, xid, data from pg_logical_slot_peek_binary_changes(%s, null, %s"
+                + (f", {placeholders}" if placeholders else "")
+                + ")"
+            )
+            params = [slot_name, row_limit, *options]
+        else:
+            raise ValueError(f"unsupported PostgreSQL logical output plugin: {plugin}")
         with connection.cursor() as cursor:
             return list(cursor.execute(sql, params).fetchall())
 
@@ -615,6 +697,71 @@ class PostgresAdapter(BaseAdapter):
                         "operation": operation,
                         "before_row": before_row,
                         "after_row": after_row,
+                    }
+                )
+
+            data_entries = [entry for entry in entries if entry["kind"] == "data"]
+            if len(data_entries) <= row_limit:
+                return self._materialize_logical_entries(entries)
+
+            boundary_xid = str(data_entries[row_limit - 1]["xid"])
+            boundary_position = next(
+                index
+                for index, entry in enumerate(entries)
+                if entry["kind"] == "data"
+                and entry["xid"] == data_entries[row_limit - 1]["xid"]
+                and entry["lsn"] == data_entries[row_limit - 1]["lsn"]
+                and entry["after_row"] == data_entries[row_limit - 1]["after_row"]
+                and entry["before_row"] == data_entries[row_limit - 1]["before_row"]
+            )
+            if any(
+                entry["kind"] == "commit" and entry["xid"] == boundary_xid
+                for entry in entries[boundary_position + 1 :]
+            ):
+                return self._materialize_logical_entries(entries)
+
+            if len(raw_rows) < fetch_limit:
+                return self._materialize_logical_entries(entries)
+
+            fetch_limit *= 2
+
+    def _fetch_pgoutput_decoded_rows(
+        self,
+        connection: Any,
+        spec_map: dict[str, PostgresTableSpec],
+        row_limit: int,
+    ) -> list[tuple[str, str, str, bool, int, PostgresTableSpec, str, dict[str, Any] | None, dict[str, Any] | None]]:
+        fetch_limit = max(row_limit + 8, row_limit * 8)
+        while True:
+            raw_rows = self._fetch_logical_changes(connection, fetch_limit=fetch_limit)
+            entries: list[dict[str, Any]] = []
+            current_xid = ""
+            for row in raw_rows:
+                lsn = str(row["lsn"])
+                xid_value = row.get("xid") if isinstance(row, dict) else None
+                parsed = self._parse_pgoutput_message(bytes(row["data"]), spec_map)
+                if parsed is None:
+                    continue
+                kind = str(parsed["kind"])
+                if kind == "begin":
+                    current_xid = str(parsed["xid"])
+                    entries.append({"kind": "begin", "xid": current_xid, "lsn": lsn})
+                    continue
+                if kind == "commit":
+                    entries.append({"kind": "commit", "xid": current_xid or str(xid_value or ""), "lsn": parsed["commit_lsn"] or lsn})
+                    current_xid = ""
+                    continue
+                if kind != "data":
+                    continue
+                entries.append(
+                    {
+                        "kind": "data",
+                        "xid": current_xid or str(xid_value or ""),
+                        "lsn": lsn,
+                        "spec": parsed["spec"],
+                        "operation": parsed["operation"],
+                        "before_row": parsed["before_row"],
+                        "after_row": parsed["after_row"],
                     }
                 )
 
@@ -853,6 +1000,7 @@ class PostgresAdapter(BaseAdapter):
         }
 
     def _inspect_logical_cdc_state(self, connection: Any, specs: list[PostgresTableSpec]) -> dict[str, Any]:
+        publication_name = self._logical_publication_name()
         with connection.cursor() as cursor:
             wal_level_row = cursor.execute("show wal_level").fetchone()
             slot_row = cursor.execute(
@@ -863,10 +1011,36 @@ class PostgresAdapter(BaseAdapter):
                 """,
                 (self._logical_slot_name(),),
             ).fetchone()
+            publication_row = cursor.execute(
+                """
+                select pubname
+                from pg_publication
+                where pubname = %s
+                """,
+                (publication_name,),
+            ).fetchone()
+            publication_tables = []
+            if publication_row is not None:
+                publication_table_rows = cursor.execute(
+                    """
+                    select schemaname, tablename
+                    from pg_publication_tables
+                    where pubname = %s
+                    order by schemaname, tablename
+                    """,
+                    (publication_name,),
+                ).fetchall()
+                publication_tables = [
+                    f"{row['schemaname']}.{row['tablename']}"
+                    for row in publication_table_rows
+                ]
         return {
             "mode": "logical",
             "slot_name": self._logical_slot_name(),
             "plugin": self._logical_output_plugin(),
+            "publication_name": publication_name,
+            "publication_exists": publication_row is not None,
+            "publication_tables": publication_tables,
             "tracked_table_count": len(specs),
             "wal_level": str(wal_level_row["wal_level"]),
             "slot_exists": slot_row is not None,
@@ -912,6 +1086,9 @@ class PostgresAdapter(BaseAdapter):
     def _logical_output_plugin(self) -> str:
         return str(self.config.options.get("output_plugin", "test_decoding"))
 
+    def _logical_publication_name(self) -> str:
+        return str(self.config.options.get("publication_name", f"denotary_{self.config.id}_pub"))
+
     def _parse_test_decoding_change(
         self,
         data: str,
@@ -942,6 +1119,183 @@ class PostgresAdapter(BaseAdapter):
             before_row = old_tuple or old_key or self._parse_test_decoding_tuple(remainder)
             return spec, operation_lower, before_row, None
         return None
+
+    def _parse_pgoutput_message(
+        self,
+        payload: bytes,
+        spec_map: dict[str, PostgresTableSpec],
+    ) -> dict[str, Any] | None:
+        if not payload:
+            return None
+        cursor = 0
+        message_type = chr(payload[cursor])
+        cursor += 1
+
+        if message_type == "B":
+            _final_lsn, cursor = self._read_int64(payload, cursor)
+            _commit_time, cursor = self._read_int64(payload, cursor)
+            xid, cursor = self._read_int32(payload, cursor)
+            return {"kind": "begin", "xid": str(xid)}
+
+        if message_type == "C":
+            _flags, cursor = self._read_int8(payload, cursor)
+            commit_lsn, cursor = self._read_int64(payload, cursor)
+            _end_lsn, cursor = self._read_int64(payload, cursor)
+            _commit_time, cursor = self._read_int64(payload, cursor)
+            return {"kind": "commit", "commit_lsn": self._format_pg_lsn(commit_lsn)}
+
+        if message_type == "R":
+            relation, _cursor = self._parse_pgoutput_relation(payload, cursor)
+            self._logical_relation_cache[relation.relid] = relation
+            return {"kind": "relation"}
+
+        if message_type == "I":
+            relid, cursor = self._read_int32(payload, cursor)
+            relation = self._logical_relation_cache.get(relid)
+            if relation is None:
+                return None
+            tuple_kind, cursor = self._read_char(payload, cursor)
+            if tuple_kind != "N":
+                return None
+            after_row, cursor = self._parse_pgoutput_tuple(payload, cursor, relation)
+            spec = spec_map.get(relation.key)
+            if spec is None:
+                return None
+            return {"kind": "data", "spec": spec, "operation": "insert", "before_row": None, "after_row": after_row}
+
+        if message_type == "U":
+            relid, cursor = self._read_int32(payload, cursor)
+            relation = self._logical_relation_cache.get(relid)
+            if relation is None:
+                return None
+            before_row = None
+            tag, cursor = self._read_char(payload, cursor)
+            if tag in {"K", "O"}:
+                before_row, cursor = self._parse_pgoutput_tuple(payload, cursor, relation)
+                tag, cursor = self._read_char(payload, cursor)
+            if tag != "N":
+                return None
+            after_row, cursor = self._parse_pgoutput_tuple(payload, cursor, relation)
+            spec = spec_map.get(relation.key)
+            if spec is None:
+                return None
+            return {"kind": "data", "spec": spec, "operation": "update", "before_row": before_row, "after_row": after_row}
+
+        if message_type == "D":
+            relid, cursor = self._read_int32(payload, cursor)
+            relation = self._logical_relation_cache.get(relid)
+            if relation is None:
+                return None
+            tag, cursor = self._read_char(payload, cursor)
+            if tag not in {"K", "O"}:
+                return None
+            before_row, cursor = self._parse_pgoutput_tuple(payload, cursor, relation)
+            spec = spec_map.get(relation.key)
+            if spec is None:
+                return None
+            return {"kind": "data", "spec": spec, "operation": "delete", "before_row": before_row, "after_row": None}
+
+        if message_type in {"Y", "O", "T"}:
+            return {"kind": "other"}
+        return None
+
+    def _parse_pgoutput_relation(self, payload: bytes, cursor: int) -> tuple[PostgresLogicalRelation, int]:
+        relid, cursor = self._read_int32(payload, cursor)
+        schema_name, cursor = self._read_cstring(payload, cursor)
+        table_name, cursor = self._read_cstring(payload, cursor)
+        replica_identity, cursor = self._read_char(payload, cursor)
+        column_count, cursor = self._read_int16(payload, cursor)
+        columns: list[PostgresLogicalRelationColumn] = []
+        for _ in range(column_count):
+            _flags, cursor = self._read_int8(payload, cursor)
+            column_name, cursor = self._read_cstring(payload, cursor)
+            type_oid, cursor = self._read_int32(payload, cursor)
+            type_modifier, cursor = self._read_int32(payload, cursor)
+            columns.append(
+                PostgresLogicalRelationColumn(
+                    name=column_name,
+                    type_oid=type_oid,
+                    type_modifier=type_modifier,
+                )
+            )
+        return (
+            PostgresLogicalRelation(
+                relid=relid,
+                schema_name=schema_name,
+                table_name=table_name,
+                replica_identity=replica_identity,
+                columns=columns,
+            ),
+            cursor,
+        )
+
+    def _parse_pgoutput_tuple(
+        self,
+        payload: bytes,
+        cursor: int,
+        relation: PostgresLogicalRelation,
+    ) -> tuple[dict[str, Any], int]:
+        column_count, cursor = self._read_int16(payload, cursor)
+        values: dict[str, Any] = {}
+        for index in range(column_count):
+            column = relation.columns[index]
+            kind, cursor = self._read_char(payload, cursor)
+            if kind == "n":
+                values[column.name] = None
+                continue
+            if kind == "u":
+                values[column.name] = None
+                continue
+            length, cursor = self._read_int32(payload, cursor)
+            raw = payload[cursor : cursor + length]
+            cursor += length
+            values[column.name] = self._decode_pgoutput_value(raw, column.type_oid, kind)
+        return values, cursor
+
+    def _decode_pgoutput_value(self, raw: bytes, type_oid: int, kind: str) -> Any:
+        if kind == "b":
+            return raw.hex()
+        text = raw.decode("utf-8")
+        if type_oid in {20, 21, 23, 26}:
+            return int(text)
+        if type_oid in {700, 701}:
+            return float(text)
+        if type_oid == 16:
+            return text in {"t", "true", "1"}
+        if type_oid == 1700:
+            return text
+        if type_oid in {114, 3802}:
+            try:
+                return json.loads(text)
+            except json.JSONDecodeError:
+                return text
+        if type_oid == 17:
+            return text
+        return text
+
+    def _read_int8(self, payload: bytes, cursor: int) -> tuple[int, int]:
+        return payload[cursor], cursor + 1
+
+    def _read_int16(self, payload: bytes, cursor: int) -> tuple[int, int]:
+        return struct.unpack_from("!H", payload, cursor)[0], cursor + 2
+
+    def _read_int32(self, payload: bytes, cursor: int) -> tuple[int, int]:
+        return struct.unpack_from("!I", payload, cursor)[0], cursor + 4
+
+    def _read_int64(self, payload: bytes, cursor: int) -> tuple[int, int]:
+        return struct.unpack_from("!Q", payload, cursor)[0], cursor + 8
+
+    def _read_char(self, payload: bytes, cursor: int) -> tuple[str, int]:
+        return chr(payload[cursor]), cursor + 1
+
+    def _read_cstring(self, payload: bytes, cursor: int) -> tuple[str, int]:
+        end = payload.index(0, cursor)
+        return payload[cursor:end].decode("utf-8"), end + 1
+
+    def _format_pg_lsn(self, value: int) -> str:
+        upper = value >> 32
+        lower = value & 0xFFFFFFFF
+        return f"{upper:X}/{lower:X}"
 
     def _extract_named_tuple(self, text: str, marker: str) -> dict[str, Any]:
         marker_index = text.find(marker)

@@ -68,6 +68,17 @@ class PostgresAdapterTest(unittest.TestCase):
             adapter.validate_connection()
         load_specs.assert_called_once()
 
+    def test_discover_capabilities_describes_pgoutput_bootstrap_mode(self) -> None:
+        config = self.make_config()
+        config.options["capture_mode"] = "logical"
+        config.options["output_plugin"] = "pgoutput"
+        adapter = PostgresAdapter(config)
+
+        capabilities = adapter.discover_capabilities()
+
+        self.assertTrue(capabilities.supports_cdc)
+        self.assertIn("pgoutput", capabilities.notes)
+
     def test_read_snapshot_emits_sorted_events_and_checkpoint_state(self) -> None:
         adapter = PostgresAdapter(self.make_config())
         specs = [
@@ -344,3 +355,51 @@ class PostgresAdapterTest(unittest.TestCase):
             signature_v2 = adapter.runtime_signature()
 
         self.assertNotEqual(signature_v1, signature_v2)
+
+    def test_inspect_reports_publication_state_for_pgoutput(self) -> None:
+        config = self.make_config()
+        config.options["capture_mode"] = "logical"
+        config.options["output_plugin"] = "pgoutput"
+        adapter = PostgresAdapter(config)
+        specs = [
+            PostgresTableSpec(
+                schema_name="public",
+                table_name="invoices",
+                watermark_column="updated_at",
+                commit_timestamp_column="updated_at",
+                primary_key_columns=["id"],
+                selected_columns=["id", "updated_at", "status"],
+            )
+        ]
+
+        @contextmanager
+        def dummy_connect():
+            yield object()
+
+        with patch.object(adapter, "_connect", dummy_connect), patch.object(
+            adapter, "_load_table_specs", return_value=specs
+        ), patch.object(
+            adapter,
+            "_inspect_logical_cdc_state",
+            return_value={
+                "mode": "logical",
+                "slot_name": "denotary_pg_core_ledger_slot",
+                "plugin": "pgoutput",
+                "publication_name": "denotary_pg_core_ledger_pub",
+                "publication_exists": True,
+                "publication_tables": ["public.invoices"],
+                "tracked_table_count": 1,
+                "wal_level": "logical",
+                "slot_exists": True,
+                "slot_active": False,
+                "restart_lsn": "",
+                "confirmed_flush_lsn": "",
+                "wal_status": "reserved",
+            },
+        ):
+            details = adapter.inspect()
+
+        self.assertEqual(details["capture_mode"], "logical")
+        self.assertEqual(details["cdc"]["plugin"], "pgoutput")
+        self.assertEqual(details["cdc"]["publication_name"], "denotary_pg_core_ledger_pub")
+        self.assertEqual(details["cdc"]["publication_tables"], ["public.invoices"])

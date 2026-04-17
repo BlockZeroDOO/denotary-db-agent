@@ -32,13 +32,17 @@ Current PostgreSQL status:
 - processed trigger events can be cleaned up automatically after checkpoint advance
 - logical decoding / WAL CDC through a logical replication slot is implemented
 - logical mode now uses a transaction-safe cursor and does not drop later rows from the same transaction when `row_limit` is small
+- logical mode now supports both:
+  - `output_plugin = "test_decoding"` for live decoded polling
+  - `output_plugin = "pgoutput"` for publication-managed live binary polling
 - deterministic checkpoints resume per table
 - full single-event cycle is implemented inside the agent:
   - prepare
   - sign and broadcast
   - watcher inclusion/finality
   - receipt + audit proof-chain export
-- current logical mode uses PostgreSQL `test_decoding` output without external CDC middleware
+- current logical polling supports both PostgreSQL `test_decoding` and `pgoutput`
+- `pgoutput` currently uses `pg_logical_slot_peek_binary_changes()` with an in-agent binary parser, not replication-protocol streaming yet
 
 ## Quick Start
 
@@ -85,11 +89,12 @@ Note:
 - `validate` performs live adapter validation for PostgreSQL and expects reachable deNotary services plus chain RPC when they are configured
 - `status` is safe to run without a live database
 - `health` shows local source state and best-effort health for configured chain/receipt/audit services
-- `bootstrap` installs or refreshes source-side runtime artifacts such as PostgreSQL trigger CDC objects or logical replication slot setup
+- `bootstrap` installs or refreshes source-side runtime artifacts such as PostgreSQL trigger CDC objects, logical replication slot setup, and `pgoutput` publications
 - `inspect` shows tracked tables, selected columns, and live PostgreSQL CDC state for a source
 - `refresh` forces runtime artifact refresh and stores the new runtime signature
 - `pause` / `resume` let operators stop one source without changing the config file
 - `run_once` and daemon mode now auto-refresh PostgreSQL runtime artifacts when tracked table shape changes, including `ALTER TABLE` column drift
+- when `output_plugin = "pgoutput"`, `inspect` shows publication state and tracked publication tables
 - `run --once` uses the configured `dnanchor` private key to sign `verifbill::submit` inside the agent
 - `run` without `--once` keeps the agent in daemon mode and, for PostgreSQL trigger sources, waits on `LISTEN/NOTIFY` before the fallback interval elapses
 - finalized receipts and proof chains are exported under `storage.proof_dir`
