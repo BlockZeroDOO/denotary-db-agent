@@ -34,8 +34,10 @@ class PostgresReplicationSession:
         self.acknowledged_lsn = self.start_lsn
         self._connection: Any | None = None
         self._pgconn: Any | None = None
+        self._closed = False
 
     def __enter__(self) -> "PostgresReplicationSession":
+        self._closed = False
         self._connection = psycopg.connect(f"{self.conninfo} replication=database", autocommit=True)
         self._pgconn = self._connection.pgconn
         command = (
@@ -61,7 +63,12 @@ class PostgresReplicationSession:
         raise RuntimeError("postgres replication session did not reach COPY_BOTH mode in time")
 
     def __exit__(self, exc_type, exc, tb) -> None:
-        if self._pgconn is not None and not exc_type:
+        self.close(send_feedback=not exc_type)
+
+    def close(self, *, send_feedback: bool = True) -> None:
+        if self._closed:
+            return
+        if self._pgconn is not None and send_feedback:
             try:
                 self.send_feedback(self.acknowledged_lsn, reply=False)
             except Exception:
@@ -70,6 +77,7 @@ class PostgresReplicationSession:
             self._connection.close()
         self._connection = None
         self._pgconn = None
+        self._closed = True
 
     def read_messages(
         self,

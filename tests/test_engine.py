@@ -224,3 +224,11 @@ class EngineTest(unittest.TestCase):
             "tracked logical tables are out of sync with expected REPLICA IDENTITY mode",
             health["sources"][0]["warnings"],
         )
+
+    def test_runtimes_reuse_adapter_instances_between_calls(self) -> None:
+        engine = AgentEngine(load_config(self.config_path))
+
+        first = engine.runtimes()
+        second = engine.runtimes()
+
+        self.assertIs(first[0].adapter, second[0].adapter)

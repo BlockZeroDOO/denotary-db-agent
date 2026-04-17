@@ -486,7 +486,7 @@ class PostgresAdapterTest(unittest.TestCase):
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0].operation, "insert")
         fetch_stream.assert_called_once()
-        self.assertIsNone(adapter._active_replication_session)
+        self.assertIs(adapter._active_replication_session, fake_session)
 
     def test_pgoutput_defaults_to_stream_runtime_mode(self) -> None:
         config = self.make_config()

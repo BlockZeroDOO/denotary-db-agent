@@ -65,6 +65,7 @@ class PostgresAdapter(BaseAdapter):
         self._logical_warning_emitted = False
         self._logical_relation_cache: dict[int, PostgresLogicalRelation] = {}
         self._active_replication_session: PostgresReplicationSession | None = None
+        self._active_replication_start_lsn = "0/0"
 
     def discover_capabilities(self) -> AdapterCapabilities:
         capture_mode = str(self.config.options.get("capture_mode", "watermark")).lower()
@@ -228,63 +229,58 @@ class PostgresAdapter(BaseAdapter):
                 plugin = self._logical_output_plugin()
                 runtime_mode = self._logical_runtime_mode()
                 if plugin == "pgoutput" and runtime_mode == "stream":
-                    with PostgresReplicationSession(
-                        conninfo=self._replication_conninfo(),
-                        slot_name=self._logical_slot_name(),
-                        publication_name=self._logical_publication_name(),
-                        start_lsn=self._parse_logical_checkpoint(checkpoint) or "0/0",
-                    ) as session:
-                        self._active_replication_session = session
-                        try:
-                            decoded_rows = self._fetch_pgoutput_stream_rows(session, spec_map, row_limit)
-                            processed_count = 0
-                            for xid, lsn, commit_lsn, advance_lsn, event_index, spec, operation, before_row, after_row in decoded_rows:
-                                if xid == last_xid and event_index <= last_event_index:
-                                    continue
-                                if processed_count >= row_limit:
-                                    break
-                                primary_key = self._derive_primary_key(spec, before_row, after_row)
-                                commit_timestamp = self._derive_commit_timestamp(spec, before_row, after_row)
-                                checkpoint_token = json.dumps(
-                                    {
-                                        "mode": "logical_cdc",
-                                        "xid": xid,
-                                        "lsn": lsn,
-                                        "commit_lsn": commit_lsn,
-                                        "event_index": event_index,
-                                        "advance_lsn": advance_lsn,
-                                    },
-                                    sort_keys=True,
-                                )
-                                yield ChangeEvent(
-                                    source_id=self.config.id,
-                                    source_type=self.source_type,
-                                    source_instance=self.config.source_instance,
-                                    database_name=self.config.database_name,
-                                    schema_or_namespace=spec.schema_name,
-                                    table_or_collection=spec.table_name,
-                                    operation=operation,  # type: ignore[arg-type]
-                                    primary_key=primary_key,
-                                    change_version=f"lsn:{lsn}:{event_index}",
-                                    commit_timestamp=commit_timestamp,
-                                    before=before_row,
-                                    after=after_row,
-                                    metadata={
-                                        "capture_mode": "logical-cdc",
-                                        "xid": xid,
-                                        "lsn": lsn,
-                                        "commit_lsn": commit_lsn,
-                                        "event_index": event_index,
-                                        "plugin": self._logical_output_plugin(),
-                                        "slot_name": self._logical_slot_name(),
-                                        "primary_key_columns": spec.primary_key_columns,
-                                        "runtime_mode": "stream",
-                                    },
-                                    checkpoint_token=checkpoint_token,
-                                )
-                                processed_count += 1
-                        finally:
-                            self._active_replication_session = None
+                    session = self._ensure_replication_session(self._parse_logical_checkpoint(checkpoint) or "0/0")
+                    try:
+                        decoded_rows = self._fetch_pgoutput_stream_rows(session, spec_map, row_limit)
+                    except Exception:
+                        self._close_replication_session(send_feedback=False)
+                        raise
+                    processed_count = 0
+                    for xid, lsn, commit_lsn, advance_lsn, event_index, spec, operation, before_row, after_row in decoded_rows:
+                        if xid == last_xid and event_index <= last_event_index:
+                            continue
+                        if processed_count >= row_limit:
+                            break
+                        primary_key = self._derive_primary_key(spec, before_row, after_row)
+                        commit_timestamp = self._derive_commit_timestamp(spec, before_row, after_row)
+                        checkpoint_token = json.dumps(
+                            {
+                                "mode": "logical_cdc",
+                                "xid": xid,
+                                "lsn": lsn,
+                                "commit_lsn": commit_lsn,
+                                "event_index": event_index,
+                                "advance_lsn": advance_lsn,
+                            },
+                            sort_keys=True,
+                        )
+                        yield ChangeEvent(
+                            source_id=self.config.id,
+                            source_type=self.source_type,
+                            source_instance=self.config.source_instance,
+                            database_name=self.config.database_name,
+                            schema_or_namespace=spec.schema_name,
+                            table_or_collection=spec.table_name,
+                            operation=operation,  # type: ignore[arg-type]
+                            primary_key=primary_key,
+                            change_version=f"lsn:{lsn}:{event_index}",
+                            commit_timestamp=commit_timestamp,
+                            before=before_row,
+                            after=after_row,
+                            metadata={
+                                "capture_mode": "logical-cdc",
+                                "xid": xid,
+                                "lsn": lsn,
+                                "commit_lsn": commit_lsn,
+                                "event_index": event_index,
+                                "plugin": self._logical_output_plugin(),
+                                "slot_name": self._logical_slot_name(),
+                                "primary_key_columns": spec.primary_key_columns,
+                                "runtime_mode": "stream",
+                            },
+                            checkpoint_token=checkpoint_token,
+                        )
+                        processed_count += 1
                     return
                 else:
                     decoded_rows = (
@@ -347,6 +343,7 @@ class PostgresAdapter(BaseAdapter):
         if self._listener_connection is not None:
             self._listener_connection.close()
             self._listener_connection = None
+        self._close_replication_session(send_feedback=True)
         return None
 
     def read_snapshot(self, checkpoint: SourceCheckpoint | None = None) -> Iterable[ChangeEvent]:
@@ -482,6 +479,7 @@ class PostgresAdapter(BaseAdapter):
                 and self._active_replication_session is not None
             ):
                 self._active_replication_session.update_acknowledged_lsn(commit_lsn)
+                self._active_replication_start_lsn = commit_lsn
                 return
             with self._connect() as connection:
                 with connection.cursor() as cursor:
@@ -1318,6 +1316,29 @@ class PostgresAdapter(BaseAdapter):
 
     def _logical_publication_name(self) -> str:
         return str(self.config.options.get("publication_name", f"denotary_{self.config.id}_pub"))
+
+    def _ensure_replication_session(self, start_lsn: str) -> PostgresReplicationSession:
+        desired_lsn = start_lsn or "0/0"
+        if self._active_replication_session is not None:
+            if self._active_replication_start_lsn == desired_lsn:
+                return self._active_replication_session
+            self._close_replication_session(send_feedback=True)
+        session = PostgresReplicationSession(
+            conninfo=self._replication_conninfo(),
+            slot_name=self._logical_slot_name(),
+            publication_name=self._logical_publication_name(),
+            start_lsn=desired_lsn,
+        )
+        session.__enter__()
+        self._active_replication_session = session
+        self._active_replication_start_lsn = desired_lsn
+        return session
+
+    def _close_replication_session(self, *, send_feedback: bool) -> None:
+        if self._active_replication_session is not None:
+            self._active_replication_session.close(send_feedback=send_feedback)
+        self._active_replication_session = None
+        self._active_replication_start_lsn = "0/0"
 
     def _replication_conninfo(self) -> str:
         parts = [

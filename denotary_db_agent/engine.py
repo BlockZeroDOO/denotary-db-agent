@@ -59,13 +59,38 @@ class AgentEngine:
             else None
         )
         self.retry_policy = RetryPolicy()
+        self._runtime_cache: dict[str, SourceRuntime] = {}
+
+    def close(self) -> None:
+        for runtime in self._runtime_cache.values():
+            runtime.adapter.stop_stream()
+        self._runtime_cache.clear()
+
+    def __del__(self) -> None:
+        try:
+            self.close()
+        except Exception:
+            pass
 
     def runtimes(self) -> list[SourceRuntime]:
-        return [
-            SourceRuntime(config=item, adapter=build_adapter(item))
-            for item in self.config.sources
-            if item.enabled
-        ]
+        enabled_ids = {item.id for item in self.config.sources if item.enabled}
+        stale_ids = [source_id for source_id in self._runtime_cache if source_id not in enabled_ids]
+        for source_id in stale_ids:
+            runtime = self._runtime_cache.pop(source_id)
+            runtime.adapter.stop_stream()
+
+        runtimes: list[SourceRuntime] = []
+        for item in self.config.sources:
+            if not item.enabled:
+                continue
+            runtime = self._runtime_cache.get(item.id)
+            if runtime is None or runtime.config is not item:
+                if runtime is not None:
+                    runtime.adapter.stop_stream()
+                runtime = SourceRuntime(config=item, adapter=build_adapter(item))
+                self._runtime_cache[item.id] = runtime
+            runtimes.append(runtime)
+        return runtimes
 
     def _is_paused(self, source_id: str) -> bool:
         return self.store.is_source_paused(source_id)
