@@ -197,6 +197,7 @@ The current PostgreSQL adapter is the first live implementation and works as:
 - in logical mode, wake daemon loops when the logical slot already has pending changes
 - in `pgoutput` mode, manage the publication lifecycle inside the agent
 - in `pgoutput` mode, support both default SQL peeking and optional bounded replication-protocol streaming
+- bounded streaming sends standby-status feedback using the last already-acknowledged LSN
 
 Expected source options:
 

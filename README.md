@@ -45,6 +45,7 @@ Current PostgreSQL status:
 - `pgoutput` supports both:
   - default `logical_runtime_mode = "peek"` via `pg_logical_slot_peek_binary_changes()`
   - optional bounded `logical_runtime_mode = "stream"` via low-level replication protocol
+- bounded streaming now includes standby-status feedback using the last safe acknowledged LSN
 
 ## Quick Start
 
@@ -107,6 +108,7 @@ Note:
 - `run --once` uses the configured `dnanchor` private key to sign `verifbill::submit` inside the agent
 - `run` without `--once` keeps the agent in daemon mode and, for PostgreSQL trigger sources, waits on `LISTEN/NOTIFY` before the fallback interval elapses
 - for PostgreSQL `pgoutput`, `logical_runtime_mode = "stream"` enables bounded replication-protocol reads instead of SQL slot peeking
+- streaming feedback only reports already acknowledged LSNs, so it doesn't replace post-delivery checkpoint advancement
 - finalized receipts and proof chains are exported under `storage.proof_dir`
 
 ## Live PostgreSQL Harness

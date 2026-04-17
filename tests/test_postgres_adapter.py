@@ -7,7 +7,7 @@ from contextlib import contextmanager
 from unittest.mock import patch
 
 from denotary_db_agent.adapters.postgres import PostgresAdapter, PostgresTableSpec
-from denotary_db_agent.adapters.postgres_replication import parse_copy_data_frame
+from denotary_db_agent.adapters.postgres_replication import build_standby_status_update, parse_copy_data_frame
 from denotary_db_agent.config import SourceConfig
 from denotary_db_agent.models import SourceCheckpoint
 
@@ -494,3 +494,11 @@ class PostgresAdapterTest(unittest.TestCase):
         self.assertEqual(frame.wal_start_lsn, "1/2")
         self.assertEqual(frame.wal_end_lsn, "1/3")
         self.assertEqual(frame.payload, b"ABC")
+
+    def test_build_standby_status_update_uses_same_lsn_for_write_flush_apply(self) -> None:
+        packet = build_standby_status_update("1/2", reply=True)
+        self.assertEqual(packet[0:1], b"r")
+        self.assertEqual(struct.unpack("!Q", packet[1:9])[0], 0x0000000100000002)
+        self.assertEqual(struct.unpack("!Q", packet[9:17])[0], 0x0000000100000002)
+        self.assertEqual(struct.unpack("!Q", packet[17:25])[0], 0x0000000100000002)
+        self.assertEqual(packet[-1], 1)

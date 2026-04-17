@@ -31,6 +31,7 @@ class PostgresReplicationSession:
         self.slot_name = slot_name
         self.publication_name = publication_name
         self.start_lsn = start_lsn or "0/0"
+        self.acknowledged_lsn = self.start_lsn
         self._connection: Any | None = None
         self._pgconn: Any | None = None
 
@@ -60,6 +61,11 @@ class PostgresReplicationSession:
         raise RuntimeError("postgres replication session did not reach COPY_BOTH mode in time")
 
     def __exit__(self, exc_type, exc, tb) -> None:
+        if self._pgconn is not None and not exc_type:
+            try:
+                self.send_feedback(self.acknowledged_lsn, reply=False)
+            except Exception:
+                pass
         if self._connection is not None:
             self._connection.close()
         self._connection = None
@@ -93,8 +99,29 @@ class PostgresReplicationSession:
                 if nbytes < 0:
                     return messages
                 idle_deadline = time.monotonic() + max(idle_timeout_sec, 0.0)
-                messages.append(parse_copy_data_frame(bytes(data)))
+                message = parse_copy_data_frame(bytes(data))
+                if message.kind == "keepalive" and message.reply_requested:
+                    self.send_feedback(self.acknowledged_lsn, reply=False)
+                messages.append(message)
         return messages
+
+    def update_acknowledged_lsn(self, lsn: str) -> None:
+        self.acknowledged_lsn = lsn or self.acknowledged_lsn
+
+    def send_feedback(self, lsn: str, *, reply: bool) -> None:
+        if self._pgconn is None:
+            raise RuntimeError("replication session is not open")
+        payload = build_standby_status_update(lsn, reply=reply)
+        self._pgconn.put_copy_data(payload)
+        socket_fd = self._pgconn.socket
+        deadline = time.monotonic() + 5.0
+        while self._pgconn.flush() == 1:
+            remaining = max(0.0, deadline - time.monotonic())
+            if remaining <= 0:
+                raise RuntimeError("postgres replication feedback flush timed out")
+            _, writable, _ = select.select([], [socket_fd], [], remaining)
+            if not writable:
+                raise RuntimeError("postgres replication feedback socket did not become writable in time")
 
 
 def parse_copy_data_frame(data: bytes) -> PostgresReplicationMessage:
@@ -133,3 +160,21 @@ def _format_pg_lsn(value: int) -> str:
     upper = value >> 32
     lower = value & 0xFFFFFFFF
     return f"{upper:X}/{lower:X}"
+
+
+def _parse_pg_lsn(lsn: str) -> int:
+    upper, lower = lsn.split("/", 1)
+    return (int(upper, 16) << 32) | int(lower, 16)
+
+
+def build_standby_status_update(lsn: str, *, reply: bool) -> bytes:
+    lsn_value = _parse_pg_lsn(lsn or "0/0")
+    client_time_usec = int((time.time() + 946684800) * 1_000_000)
+    return (
+        b"r"
+        + struct.pack("!Q", lsn_value)
+        + struct.pack("!Q", lsn_value)
+        + struct.pack("!Q", lsn_value)
+        + struct.pack("!Q", client_time_usec)
+        + struct.pack("!B", 1 if reply else 0)
+    )
