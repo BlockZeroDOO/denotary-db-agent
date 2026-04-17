@@ -4,7 +4,7 @@
 
 | Adapter | Target path | Minimum version | CDC path | Current scaffold status |
 | --- | --- | --- | --- | --- |
-| PostgreSQL | enterprise | 14 | logical decoding / WAL | capability + dry-run snapshot reference |
+| PostgreSQL | enterprise | 14 | watermark polling baseline now; logical decoding / WAL next | live baseline implementation |
 | MySQL | enterprise | 8.0 | row-based binlog | capability scaffold |
 | MariaDB | enterprise | 10.6 | MariaDB binlog profile | capability scaffold |
 | SQL Server | enterprise | 2019 | CDC / Change Tracking | capability scaffold |
@@ -27,4 +27,3 @@
 - Elasticsearch / OpenSearch
 - Cassandra
 - native in-database extensions
-

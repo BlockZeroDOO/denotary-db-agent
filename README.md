@@ -23,6 +23,12 @@ The first wave of database targets is:
 
 This initial implementation focuses on the platform layer and adapter contract. Real CDC transport details per database remain adapter-specific work on top of this package scaffold.
 
+Current PostgreSQL status:
+
+- live `snapshot + watermark polling` baseline is implemented
+- deterministic checkpoints resume per table
+- `logical decoding / WAL CDC` is the planned next PostgreSQL upgrade step
+
 ## Quick Start
 
 ```bash
@@ -48,3 +54,25 @@ python -m unittest discover -s tests -v
 python -m denotary_db_agent --config examples/agent.example.json validate
 python -m denotary_db_agent --config examples/agent.example.json status
 ```
+
+Note:
+
+- `validate` performs live adapter validation for PostgreSQL and expects a reachable database
+- `status` is safe to run without a live database
+
+## Live PostgreSQL Harness
+
+For a reproducible live PostgreSQL integration pass:
+
+- [deploy/postgres-live/docker-compose.yml](deploy/postgres-live/docker-compose.yml)
+- [deploy/postgres-live/init.sql](deploy/postgres-live/init.sql)
+- [scripts/run-live-postgres-integration.ps1](scripts/run-live-postgres-integration.ps1)
+- [scripts/run-live-postgres-integration.sh](scripts/run-live-postgres-integration.sh)
+
+This harness:
+
+- starts PostgreSQL in Docker
+- creates test `invoices` and `payments` tables
+- inserts live rows
+- runs `denotary-db-agent` against the live database
+- verifies watcher registration and checkpoint resume behavior

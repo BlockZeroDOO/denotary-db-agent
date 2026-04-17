@@ -34,7 +34,7 @@ The package assumes:
 
 ## Current State
 
-This version implements the platform skeleton and a dry-run reference adapter flow.
+This version implements the platform skeleton and the first live PostgreSQL baseline.
 
 Implemented now:
 
@@ -45,11 +45,11 @@ Implemented now:
 - checkpoint store and DLQ
 - enterprise prepare + watcher registration clients
 - CLI and tests
+- PostgreSQL watermark-based snapshot/poll adapter with per-table checkpoint state
 
 Not implemented yet:
 
-- live CDC streaming drivers per database
+- live CDC streaming drivers for PostgreSQL logical decoding and the remaining databases
 - enterprise transaction signing/broadcast inside the agent
 - batching into `Ingress API /v1/batch/prepare`
 - production metrics export
-

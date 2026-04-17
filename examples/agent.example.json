@@ -25,7 +25,7 @@
       },
       "exclude": {},
       "checkpoint_policy": "after_ack",
-      "backfill_mode": "none",
+      "backfill_mode": "full",
       "batch_enabled": false,
       "batch_size": 100,
       "flush_interval_ms": 1000,
@@ -36,10 +36,12 @@
         "database": "ledger"
       },
       "options": {
+        "watermark_column": "updated_at",
+        "commit_timestamp_column": "updated_at",
+        "row_limit": 250,
         "slot_name": "denotary_slot",
         "publication_name": "denotary_pub"
       }
     }
   ]
 }
-

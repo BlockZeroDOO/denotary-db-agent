@@ -12,7 +12,9 @@ license = { text = "Proprietary" }
 authors = [
   { name = "BlockZero DOO" }
 ]
-dependencies = []
+dependencies = [
+  "psycopg[binary]>=3.1,<4"
+]
 
 [project.scripts]
 denotary-db-agent = "denotary_db_agent.cli:main"

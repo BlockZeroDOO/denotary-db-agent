@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import asdict, dataclass, field
+from decimal import Decimal
 from datetime import datetime, timezone
 from typing import Any, Literal
 
@@ -15,8 +16,31 @@ def utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def normalize_json_value(payload: Any) -> Any:
+    if isinstance(payload, dict):
+        return {str(key): normalize_json_value(value) for key, value in payload.items()}
+    if isinstance(payload, list):
+        return [normalize_json_value(item) for item in payload]
+    if isinstance(payload, tuple):
+        return [normalize_json_value(item) for item in payload]
+    if isinstance(payload, datetime):
+        normalized = payload.astimezone(timezone.utc) if payload.tzinfo else payload.replace(tzinfo=timezone.utc)
+        return normalized.replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    if isinstance(payload, Decimal):
+        return format(payload, "f")
+    if isinstance(payload, bytes):
+        return payload.hex()
+    return payload
+
+
 def canonical_json(payload: Any) -> str:
-    return json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False)
+    return json.dumps(
+        normalize_json_value(payload),
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+        allow_nan=False,
+    )
 
 
 def sha256_hex(payload: str | bytes) -> str:
@@ -132,6 +156,6 @@ def event_identity_key(event: ChangeEvent) -> str:
 
 
 def event_debug_dict(event: ChangeEvent) -> dict[str, Any]:
-    payload = asdict(event)
+    payload = normalize_json_value(asdict(event))
     payload["identity_key"] = event_identity_key(event)
     return payload
