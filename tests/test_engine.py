@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import socket
 import tempfile
 import threading
@@ -14,6 +15,7 @@ from typing import Any
 
 from denotary_db_agent.config import load_config
 from denotary_db_agent.engine import AgentEngine, SourceRuntime
+from denotary_db_agent.models import DeliveryAttempt, ProofArtifact
 
 
 def free_port() -> int:
@@ -102,7 +104,8 @@ class EngineTest(unittest.TestCase):
                 "policy_id": 1
             },
             "storage": {
-                "state_db": str(Path(self.temp_dir.name) / "state.sqlite3")
+                "state_db": str(Path(self.temp_dir.name) / "state.sqlite3"),
+                "proof_dir": str(Path(self.temp_dir.name) / "proofs"),
             },
             "sources": [
                 {
@@ -429,3 +432,79 @@ class EngineTest(unittest.TestCase):
         second = engine.runtimes()
 
         self.assertIs(first[0].adapter, second[0].adapter)
+
+    def test_apply_runtime_retention_prunes_store_rows_and_deletes_proof_files(self) -> None:
+        config = json.loads(self.config_path.read_text(encoding="utf-8"))
+        config["storage"]["delivery_retention"] = 1
+        config["storage"]["proof_retention"] = 1
+        config["storage"]["dlq_retention"] = 1
+        self.config_path.write_text(json.dumps(config), encoding="utf-8")
+
+        engine = AgentEngine(load_config(self.config_path))
+        runtime = engine.runtimes()[0]
+        proof_root = Path(engine.config.storage.proof_dir)
+        proof_root.mkdir(parents=True, exist_ok=True)
+        stale_proof = proof_root / "old-proof.json"
+        fresh_proof = proof_root / "new-proof.json"
+        stale_proof.write_text("{}", encoding="utf-8")
+        fresh_proof.write_text("{}", encoding="utf-8")
+
+        engine.store.upsert_delivery(
+            DeliveryAttempt(
+                request_id="req-old",
+                trace_id="trace-old",
+                source_id=runtime.config.id,
+                external_ref="ext-old",
+                tx_id=None,
+                status="failed",
+                prepared_action=None,
+                last_error="old",
+                updated_at="2026-04-17T10:00:00Z",
+            )
+        )
+        engine.store.upsert_delivery(
+            DeliveryAttempt(
+                request_id="req-new",
+                trace_id="trace-new",
+                source_id=runtime.config.id,
+                external_ref="ext-new",
+                tx_id=None,
+                status="prepared_registered",
+                prepared_action=None,
+                last_error=None,
+                updated_at="2026-04-17T10:00:01Z",
+            )
+        )
+        engine.store.upsert_proof(
+            ProofArtifact(
+                request_id="proof-old",
+                source_id=runtime.config.id,
+                receipt={"ok": True},
+                audit_chain={"ok": True},
+                export_path=str(stale_proof),
+                updated_at="2026-04-17T10:00:00Z",
+            )
+        )
+        engine.store.upsert_proof(
+            ProofArtifact(
+                request_id="proof-new",
+                source_id=runtime.config.id,
+                receipt={"ok": True},
+                audit_chain={"ok": True},
+                export_path=str(fresh_proof),
+                updated_at="2026-04-17T10:00:01Z",
+            )
+        )
+        engine.store.push_dlq(runtime.config.id, "old-error", {"index": 1}, "2026-04-17T10:00:00Z")
+        engine.store.push_dlq(runtime.config.id, "new-error", {"index": 2}, "2026-04-17T10:00:01Z")
+
+        engine._apply_runtime_retention(runtime)
+
+        deliveries = engine.store.list_deliveries(runtime.config.id)
+        proofs = engine.store.list_proofs(runtime.config.id)
+        dlq = engine.store.list_dlq(runtime.config.id)
+        self.assertEqual([row["request_id"] for row in deliveries], ["req-new"])
+        self.assertEqual([row["request_id"] for row in proofs], ["proof-new"])
+        self.assertEqual([row["reason"] for row in dlq], ["new-error"])
+        self.assertFalse(os.path.exists(stale_proof))
+        self.assertTrue(os.path.exists(fresh_proof))

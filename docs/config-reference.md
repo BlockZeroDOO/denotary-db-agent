@@ -202,7 +202,10 @@ Example:
 ```json
 "storage": {
   "state_db": "./data/agent-state.sqlite3",
-  "proof_dir": "./data/proofs"
+  "proof_dir": "./data/proofs",
+  "proof_retention": 1000,
+  "delivery_retention": 5000,
+  "dlq_retention": 1000
 }
 ```
 
@@ -223,6 +226,36 @@ Example:
 - Required: no
 - Default: `"runtime/proofs"`
 - Purpose: directory where exported proof bundles are written
+
+### `proof_retention`
+
+- Type: `integer`
+- Required: no
+- Default: `0`
+- Meaning:
+  - `0` disables pruning
+  - positive values keep only the newest N proof artifacts per source
+- Purpose: prune old proof metadata and exported proof JSON bundles together
+
+### `delivery_retention`
+
+- Type: `integer`
+- Required: no
+- Default: `0`
+- Meaning:
+  - `0` disables pruning
+  - positive values keep only the newest N delivery history rows per source
+- Purpose: bound the size of the local `deliveries` table during long-lived operation
+
+### `dlq_retention`
+
+- Type: `integer`
+- Required: no
+- Default: `0`
+- Meaning:
+  - `0` disables pruning
+  - positive values keep only the newest N DLQ rows per source
+- Purpose: keep local failure history bounded without manual SQLite cleanup
 
 ## `sources[]`
 
@@ -649,6 +682,11 @@ For a first real deployment:
 - `diagnostics --save-snapshot` writes JSON snapshots under the runtime directory.
 - diagnostics snapshot retention now defaults to keeping the newest `20` matching files per source.
 - use `--snapshot-retention <N>` to tune local diagnostics history length.
+- runtime artifact retention is configured separately in `storage`:
+  - `proof_retention`
+  - `delivery_retention`
+  - `dlq_retention`
+- when `proof_retention` is enabled, pruned proof bundle files are deleted from disk together with their SQLite metadata rows.
 
 ## Security Notes
 

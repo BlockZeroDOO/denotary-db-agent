@@ -164,6 +164,28 @@ class CheckpointStore:
                 ).fetchall()
         return [dict(row) for row in rows]
 
+    def prune_deliveries(self, source_id: str, retain: int) -> int:
+        if retain <= 0:
+            return 0
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                select request_id
+                from deliveries
+                where source_id = ?
+                order by updated_at desc, request_id desc
+                limit -1 offset ?
+                """,
+                (source_id, retain),
+            ).fetchall()
+            removed = [str(row["request_id"]) for row in rows]
+            if removed:
+                connection.executemany(
+                    "delete from deliveries where request_id = ?",
+                    [(request_id,) for request_id in removed],
+                )
+        return len(removed)
+
     def upsert_proof(self, artifact: ProofArtifact) -> None:
         with self._connect() as connection:
             connection.execute(
@@ -222,6 +244,28 @@ class CheckpointStore:
                 ).fetchall()
         return [dict(row) for row in rows]
 
+    def prune_proofs(self, source_id: str, retain: int) -> list[dict[str, str | None]]:
+        if retain <= 0:
+            return []
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                select request_id, source_id, export_path, updated_at
+                from proofs
+                where source_id = ?
+                order by updated_at desc, request_id desc
+                limit -1 offset ?
+                """,
+                (source_id, retain),
+            ).fetchall()
+            removed = [dict(row) for row in rows]
+            if removed:
+                connection.executemany(
+                    "delete from proofs where request_id = ?",
+                    [(str(row["request_id"]),) for row in removed],
+                )
+        return removed
+
     def push_dlq(self, source_id: str, reason: str, payload: dict, created_at: str) -> None:
         with self._connect() as connection:
             connection.execute(
@@ -241,6 +285,28 @@ class CheckpointStore:
                     "select id, source_id, reason, payload_json, created_at from dlq order by id desc"
                 ).fetchall()
         return [dict(row) for row in rows]
+
+    def prune_dlq(self, source_id: str, retain: int) -> int:
+        if retain <= 0:
+            return 0
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                select id
+                from dlq
+                where source_id = ?
+                order by id desc
+                limit -1 offset ?
+                """,
+                (source_id, retain),
+            ).fetchall()
+            removed = [int(row["id"]) for row in rows]
+            if removed:
+                connection.executemany(
+                    "delete from dlq where id = ?",
+                    [(row_id,) for row_id in removed],
+                )
+        return len(removed)
 
     def set_source_paused(self, source_id: str, paused: bool, updated_at: str) -> None:
         with self._connect() as connection:

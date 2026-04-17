@@ -20,7 +20,10 @@
   },
   "storage": {
     "state_db": "./data/agent-state.sqlite3",
-    "proof_dir": "./data/proofs"
+    "proof_dir": "./data/proofs",
+    "proof_retention": 1000,
+    "delivery_retention": 5000,
+    "dlq_retention": 1000
   },
   "sources": [
     {

@@ -47,6 +47,9 @@ class DenotaryConfig:
 class StorageConfig:
     state_db: str
     proof_dir: str = "runtime/proofs"
+    proof_retention: int = 0
+    delivery_retention: int = 0
+    dlq_retention: int = 0
 
 
 @dataclass
@@ -76,6 +79,13 @@ def _require_int(mapping: dict[str, Any], field_name: str) -> int:
     value = mapping.get(field_name)
     if not isinstance(value, int):
         raise ValueError(f"{field_name} must be integer")
+    return value
+
+
+def _require_non_negative_int(mapping: dict[str, Any], field_name: str, default: int = 0) -> int:
+    value = int(mapping.get(field_name, default))
+    if value < 0:
+        raise ValueError(f"{field_name} must be non-negative")
     return value
 
 
@@ -114,6 +124,9 @@ def load_config(path: str | Path) -> AgentConfig:
     storage = StorageConfig(
         state_db=_require_non_empty_string(storage_raw, "state_db"),
         proof_dir=str(storage_raw.get("proof_dir", "runtime/proofs")),
+        proof_retention=_require_non_negative_int(storage_raw, "proof_retention", 0),
+        delivery_retention=_require_non_negative_int(storage_raw, "delivery_retention", 0),
+        dlq_retention=_require_non_negative_int(storage_raw, "dlq_retention", 0),
     )
 
     sources: list[SourceConfig] = []

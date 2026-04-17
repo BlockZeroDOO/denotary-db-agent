@@ -329,3 +329,29 @@ The local SQLite state file stores:
 - DLQ records
 
 Back up this file if replay/recovery history matters operationally.
+
+## Runtime Retention
+
+Use `storage` retention settings when you want the agent to prune old local artifacts automatically:
+
+- `proof_retention`
+- `delivery_retention`
+- `dlq_retention`
+
+Behavior:
+
+- values of `0` disable pruning
+- positive values keep only the newest N rows per source
+- when old proof rows are pruned, the corresponding exported proof JSON files are also deleted from disk
+
+Recommended starting point for long-running PostgreSQL installations:
+
+```json
+"storage": {
+  "state_db": "./data/agent-state.sqlite3",
+  "proof_dir": "./data/proofs",
+  "proof_retention": 1000,
+  "delivery_retention": 5000,
+  "dlq_retention": 1000
+}
+```

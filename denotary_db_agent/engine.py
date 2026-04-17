@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import time
 from dataclasses import dataclass
 from time import monotonic
@@ -381,6 +382,7 @@ class AgentEngine:
                         failed += len(chunk)
                         for event in chunk:
                             self.store.push_dlq(runtime.config.id, str(exc), event_debug_dict(event), utc_now().isoformat())
+                self._apply_runtime_retention(runtime)
                 continue
             for event in events:
                 try:
@@ -389,6 +391,7 @@ class AgentEngine:
                 except Exception as exc:  # noqa: BLE001
                     failed += 1
                     self.store.push_dlq(runtime.config.id, str(exc), event_debug_dict(event), utc_now().isoformat())
+            self._apply_runtime_retention(runtime)
         return {"processed": processed, "failed": failed}
 
     def run_forever(self, interval_sec: float, max_loops: int | None = None) -> dict[str, int]:
@@ -721,3 +724,21 @@ class AgentEngine:
         runtime.adapter.refresh_runtime()
         refreshed_signature = runtime.adapter.runtime_signature()
         self.store.set_runtime_signature(runtime.config.id, refreshed_signature, utc_now().isoformat())
+
+    def _apply_runtime_retention(self, runtime: SourceRuntime) -> None:
+        storage = self.config.storage
+        if storage.delivery_retention > 0:
+            self.store.prune_deliveries(runtime.config.id, storage.delivery_retention)
+        if storage.dlq_retention > 0:
+            self.store.prune_dlq(runtime.config.id, storage.dlq_retention)
+        if storage.proof_retention > 0:
+            removed = self.store.prune_proofs(runtime.config.id, storage.proof_retention)
+            for row in removed:
+                export_path = row.get("export_path")
+                if not export_path:
+                    continue
+                try:
+                    if os.path.exists(str(export_path)):
+                        os.remove(str(export_path))
+                except FileNotFoundError:
+                    continue
