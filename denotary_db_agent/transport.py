@@ -9,6 +9,9 @@ from pathlib import Path
 from typing import Any
 
 from eosapi import EosApi
+from eosapi.exceptions import NodeException
+from eosapi.packer import Name, Uint32, Uint64
+from eosapi.transaction import Action, Authorization, Transaction
 
 from denotary_db_agent.models import CanonicalEnvelope
 
@@ -124,28 +127,107 @@ class ChainClient:
         if not contract or not action or not isinstance(data, dict):
             raise RuntimeError(f"prepared_action is incomplete: {prepared_action}")
 
-        result = self.api.push_transaction(
-            {
-                "actions": [
-                    {
-                        "account": contract,
-                        "name": action,
-                        "authorization": [
-                            {
-                                "actor": self.submitter,
-                                "permission": self.permission,
-                            }
-                        ],
-                        "data": data,
-                    }
-                ]
-            }
-        )
+        transaction = {
+            "actions": [
+                {
+                    "account": contract,
+                    "name": action,
+                    "authorization": [
+                        {
+                            "actor": self.submitter,
+                            "permission": self.permission,
+                        }
+                    ],
+                    "data": data,
+                }
+            ]
+        }
+        try:
+            result = self.api.push_transaction(transaction)
+        except NodeException as exc:
+            if not self._should_fallback_to_local_packing(exc, action, data):
+                raise
+            result = self._push_with_local_packing(contract, action, data)
         tx_id = str(result.get("transaction_id") or "").lower()
         block_num = int(result.get("processed", {}).get("block_num") or 0)
         if len(tx_id) != 64 or block_num <= 0:
             raise RuntimeError(f"unexpected push_transaction response: {result}")
         return BroadcastResult(tx_id=tx_id, block_num=block_num, raw=result)
+
+    def _push_with_local_packing(self, contract: str, action: str, data: dict[str, Any]) -> dict[str, Any]:
+        authorization = [Authorization(actor=self.submitter, permission=self.permission)]
+        packed = self._pack_known_action(action, data)
+        trx_action = Action(account=contract, name=action, authorization=authorization, data=data)
+        trx_action.link(packed)
+        trx = Transaction(actions=[trx_action])
+
+        net_info = self.api.get_info()
+        trx.link(net_info["last_irreversible_block_id"], net_info["chain_id"])
+        trx.sign(self.private_key)
+        return self.api.post_transaction(trx)
+
+    def _should_fallback_to_local_packing(self, exc: NodeException, action: str, data: dict[str, Any]) -> bool:
+        if not self._supports_local_packing(action, data):
+            return False
+        response = getattr(exc, "resp", None)
+        if response is None:
+            return False
+        status_code = int(getattr(response, "status_code", 0) or 0)
+        request_path = str(getattr(getattr(response, "request", None), "path_url", "") or "")
+        if "/v1/chain/abi_json_to_bin" not in request_path:
+            return False
+        return status_code in {404, 405, 410, 501}
+
+    def _supports_local_packing(self, action: str, data: dict[str, Any]) -> bool:
+        try:
+            self._pack_known_action(action, data)
+        except Exception:
+            return False
+        return True
+
+    def _pack_known_action(self, action: str, data: dict[str, Any]) -> bytes:
+        if action == "submit":
+            return b"".join(
+                [
+                    self._pack_name(data, "payer"),
+                    self._pack_name(data, "submitter"),
+                    self._pack_uint64(data, "schema_id"),
+                    self._pack_uint64(data, "policy_id"),
+                    self._pack_checksum256(data, "object_hash"),
+                    self._pack_checksum256(data, "external_ref"),
+                ]
+            )
+        if action == "submitroot":
+            return b"".join(
+                [
+                    self._pack_name(data, "payer"),
+                    self._pack_name(data, "submitter"),
+                    self._pack_uint64(data, "schema_id"),
+                    self._pack_uint64(data, "policy_id"),
+                    self._pack_checksum256(data, "root_hash"),
+                    self._pack_uint32(data, "leaf_count"),
+                    self._pack_checksum256(data, "manifest_hash"),
+                    self._pack_checksum256(data, "external_ref"),
+                ]
+            )
+        raise RuntimeError(f"local packing is not supported for action {action}")
+
+    def _pack_name(self, data: dict[str, Any], field: str) -> bytes:
+        value = str(data[field] or "")
+        return Name.pack(value)
+
+    def _pack_uint64(self, data: dict[str, Any], field: str) -> bytes:
+        return Uint64.pack(int(data[field]))
+
+    def _pack_uint32(self, data: dict[str, Any], field: str) -> bytes:
+        return Uint32.pack(int(data[field]))
+
+    def _pack_checksum256(self, data: dict[str, Any], field: str) -> bytes:
+        value = str(data[field] or "")
+        packed = bytes.fromhex(value)
+        if len(packed) != 32:
+            raise RuntimeError(f"{field} must be a 32-byte checksum256 hex string")
+        return packed
 
 
 class WatcherClient:

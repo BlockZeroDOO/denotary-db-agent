@@ -124,7 +124,7 @@ class CanonicalEnvelope:
                 "allow_single": True,
                 "allow_batch": False,
             },
-            "document": self.document_payload(),
+            "payload": self.document_payload(),
         }
 
     def to_batch_item(self) -> dict[str, Any]:

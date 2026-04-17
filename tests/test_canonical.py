@@ -39,3 +39,11 @@ class CanonicalizationTest(unittest.TestCase):
         self.assertEqual(env_a.metadata_hash, env_b.metadata_hash)
         self.assertEqual(env_a.external_ref, env_b.external_ref)
 
+    def test_single_prepare_payload_uses_payload_field(self) -> None:
+        envelope = canonicalize_event(sample_event())
+
+        payload = envelope.to_prepare_payload("verification", 123, 456)
+
+        self.assertIn("payload", payload)
+        self.assertNotIn("document", payload)
+        self.assertEqual(payload["payload"]["table_or_collection"], "invoices")
