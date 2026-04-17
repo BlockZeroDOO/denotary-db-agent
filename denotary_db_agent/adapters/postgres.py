@@ -1001,6 +1001,7 @@ class PostgresAdapter(BaseAdapter):
 
     def _inspect_logical_cdc_state(self, connection: Any, specs: list[PostgresTableSpec]) -> dict[str, Any]:
         publication_name = self._logical_publication_name()
+        tracked_tables = [spec.key for spec in specs]
         with connection.cursor() as cursor:
             wal_level_row = cursor.execute("show wal_level").fetchone()
             slot_row = cursor.execute(
@@ -1034,13 +1035,16 @@ class PostgresAdapter(BaseAdapter):
                     f"{row['schemaname']}.{row['tablename']}"
                     for row in publication_table_rows
                 ]
+        publication_in_sync = publication_tables == tracked_tables
         return {
             "mode": "logical",
             "slot_name": self._logical_slot_name(),
             "plugin": self._logical_output_plugin(),
             "publication_name": publication_name,
             "publication_exists": publication_row is not None,
+            "tracked_tables": tracked_tables,
             "publication_tables": publication_tables,
+            "publication_in_sync": publication_in_sync,
             "tracked_table_count": len(specs),
             "wal_level": str(wal_level_row["wal_level"]),
             "slot_exists": slot_row is not None,

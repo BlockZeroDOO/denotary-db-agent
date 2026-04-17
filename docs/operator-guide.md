@@ -99,6 +99,7 @@ For PostgreSQL this returns:
 - trigger CDC schema status when `capture_mode = "trigger"`
 - logical slot status when `capture_mode = "logical"`
 - `pgoutput` publication state and publication tables when `output_plugin = "pgoutput"`
+- whether `pgoutput` publication tables are currently in sync with tracked tables
 - installed trigger count or logical/publication state, depending on mode
 
 ### Refresh
@@ -117,6 +118,8 @@ Use this when:
 The agent also performs this refresh automatically when the stored runtime signature no longer
 matches the live PostgreSQL table shape. `inspect` now reports the live `selected_columns`
 per tracked table, so operators can confirm what the current runtime will hash and send.
+For `pgoutput`, `refresh` also repairs publication drift when publication membership no longer
+matches the tracked table set.
 
 ### Pause / Resume
 

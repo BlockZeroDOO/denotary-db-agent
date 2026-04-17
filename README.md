@@ -91,7 +91,9 @@ Note:
 - `health` shows local source state and best-effort health for configured chain/receipt/audit services
 - `bootstrap` installs or refreshes source-side runtime artifacts such as PostgreSQL trigger CDC objects, logical replication slot setup, and `pgoutput` publications
 - `inspect` shows tracked tables, selected columns, and live PostgreSQL CDC state for a source
+- for `pgoutput`, `inspect` also shows whether publication tables are in sync with tracked tables
 - `refresh` forces runtime artifact refresh and stores the new runtime signature
+- `refresh` can repair PostgreSQL publication drift when `pgoutput` publication tables no longer match tracked tables
 - `pause` / `resume` let operators stop one source without changing the config file
 - `run_once` and daemon mode now auto-refresh PostgreSQL runtime artifacts when tracked table shape changes, including `ALTER TABLE` column drift
 - when `output_plugin = "pgoutput"`, `inspect` shows publication state and tracked publication tables

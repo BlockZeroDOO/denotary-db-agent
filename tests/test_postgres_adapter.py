@@ -387,7 +387,9 @@ class PostgresAdapterTest(unittest.TestCase):
                 "plugin": "pgoutput",
                 "publication_name": "denotary_pg_core_ledger_pub",
                 "publication_exists": True,
+                "tracked_tables": ["public.invoices"],
                 "publication_tables": ["public.invoices"],
+                "publication_in_sync": True,
                 "tracked_table_count": 1,
                 "wal_level": "logical",
                 "slot_exists": True,
@@ -403,3 +405,4 @@ class PostgresAdapterTest(unittest.TestCase):
         self.assertEqual(details["cdc"]["plugin"], "pgoutput")
         self.assertEqual(details["cdc"]["publication_name"], "denotary_pg_core_ledger_pub")
         self.assertEqual(details["cdc"]["publication_tables"], ["public.invoices"])
+        self.assertTrue(details["cdc"]["publication_in_sync"])

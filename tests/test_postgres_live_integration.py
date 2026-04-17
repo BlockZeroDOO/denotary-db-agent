@@ -310,6 +310,19 @@ class PostgresLiveIntegrationTest(unittest.TestCase):
                 cursor.execute(f"alter table public.invoices drop column if exists {column_name}")
             connection.commit()
 
+    def _set_publication_tables(self, publication_name: str, tables: list[str]) -> None:
+        with psycopg.connect(
+            host="127.0.0.1",
+            port=55432,
+            user="denotary",
+            password="denotarypw",
+            dbname="ledger",
+        ) as connection:
+            with connection.cursor() as cursor:
+                table_sql = ", ".join(tables)
+                cursor.execute(f"alter publication {publication_name} set table {table_sql}")
+            connection.commit()
+
     def test_live_postgres_snapshot_and_resume(self) -> None:
         self._seed_initial_rows()
         engine = AgentEngine(load_config(self.config_path))
@@ -569,6 +582,34 @@ class PostgresLiveIntegrationTest(unittest.TestCase):
         self.assertEqual(inspect["sources"][0]["cdc"]["plugin"], "pgoutput")
         self.assertEqual(inspect["sources"][0]["cdc"]["publication_name"], "denotary_test_pub")
         self.assertTrue(inspect["sources"][0]["cdc"]["slot_exists"])
+        self.assertTrue(inspect["sources"][0]["cdc"]["publication_in_sync"])
+
+    def test_live_postgres_pgoutput_refresh_repairs_publication_drift(self) -> None:
+        self._write_config(capture_mode="logical", backfill_mode="none")
+        config = json.loads(self.config_path.read_text(encoding="utf-8"))
+        config["sources"][0]["options"]["output_plugin"] = "pgoutput"
+        self.config_path.write_text(json.dumps(config), encoding="utf-8")
+
+        engine = AgentEngine(load_config(self.config_path))
+        engine.validate()
+        engine.bootstrap("pg-core-ledger")
+
+        self._set_publication_tables(
+            "denotary_test_pub",
+            ['public.invoices'],
+        )
+
+        drifted = engine.inspect("pg-core-ledger")
+        self.assertFalse(drifted["sources"][0]["cdc"]["publication_in_sync"])
+        self.assertEqual(drifted["sources"][0]["cdc"]["publication_tables"], ["public.invoices"])
+
+        refreshed = engine.refresh_source("pg-core-ledger")
+        self.assertEqual(refreshed["sources"][0]["capture_mode"], "logical")
+
+        repaired = engine.inspect("pg-core-ledger")
+        self.assertTrue(repaired["sources"][0]["cdc"]["publication_in_sync"])
+        self.assertIn("public.invoices", repaired["sources"][0]["cdc"]["publication_tables"])
+        self.assertIn("public.payments", repaired["sources"][0]["cdc"]["publication_tables"])
 
     def test_live_postgres_pgoutput_captures_insert_update_delete(self) -> None:
         self._write_config(capture_mode="logical", backfill_mode="none")
