@@ -70,6 +70,7 @@ Returns:
 
 - local source runtime state
 - paused/resumed state
+- per-source `severity`
 - best-effort health for configured chain / receipt / audit services
 - configured ingress / watcher endpoints
 - source-level warnings for logical slot drift and WAL lag thresholds when PostgreSQL logical mode is used

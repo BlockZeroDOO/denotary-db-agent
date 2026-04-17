@@ -190,9 +190,12 @@ class AgentEngine:
                 if isinstance(cdc, dict):
                     source_entry["cdc"] = cdc
                 source_entry["warnings"] = warnings
-                source_entry["ok"] = len(warnings) == 0
+                severity = self._classify_source_health_severity(cdc if isinstance(cdc, dict) else None, warnings)
+                source_entry["severity"] = severity
+                source_entry["ok"] = severity == "healthy"
             except Exception as exc:  # noqa: BLE001
                 source_entry["ok"] = False
+                source_entry["severity"] = "error"
                 source_entry["warnings"] = [str(exc)]
             source_entries.append(source_entry)
         return {
@@ -200,6 +203,18 @@ class AgentEngine:
             "services": services,
             "sources": source_entries,
         }
+
+    def _classify_source_health_severity(self, cdc: dict[str, object] | None, warnings: list[str]) -> str:
+        if not warnings:
+            return "healthy"
+        if cdc is None:
+            return "degraded"
+        if cdc.get("slot_exists") is False:
+            return "critical"
+        if cdc.get("stream_backoff_active") is True:
+            failure_streak = int(cdc.get("stream_failure_streak") or 0)
+            return "critical" if failure_streak >= 3 else "degraded"
+        return "degraded"
 
     def _build_source_health_warnings(self, runtime: SourceRuntime, cdc: dict[str, object] | None) -> list[str]:
         if cdc is None:

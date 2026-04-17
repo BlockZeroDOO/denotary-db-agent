@@ -878,3 +878,67 @@ class PostgresLiveIntegrationTest(unittest.TestCase):
 
         deliveries = engine.store.list_deliveries("pg-core-ledger")
         self.assertEqual(len(deliveries), 2)
+
+    def test_live_postgres_pgoutput_stream_recovers_across_repeated_session_closes(self) -> None:
+        self._write_config(capture_mode="logical", backfill_mode="none")
+        config = json.loads(self.config_path.read_text(encoding="utf-8"))
+        config["sources"][0]["options"]["output_plugin"] = "pgoutput"
+        config["sources"][0]["options"]["logical_runtime_mode"] = "stream"
+        config["sources"][0]["options"]["logical_stream_timeout_sec"] = 2.0
+        config["sources"][0]["options"]["logical_stream_idle_timeout_sec"] = 0.5
+        self.config_path.write_text(json.dumps(config), encoding="utf-8")
+
+        engine = AgentEngine(load_config(self.config_path))
+        engine.validate()
+        engine.bootstrap("pg-core-ledger")
+
+        def insert_invoice(invoice_id: int, amount: float, updated_at: str) -> None:
+            with psycopg.connect(
+                host="127.0.0.1",
+                port=55432,
+                user="denotary",
+                password="denotarypw",
+                dbname="ledger",
+            ) as connection:
+                with connection.cursor() as cursor:
+                    cursor.execute(
+                        """
+                        insert into public.invoices (id, status, amount, updated_at)
+                        values (%s, 'draft', %s, %s)
+                        """,
+                        (invoice_id, amount, updated_at),
+                    )
+                connection.commit()
+
+        insert_invoice(7301, 61.00, "2026-04-17T15:30:01Z")
+        first_result = engine.run_once()
+        self.assertEqual(first_result["processed"], 1)
+        self.assertEqual(first_result["failed"], 0)
+
+        runtime = engine.runtimes()[0]
+        runtime.adapter._close_replication_session(send_feedback=False)
+        insert_invoice(7302, 62.00, "2026-04-17T15:30:02Z")
+        second_result = engine.run_once()
+        self.assertEqual(second_result["processed"], 1)
+        self.assertEqual(second_result["failed"], 0)
+
+        runtime.adapter._close_replication_session(send_feedback=False)
+        insert_invoice(7303, 63.00, "2026-04-17T15:30:03Z")
+        third_result = engine.run_once()
+        self.assertEqual(third_result["processed"], 1)
+        self.assertEqual(third_result["failed"], 0)
+
+        inspect = engine.inspect("pg-core-ledger")
+        self.assertEqual(inspect["sources"][0]["cdc"]["runtime_mode"], "stream")
+        self.assertEqual(inspect["sources"][0]["cdc"]["stream_connect_count"], 3)
+        self.assertEqual(inspect["sources"][0]["cdc"]["stream_reconnect_count"], 2)
+        self.assertEqual(inspect["sources"][0]["cdc"]["stream_last_reconnect_reason"], "session_reopen")
+        self.assertEqual(inspect["sources"][0]["cdc"]["stream_failure_streak"], 0)
+        self.assertFalse(inspect["sources"][0]["cdc"]["stream_backoff_active"])
+
+        health = engine.health()
+        self.assertTrue(health["sources"][0]["ok"])
+        self.assertEqual(health["sources"][0]["severity"], "healthy")
+
+        deliveries = engine.store.list_deliveries("pg-core-ledger")
+        self.assertEqual(len(deliveries), 3)

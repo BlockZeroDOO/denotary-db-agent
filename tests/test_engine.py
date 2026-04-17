@@ -223,6 +223,7 @@ class EngineTest(unittest.TestCase):
             health = engine.health()
 
         self.assertFalse(health["sources"][0]["ok"])
+        self.assertEqual(health["sources"][0]["severity"], "degraded")
         self.assertEqual(health["sources"][0]["capture_mode"], "logical")
         self.assertIn("pgoutput publication tables are out of sync with tracked tables", health["sources"][0]["warnings"])
         self.assertIn(
@@ -233,6 +234,36 @@ class EngineTest(unittest.TestCase):
             "postgres stream is in reconnect cooldown after connection_lost; retry after 2026-04-18T12:00:01Z",
             health["sources"][0]["warnings"],
         )
+
+    def test_health_marks_missing_logical_slot_as_critical(self) -> None:
+        engine = AgentEngine(load_config(self.config_path))
+        source_config = engine.config.sources[0]
+
+        fake_adapter = SimpleNamespace(
+            inspect=lambda: {
+                "capture_mode": "logical",
+                "cdc": {
+                    "slot_exists": False,
+                    "publication_in_sync": True,
+                    "replica_identity_in_sync": True,
+                    "stream_backoff_active": False,
+                    "stream_failure_streak": 0,
+                    "retained_wal_bytes": 0,
+                    "flush_lag_bytes": 0,
+                },
+            }
+        )
+
+        with unittest.mock.patch.object(
+            engine,
+            "runtimes",
+            return_value=[SourceRuntime(config=source_config, adapter=fake_adapter)],
+        ):
+            health = engine.health()
+
+        self.assertFalse(health["sources"][0]["ok"])
+        self.assertEqual(health["sources"][0]["severity"], "critical")
+        self.assertIn("logical slot is missing", health["sources"][0]["warnings"])
 
     def test_runtimes_reuse_adapter_instances_between_calls(self) -> None:
         engine = AgentEngine(load_config(self.config_path))
