@@ -29,6 +29,12 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Save diagnostics snapshot to a timestamped JSON file under the local runtime directory",
     )
+    diagnostics_parser.add_argument(
+        "--snapshot-retention",
+        type=int,
+        default=20,
+        help="When saving diagnostics snapshots, keep only the newest N matching files (default: 20)",
+    )
     bootstrap_parser = subparsers.add_parser("bootstrap", help="Install or refresh source-side runtime artifacts")
     bootstrap_parser.add_argument("--source", help="Source id")
     inspect_parser = subparsers.add_parser("inspect", help="Inspect source configuration and live runtime state")
@@ -67,6 +73,20 @@ def write_json_snapshot(payload: dict, output_path: str | Path) -> Path:
     return path
 
 
+def prune_diagnostics_snapshots(snapshot_path: str | Path, keep_count: int, source_id: str | None) -> list[Path]:
+    if keep_count < 1:
+        raise ValueError("snapshot retention must be at least 1")
+    path = Path(snapshot_path)
+    suffix = source_id or "all"
+    matches = sorted(path.parent.glob(f"diagnostics-{suffix}-*.json"), key=lambda item: item.name, reverse=True)
+    removed: list[Path] = []
+    for old_path in matches[keep_count:]:
+        if old_path.exists():
+            old_path.unlink()
+            removed.append(old_path)
+    return removed
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -87,12 +107,16 @@ def main(argv: list[str] | None = None) -> int:
         if args.output:
             snapshot_path = write_json_snapshot(diagnostics, args.output)
             diagnostics["snapshot_path"] = str(snapshot_path)
+            removed = prune_diagnostics_snapshots(snapshot_path, args.snapshot_retention, args.source)
+            diagnostics["pruned_snapshot_paths"] = [str(item) for item in removed]
         elif args.save_snapshot:
             snapshot_path = write_json_snapshot(
                 diagnostics,
                 default_diagnostics_snapshot_path(args.config, config.storage.state_db, args.source),
             )
             diagnostics["snapshot_path"] = str(snapshot_path)
+            removed = prune_diagnostics_snapshots(snapshot_path, args.snapshot_retention, args.source)
+            diagnostics["pruned_snapshot_paths"] = [str(item) for item in removed]
         print(json.dumps(diagnostics, indent=2))
         return 0
     if args.command == "bootstrap":

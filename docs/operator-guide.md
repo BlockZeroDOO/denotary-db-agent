@@ -80,6 +80,7 @@ Returns:
 ```bash
 denotary-db-agent --config examples/agent.example.json diagnostics --source pg-core-ledger
 denotary-db-agent --config examples/agent.example.json diagnostics --source pg-core-ledger --save-snapshot
+denotary-db-agent --config examples/agent.example.json diagnostics --source pg-core-ledger --save-snapshot --snapshot-retention 10
 ```
 
 Returns a compact operator-focused report with:
@@ -92,6 +93,8 @@ Returns a compact operator-focused report with:
 
 With `--save-snapshot`, the command also writes the same JSON payload to a timestamped file under the
 local runtime directory. Use `--output <path>` when you want a deterministic file path for automation.
+By default the command keeps only the newest `20` matching diagnostics snapshots per source; override
+that with `--snapshot-retention <N>` when operators need a shorter or longer local history.
 
 ### Bootstrap
 
