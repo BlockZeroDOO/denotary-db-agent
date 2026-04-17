@@ -75,6 +75,20 @@ Returns:
 - configured ingress / watcher endpoints
 - source-level warnings for logical slot drift and WAL lag thresholds when PostgreSQL logical mode is used
 
+### Diagnostics
+
+```bash
+denotary-db-agent --config examples/agent.example.json diagnostics --source pg-core-ledger
+```
+
+Returns a compact operator-focused report with:
+
+- source severity and warnings
+- configured vs effective stream runtime mode
+- reconnect / fallback / probation state
+- recent stream error history
+- logical slot progress markers and lag counters
+
 ### Bootstrap
 
 ```bash

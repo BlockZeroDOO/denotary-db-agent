@@ -281,6 +281,79 @@ class AgentEngine:
             results.append(runtime.adapter.inspect())
         return {"agent_name": self.config.agent_name, "sources": results}
 
+    def diagnostics(self, source_id: str | None = None) -> dict:
+        health = self.health()
+        results: list[dict[str, object]] = []
+        runtime_by_source = {runtime.config.id: runtime for runtime in self.runtimes()}
+        for source in health["sources"]:
+            current_source_id = str(source["source_id"])
+            if source_id and current_source_id != source_id:
+                continue
+            inspect_source: dict[str, object] = {}
+            runtime = runtime_by_source.get(current_source_id)
+            if runtime is not None:
+                try:
+                    inspect_source = runtime.adapter.inspect()
+                except Exception as exc:  # noqa: BLE001
+                    inspect_source = {
+                        "source_id": current_source_id,
+                        "adapter": runtime.config.adapter,
+                        "capture_mode": source.get("capture_mode"),
+                        "inspect_error": str(exc),
+                    }
+            cdc = inspect_source.get("cdc") if isinstance(inspect_source, dict) else None
+            entry: dict[str, object] = {
+                "source_id": current_source_id,
+                "adapter": source.get("adapter"),
+                "capture_mode": source.get("capture_mode") or inspect_source.get("capture_mode"),
+                "severity": source.get("severity", "unknown"),
+                "ok": source.get("ok", False),
+                "warnings": source.get("warnings", []),
+                "paused": source.get("paused", False),
+            }
+            if "inspect_error" in inspect_source:
+                entry["inspect_error"] = inspect_source["inspect_error"]
+            if isinstance(cdc, dict):
+                entry["stream"] = {
+                    "configured_runtime_mode": cdc.get("runtime_mode"),
+                    "effective_runtime_mode": cdc.get("effective_runtime_mode", cdc.get("runtime_mode")),
+                    "session_active": cdc.get("stream_session_active"),
+                    "start_lsn": cdc.get("stream_start_lsn"),
+                    "acknowledged_lsn": cdc.get("stream_acknowledged_lsn"),
+                    "connect_count": cdc.get("stream_connect_count"),
+                    "reconnect_count": cdc.get("stream_reconnect_count"),
+                    "last_connect_at": cdc.get("stream_last_connect_at"),
+                    "last_reconnect_at": cdc.get("stream_last_reconnect_at"),
+                    "last_reconnect_reason": cdc.get("stream_last_reconnect_reason"),
+                    "last_error": cdc.get("stream_last_error"),
+                    "last_error_kind": cdc.get("stream_last_error_kind"),
+                    "last_error_at": cdc.get("stream_last_error_at"),
+                    "error_history": cdc.get("stream_error_history", []),
+                    "failure_streak": cdc.get("stream_failure_streak"),
+                    "backoff_active": cdc.get("stream_backoff_active"),
+                    "backoff_remaining_sec": cdc.get("stream_backoff_remaining_sec"),
+                    "backoff_until": cdc.get("stream_backoff_until"),
+                    "fallback_active": cdc.get("stream_fallback_active"),
+                    "fallback_remaining_sec": cdc.get("stream_fallback_remaining_sec"),
+                    "fallback_until": cdc.get("stream_fallback_until"),
+                    "fallback_reason": cdc.get("stream_fallback_reason"),
+                    "probation_active": cdc.get("stream_probation_active"),
+                    "probation_remaining_sec": cdc.get("stream_probation_remaining_sec"),
+                    "probation_until": cdc.get("stream_probation_until"),
+                    "probation_reason": cdc.get("stream_probation_reason"),
+                }
+                entry["logical_slot"] = {
+                    "slot_exists": cdc.get("slot_exists"),
+                    "slot_active": cdc.get("slot_active"),
+                    "restart_lsn": cdc.get("restart_lsn"),
+                    "confirmed_flush_lsn": cdc.get("confirmed_flush_lsn"),
+                    "pending_changes": cdc.get("pending_changes"),
+                    "retained_wal_bytes": cdc.get("retained_wal_bytes"),
+                    "flush_lag_bytes": cdc.get("flush_lag_bytes"),
+                }
+            results.append(entry)
+        return {"agent_name": self.config.agent_name, "sources": results}
+
     def run_once(self) -> dict[str, int]:
         return self._run_runtimes_once(self.runtimes())
 

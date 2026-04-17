@@ -19,6 +19,8 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("validate", help="Validate config and adapter connectivity")
     subparsers.add_parser("status", help="Show source status")
     subparsers.add_parser("health", help="Show service and source health")
+    diagnostics_parser = subparsers.add_parser("diagnostics", help="Show compact stream/runtime diagnostics")
+    diagnostics_parser.add_argument("--source", help="Source id")
     bootstrap_parser = subparsers.add_parser("bootstrap", help="Install or refresh source-side runtime artifacts")
     bootstrap_parser.add_argument("--source", help="Source id")
     inspect_parser = subparsers.add_parser("inspect", help="Inspect source configuration and live runtime state")
@@ -56,6 +58,9 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "health":
         print(json.dumps(engine.health(), indent=2))
+        return 0
+    if args.command == "diagnostics":
+        print(json.dumps(engine.diagnostics(args.source), indent=2))
         return 0
     if args.command == "bootstrap":
         print(json.dumps(engine.bootstrap(args.source), indent=2))

@@ -338,6 +338,90 @@ class EngineTest(unittest.TestCase):
             health["sources"][0]["warnings"],
         )
 
+    def test_diagnostics_reports_compact_stream_runtime_state(self) -> None:
+        engine = AgentEngine(load_config(self.config_path))
+        source_config = engine.config.sources[0]
+
+        fake_adapter = SimpleNamespace(
+            inspect=lambda: {
+                "source_id": source_config.id,
+                "adapter": source_config.adapter,
+                "capture_mode": "logical",
+                "cdc": {
+                    "runtime_mode": "stream",
+                    "effective_runtime_mode": "peek",
+                    "stream_session_active": False,
+                    "stream_start_lsn": "0/16B6A28",
+                    "stream_acknowledged_lsn": "0/16B6A40",
+                    "stream_connect_count": 4,
+                    "stream_reconnect_count": 3,
+                    "stream_last_connect_at": "2026-04-18T12:00:00Z",
+                    "stream_last_reconnect_at": "2026-04-18T12:01:00Z",
+                    "stream_last_reconnect_reason": "connection_lost",
+                    "stream_last_error": "broken stream",
+                    "stream_last_error_kind": "connection_lost",
+                    "stream_last_error_at": "2026-04-18T12:01:00Z",
+                    "stream_error_history": [{"at": "2026-04-18T12:01:00Z", "kind": "connection_lost", "message": "broken stream"}],
+                    "stream_failure_streak": 3,
+                    "stream_backoff_active": True,
+                    "stream_backoff_remaining_sec": 2.5,
+                    "stream_backoff_until": "2026-04-18T12:01:03Z",
+                    "stream_fallback_active": True,
+                    "stream_fallback_remaining_sec": 20.0,
+                    "stream_fallback_until": "2026-04-18T12:01:20Z",
+                    "stream_fallback_reason": "connection_lost",
+                    "stream_probation_active": False,
+                    "stream_probation_remaining_sec": 0.0,
+                    "stream_probation_until": "",
+                    "stream_probation_reason": "",
+                    "slot_exists": True,
+                    "slot_active": False,
+                    "restart_lsn": "0/16B6A28",
+                    "confirmed_flush_lsn": "0/16B6A40",
+                    "pending_changes": False,
+                    "retained_wal_bytes": 0,
+                    "flush_lag_bytes": 0,
+                },
+            }
+        )
+
+        with unittest.mock.patch.object(
+            engine,
+            "runtimes",
+            return_value=[SourceRuntime(config=source_config, adapter=fake_adapter)],
+        ):
+            diagnostics = engine.diagnostics(source_config.id)
+
+        self.assertEqual(len(diagnostics["sources"]), 1)
+        source = diagnostics["sources"][0]
+        self.assertEqual(source["severity"], "degraded")
+        self.assertEqual(source["stream"]["configured_runtime_mode"], "stream")
+        self.assertEqual(source["stream"]["effective_runtime_mode"], "peek")
+        self.assertEqual(source["stream"]["reconnect_count"], 3)
+        self.assertEqual(source["stream"]["fallback_reason"], "connection_lost")
+        self.assertEqual(source["logical_slot"]["confirmed_flush_lsn"], "0/16B6A40")
+
+    def test_diagnostics_returns_inspect_error_instead_of_raising(self) -> None:
+        engine = AgentEngine(load_config(self.config_path))
+        source_config = engine.config.sources[0]
+
+        fake_adapter = SimpleNamespace(
+            inspect=lambda: (_ for _ in ()).throw(RuntimeError("db offline"))
+        )
+
+        with unittest.mock.patch.object(
+            engine,
+            "runtimes",
+            return_value=[SourceRuntime(config=source_config, adapter=fake_adapter)],
+        ):
+            diagnostics = engine.diagnostics(source_config.id)
+
+        self.assertEqual(len(diagnostics["sources"]), 1)
+        source = diagnostics["sources"][0]
+        self.assertFalse(source["ok"])
+        self.assertEqual(source["severity"], "error")
+        self.assertEqual(source["inspect_error"], "db offline")
+
     def test_runtimes_reuse_adapter_instances_between_calls(self) -> None:
         engine = AgentEngine(load_config(self.config_path))
 
