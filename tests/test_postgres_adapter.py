@@ -419,6 +419,7 @@ class PostgresAdapterTest(unittest.TestCase):
                 "stream_last_error": "",
                 "stream_last_error_kind": "",
                 "stream_last_error_at": "",
+                "stream_error_history": [],
                 "stream_failure_streak": 0,
                 "stream_backoff_active": False,
                 "stream_backoff_remaining_sec": 0.0,
@@ -436,6 +437,7 @@ class PostgresAdapterTest(unittest.TestCase):
         self.assertFalse(details["cdc"]["pending_changes"])
         self.assertTrue(details["cdc"]["replica_identity_in_sync"])
         self.assertEqual(details["cdc"]["retained_wal_bytes"], 0)
+        self.assertEqual(details["cdc"]["stream_error_history"], [])
         self.assertEqual(details["cdc"]["stream_backoff_remaining_sec"], 0.0)
 
     def test_wait_for_changes_detects_logical_pending_changes(self) -> None:
@@ -675,8 +677,25 @@ class PostgresAdapterTest(unittest.TestCase):
         self.assertEqual(adapter._stream_failure_streak, 2)
         self.assertEqual(adapter._stream_last_error_kind, "connection_lost")
         self.assertIn("broken connection again", adapter._stream_last_error)
+        self.assertEqual(len(adapter._stream_error_history), 2)
+        self.assertEqual(adapter._stream_error_history[-1]["kind"], "connection_lost")
         self.assertGreater(adapter._stream_backoff_remaining_sec(), 0.0)
         self.assertTrue(adapter._stream_backoff_until)
+
+    def test_stream_error_history_is_trimmed_to_configured_size(self) -> None:
+        config = self.make_config()
+        config.options["capture_mode"] = "logical"
+        config.options["output_plugin"] = "pgoutput"
+        config.options["logical_runtime_mode"] = "stream"
+        config.options["logical_stream_error_history_size"] = 3
+        adapter = PostgresAdapter(config)
+
+        for index in range(5):
+            adapter._record_stream_runtime_failure(RuntimeError(f"failure-{index}"))
+
+        self.assertEqual(len(adapter._stream_error_history), 3)
+        self.assertEqual(adapter._stream_error_history[0]["message"], "failure-2")
+        self.assertEqual(adapter._stream_error_history[-1]["message"], "failure-4")
 
     def test_stream_runtime_skips_fetch_during_backoff_window(self) -> None:
         config = self.make_config()

@@ -77,6 +77,7 @@ class PostgresAdapter(BaseAdapter):
         self._stream_failure_streak = 0
         self._stream_backoff_until_monotonic = 0.0
         self._stream_backoff_until = ""
+        self._stream_error_history: list[dict[str, str]] = []
 
     def discover_capabilities(self) -> AdapterCapabilities:
         capture_mode = str(self.config.options.get("capture_mode", "watermark")).lower()
@@ -1326,6 +1327,7 @@ class PostgresAdapter(BaseAdapter):
             "stream_last_error": self._stream_last_error,
             "stream_last_error_kind": self._stream_last_error_kind,
             "stream_last_error_at": self._stream_last_error_at,
+            "stream_error_history": list(self._stream_error_history),
             "stream_failure_streak": self._stream_failure_streak,
             "stream_backoff_active": self._stream_backoff_remaining_sec() > 0,
             "stream_backoff_remaining_sec": round(self._stream_backoff_remaining_sec(), 3),
@@ -1425,6 +1427,13 @@ class PostgresAdapter(BaseAdapter):
         self._stream_last_error = str(exc)
         self._stream_last_error_kind = reason
         self._stream_last_error_at = now
+        self._append_stream_error_history(
+            {
+                "at": now,
+                "kind": reason,
+                "message": str(exc),
+            }
+        )
         self._stream_failure_streak += 1
         delay_sec = self._stream_backoff_delay_sec()
         if delay_sec > 0:
@@ -1450,6 +1459,13 @@ class PostgresAdapter(BaseAdapter):
         if self._stream_backoff_until_monotonic <= 0:
             return 0.0
         return max(0.0, self._stream_backoff_until_monotonic - time.monotonic())
+
+    def _append_stream_error_history(self, entry: dict[str, str]) -> None:
+        max_entries = int(self.config.options.get("logical_stream_error_history_size", 5))
+        max_entries = max(1, max_entries)
+        self._stream_error_history.append(entry)
+        if len(self._stream_error_history) > max_entries:
+            self._stream_error_history = self._stream_error_history[-max_entries:]
 
     def _replication_conninfo(self) -> str:
         parts = [
