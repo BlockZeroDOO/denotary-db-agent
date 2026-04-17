@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from contextlib import contextmanager
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -38,21 +39,56 @@ class PostgresAdapter(BaseAdapter):
     def __init__(self, config):
         super().__init__(config)
         self._listener_connection: Any | None = None
+        self._logical_warning_emitted = False
 
     def discover_capabilities(self) -> AdapterCapabilities:
         capture_mode = str(self.config.options.get("capture_mode", "watermark")).lower()
         return AdapterCapabilities(
             source_type=self.source_type,
             minimum_version="14",
-            supports_cdc=capture_mode == "trigger",
+            supports_cdc=capture_mode in {"trigger", "logical"},
             supports_snapshot=True,
-            operations=("snapshot",) if capture_mode != "trigger" else ("insert", "update", "delete"),
+            operations=("snapshot",) if capture_mode == "watermark" else ("insert", "update", "delete"),
             notes=(
                 "Trigger-based built-in CDC is enabled for PostgreSQL with optional LISTEN/NOTIFY wakeups."
                 if capture_mode == "trigger"
-                else "Live baseline implementation uses watermark-based snapshot polling. Logical decoding / WAL CDC remains the next PostgreSQL upgrade step."
+                else (
+                    "Logical decoding / WAL CDC is enabled through a logical replication slot and test_decoding output."
+                    if capture_mode == "logical"
+                    else "Live baseline implementation uses watermark-based snapshot polling."
+                )
             ),
         )
+
+    def bootstrap(self) -> dict:
+        self.validate_connection()
+        with self._connect() as connection:
+            specs = self._load_table_specs(connection)
+            cdc_state = self._inspect_cdc_state(connection, specs)
+        return {
+            "source_id": self.config.id,
+            "adapter": self.config.adapter,
+            "capture_mode": self._capture_mode(),
+            "tracked_tables": [self._spec_summary(spec) for spec in specs],
+            "cdc": cdc_state,
+        }
+
+    def inspect(self) -> dict:
+        capabilities = self.discover_capabilities()
+        with self._connect() as connection:
+            specs = self._load_table_specs(connection)
+            cdc_state = self._inspect_cdc_state(connection, specs)
+        return {
+            "source_id": self.config.id,
+            "adapter": self.config.adapter,
+            "source_type": capabilities.source_type,
+            "capture_mode": self._capture_mode(),
+            "supports_cdc": capabilities.supports_cdc,
+            "supports_snapshot": capabilities.supports_snapshot,
+            "tracked_tables": [self._spec_summary(spec) for spec in specs],
+            "cdc": cdc_state,
+            "notes": capabilities.notes,
+        }
 
     def validate_connection(self) -> None:
         required = ("host", "port", "username", "database")
@@ -68,50 +104,107 @@ class PostgresAdapter(BaseAdapter):
             specs = self._load_table_specs(connection)
             if self._capture_mode() == "trigger":
                 self._ensure_trigger_cdc_setup(connection, specs)
+            elif self._capture_mode() == "logical":
+                self._ensure_logical_cdc_setup(connection, specs)
 
     def start_stream(self, checkpoint: SourceCheckpoint | None) -> Iterable[ChangeEvent]:
-        if self._capture_mode() != "trigger":
-            raise NotImplementedError(
-                "postgresql logical decoding streaming is not implemented yet; use read_snapshot() watermark polling in the current baseline"
-            )
-
-        last_event_id = self._parse_trigger_checkpoint(checkpoint)
+        capture_mode = self._capture_mode()
         with self._connect() as connection:
             specs = self._load_table_specs(connection)
-            self._ensure_trigger_cdc_setup(connection, specs)
-            spec_map = {spec.key: spec for spec in specs}
-            for row in self._fetch_trigger_events(connection, last_event_id):
-                spec_key = f"{row['source_schema']}.{row['source_table']}"
-                spec = spec_map.get(spec_key)
-                if spec is None:
-                    continue
-                event_id = int(row["event_id"])
-                commit_timestamp = self._normalize_timestamp(row["commit_timestamp"])
-                primary_key = dict(row["primary_key"] or {})
-                operation = str(row["operation"]).lower()
-                before_row = row.get("before_row")
-                after_row = row.get("after_row")
-                checkpoint_token = json.dumps({"mode": "trigger_cdc", "event_id": event_id}, sort_keys=True)
-                yield ChangeEvent(
-                    source_id=self.config.id,
-                    source_type=self.source_type,
-                    source_instance=self.config.source_instance,
-                    database_name=self.config.database_name,
-                    schema_or_namespace=spec.schema_name,
-                    table_or_collection=spec.table_name,
-                    operation=operation,  # type: ignore[arg-type]
-                    primary_key=primary_key,
-                    change_version=f"event:{event_id}",
-                    commit_timestamp=commit_timestamp,
-                    before=before_row,
-                    after=after_row,
-                    metadata={
-                        "capture_mode": "trigger-cdc",
-                        "event_id": event_id,
-                        "primary_key_columns": spec.primary_key_columns,
-                    },
-                    checkpoint_token=checkpoint_token,
-                )
+            if capture_mode == "trigger":
+                self._ensure_trigger_cdc_setup(connection, specs)
+                spec_map = {spec.key: spec for spec in specs}
+                last_event_id = self._parse_trigger_checkpoint(checkpoint)
+                for row in self._fetch_trigger_events(connection, last_event_id):
+                    spec_key = f"{row['source_schema']}.{row['source_table']}"
+                    spec = spec_map.get(spec_key)
+                    if spec is None:
+                        continue
+                    event_id = int(row["event_id"])
+                    commit_timestamp = self._normalize_timestamp(row["commit_timestamp"])
+                    primary_key = dict(row["primary_key"] or {})
+                    operation = str(row["operation"]).lower()
+                    before_row = row.get("before_row")
+                    after_row = row.get("after_row")
+                    checkpoint_token = json.dumps({"mode": "trigger_cdc", "event_id": event_id}, sort_keys=True)
+                    yield ChangeEvent(
+                        source_id=self.config.id,
+                        source_type=self.source_type,
+                        source_instance=self.config.source_instance,
+                        database_name=self.config.database_name,
+                        schema_or_namespace=spec.schema_name,
+                        table_or_collection=spec.table_name,
+                        operation=operation,  # type: ignore[arg-type]
+                        primary_key=primary_key,
+                        change_version=f"event:{event_id}",
+                        commit_timestamp=commit_timestamp,
+                        before=before_row,
+                        after=after_row,
+                        metadata={
+                            "capture_mode": "trigger-cdc",
+                            "event_id": event_id,
+                            "primary_key_columns": spec.primary_key_columns,
+                        },
+                        checkpoint_token=checkpoint_token,
+                    )
+                return
+
+            if capture_mode == "logical":
+                self._ensure_logical_cdc_setup(connection, specs)
+                spec_map = {spec.key: spec for spec in specs}
+                last_xid, last_event_index, _commit_lsn, _advance_lsn = self._parse_logical_checkpoint_state(checkpoint)
+                row_limit = int(self.config.options.get("row_limit", self.config.batch_size))
+                decoded_rows = self._fetch_logical_decoded_rows(connection, spec_map, row_limit)
+                processed_count = 0
+                for xid, lsn, commit_lsn, advance_lsn, event_index, spec, operation, before_row, after_row in decoded_rows:
+                    if xid == last_xid and event_index <= last_event_index:
+                        continue
+                    if processed_count >= row_limit:
+                        break
+                    primary_key = self._derive_primary_key(spec, before_row, after_row)
+                    commit_timestamp = self._derive_commit_timestamp(spec, before_row, after_row)
+                    checkpoint_token = json.dumps(
+                        {
+                            "mode": "logical_cdc",
+                            "xid": xid,
+                            "lsn": lsn,
+                            "commit_lsn": commit_lsn,
+                            "event_index": event_index,
+                            "advance_lsn": advance_lsn,
+                        },
+                        sort_keys=True,
+                    )
+                    yield ChangeEvent(
+                        source_id=self.config.id,
+                        source_type=self.source_type,
+                        source_instance=self.config.source_instance,
+                        database_name=self.config.database_name,
+                        schema_or_namespace=spec.schema_name,
+                        table_or_collection=spec.table_name,
+                        operation=operation,  # type: ignore[arg-type]
+                        primary_key=primary_key,
+                        change_version=f"lsn:{lsn}:{event_index}",
+                        commit_timestamp=commit_timestamp,
+                        before=before_row,
+                        after=after_row,
+                        metadata={
+                            "capture_mode": "logical-cdc",
+                            "xid": xid,
+                            "lsn": lsn,
+                            "commit_lsn": commit_lsn,
+                            "event_index": event_index,
+                            "plugin": self._logical_output_plugin(),
+                            "slot_name": self._logical_slot_name(),
+                            "primary_key_columns": spec.primary_key_columns,
+                        },
+                        checkpoint_token=checkpoint_token,
+                    )
+                    processed_count += 1
+                return
+
+        raise NotImplementedError(
+            "postgresql start_stream() is only available for trigger or logical capture modes"
+        )
 
     def stop_stream(self) -> None:
         if self._listener_connection is not None:
@@ -120,7 +213,7 @@ class PostgresAdapter(BaseAdapter):
         return None
 
     def read_snapshot(self, checkpoint: SourceCheckpoint | None = None) -> Iterable[ChangeEvent]:
-        if self._capture_mode() == "trigger":
+        if self._capture_mode() in {"trigger", "logical"}:
             return
 
         dry_events = self.config.options.get("dry_run_events") or []
@@ -194,6 +287,8 @@ class PostgresAdapter(BaseAdapter):
         return None
 
     def wait_for_changes(self, timeout_sec: float) -> bool:
+        if self._capture_mode() == "logical":
+            return super().wait_for_changes(timeout_sec)
         if self._capture_mode() != "trigger":
             return super().wait_for_changes(timeout_sec)
         try:
@@ -210,16 +305,32 @@ class PostgresAdapter(BaseAdapter):
         return False
 
     def after_checkpoint_advanced(self, token: str) -> None:
-        if self._capture_mode() != "trigger":
+        capture_mode = self._capture_mode()
+        if capture_mode == "trigger":
+            if not bool(self.config.options.get("cleanup_processed_events", True)):
+                return
+            event_id = self._parse_trigger_checkpoint(
+                SourceCheckpoint(source_id=self.config.id, token=token, updated_at="")
+            )
+            if event_id <= 0:
+                return
+            with self._connect() as connection:
+                with connection.cursor() as cursor:
+                    cursor.execute("delete from denotary_cdc.events where event_id <= %s", (event_id,))
             return
-        if not bool(self.config.options.get("cleanup_processed_events", True)):
-            return
-        event_id = self._parse_trigger_checkpoint(SourceCheckpoint(source_id=self.config.id, token=token, updated_at=""))
-        if event_id <= 0:
-            return
-        with self._connect() as connection:
-            with connection.cursor() as cursor:
-                cursor.execute("delete from denotary_cdc.events where event_id <= %s", (event_id,))
+
+        if capture_mode == "logical":
+            _xid, _event_index, commit_lsn, advance_lsn = self._parse_logical_checkpoint_state(
+                SourceCheckpoint(source_id=self.config.id, token=token, updated_at="")
+            )
+            if not commit_lsn or not advance_lsn:
+                return
+            with self._connect() as connection:
+                with connection.cursor() as cursor:
+                    cursor.execute(
+                        "select end_lsn from pg_replication_slot_advance(%s, %s)",
+                        (self._logical_slot_name(), commit_lsn),
+                    )
 
     @contextmanager
     def _connect(self) -> Iterator[Any]:
@@ -388,6 +499,149 @@ class PostgresAdapter(BaseAdapter):
                     """
                 )
 
+    def _ensure_logical_cdc_setup(self, connection: Any, specs: list[PostgresTableSpec]) -> None:
+        with connection.cursor() as cursor:
+            wal_level_row = cursor.execute("show wal_level").fetchone()
+            if str(wal_level_row["wal_level"]).lower() != "logical":
+                raise ValueError("postgresql wal_level must be logical for capture_mode=logical")
+
+            if bool(self.config.options.get("replica_identity_full", True)):
+                for spec in specs:
+                    cursor.execute(
+                        f"""
+                        alter table {self._quote_identifier(spec.schema_name)}.{self._quote_identifier(spec.table_name)}
+                        replica identity full
+                        """
+                    )
+                connection.commit()
+
+            slot_row = cursor.execute(
+                """
+                select slot_name, plugin, confirmed_flush_lsn, restart_lsn
+                from pg_replication_slots
+                where slot_name = %s
+                """,
+                (self._logical_slot_name(),),
+            ).fetchone()
+            if slot_row is None and bool(self.config.options.get("auto_create_slot", True)):
+                cursor.execute(
+                    "select slot_name, lsn from pg_create_logical_replication_slot(%s, %s)",
+                    (self._logical_slot_name(), self._logical_output_plugin()),
+                )
+
+    def _fetch_logical_changes(self, connection: Any, fetch_limit: int | None = None) -> list[dict[str, Any]]:
+        row_limit = fetch_limit or int(self.config.options.get("row_limit", self.config.batch_size))
+        plugin = self._logical_output_plugin()
+        slot_name = self._logical_slot_name()
+        options = []
+        if plugin == "test_decoding":
+            options = ["include-xids", "0", "skip-empty-xacts", "1"]
+        placeholders = ", ".join(["%s"] * len(options))
+        sql = (
+            f"select lsn, xid, data from pg_logical_slot_peek_changes(%s, null, %s"
+            + (f", {placeholders}" if placeholders else "")
+            + ")"
+        )
+        params: list[Any] = [slot_name, row_limit, *options]
+        with connection.cursor() as cursor:
+            return list(cursor.execute(sql, params).fetchall())
+
+    def _fetch_logical_decoded_rows(
+        self,
+        connection: Any,
+        spec_map: dict[str, PostgresTableSpec],
+        row_limit: int,
+    ) -> list[tuple[str, str, str, bool, int, PostgresTableSpec, str, dict[str, Any] | None, dict[str, Any] | None]]:
+        fetch_limit = max(row_limit + 4, row_limit * 4)
+        while True:
+            raw_rows = self._fetch_logical_changes(connection, fetch_limit=fetch_limit)
+            entries: list[dict[str, Any]] = []
+            for row in raw_rows:
+                xid = str(row["xid"])
+                lsn = str(row["lsn"])
+                data = str(row["data"])
+                if data.startswith("BEGIN") or data.startswith("COMMIT"):
+                    entries.append({"kind": "commit" if data.startswith("COMMIT") else "begin", "xid": xid, "lsn": lsn})
+                    continue
+                decoded = self._parse_test_decoding_change(data, spec_map)
+                if decoded is None:
+                    continue
+                spec, operation, before_row, after_row = decoded
+                entries.append(
+                    {
+                        "kind": "data",
+                        "xid": xid,
+                        "lsn": lsn,
+                        "spec": spec,
+                        "operation": operation,
+                        "before_row": before_row,
+                        "after_row": after_row,
+                    }
+                )
+
+            data_entries = [entry for entry in entries if entry["kind"] == "data"]
+            if len(data_entries) <= row_limit:
+                return self._materialize_logical_entries(entries)
+
+            boundary_xid = str(data_entries[row_limit - 1]["xid"])
+            boundary_position = next(
+                index
+                for index, entry in enumerate(entries)
+                if entry["kind"] == "data"
+                and entry["xid"] == data_entries[row_limit - 1]["xid"]
+                and entry["lsn"] == data_entries[row_limit - 1]["lsn"]
+                and entry["after_row"] == data_entries[row_limit - 1]["after_row"]
+                and entry["before_row"] == data_entries[row_limit - 1]["before_row"]
+            )
+            if any(
+                entry["kind"] == "commit" and entry["xid"] == boundary_xid
+                for entry in entries[boundary_position + 1 :]
+            ):
+                return self._materialize_logical_entries(entries)
+
+            if len(raw_rows) < fetch_limit:
+                return self._materialize_logical_entries(entries)
+
+            fetch_limit *= 2
+
+    def _materialize_logical_entries(
+        self,
+        entries: list[dict[str, Any]],
+    ) -> list[tuple[str, str, str, bool, int, PostgresTableSpec, str, dict[str, Any] | None, dict[str, Any] | None]]:
+        commit_lsn_by_xid: dict[str, str] = {}
+        total_by_xid: dict[str, int] = {}
+        for entry in entries:
+            if entry["kind"] == "commit":
+                commit_lsn_by_xid[str(entry["xid"])] = str(entry["lsn"])
+            if entry["kind"] == "data":
+                xid = str(entry["xid"])
+                total_by_xid[xid] = total_by_xid.get(xid, 0) + 1
+
+        materialized: list[tuple[str, str, str, bool, int, PostgresTableSpec, str, dict[str, Any] | None, dict[str, Any] | None]] = []
+        running_by_xid: dict[str, int] = {}
+        for entry in entries:
+            if entry["kind"] != "data":
+                continue
+            xid = str(entry["xid"])
+            running_by_xid[xid] = running_by_xid.get(xid, 0) + 1
+            event_index = running_by_xid[xid]
+            commit_lsn = commit_lsn_by_xid.get(xid, "")
+            advance_lsn = bool(commit_lsn) and event_index == total_by_xid[xid]
+            materialized.append(
+                (
+                    xid,
+                    str(entry["lsn"]),
+                    commit_lsn,
+                    advance_lsn,
+                    event_index,
+                    entry["spec"],
+                    str(entry["operation"]),
+                    entry["before_row"],
+                    entry["after_row"],
+                )
+            )
+        return materialized
+
     def _fetch_trigger_events(self, connection: Any, after_event_id: int) -> list[dict[str, Any]]:
         row_limit = int(self.config.options.get("row_limit", self.config.batch_size))
         with connection.cursor() as cursor:
@@ -483,6 +737,110 @@ class PostgresAdapter(BaseAdapter):
             return int(raw_id) if isinstance(raw_id, int) or str(raw_id).isdigit() else 0
         return 0
 
+    def _parse_logical_checkpoint(self, checkpoint: SourceCheckpoint | None) -> str:
+        _xid, _event_index, commit_lsn, _advance_lsn = self._parse_logical_checkpoint_state(checkpoint)
+        if commit_lsn:
+            return commit_lsn
+        try:
+            value = json.loads(checkpoint.token) if checkpoint and checkpoint.token else {}
+        except json.JSONDecodeError:
+            return ""
+        if isinstance(value, dict):
+            lsn = value.get("lsn", "")
+            return str(lsn) if isinstance(lsn, str) else ""
+        return ""
+
+    def _parse_logical_checkpoint_state(self, checkpoint: SourceCheckpoint | None) -> tuple[str, int, str, bool]:
+        if checkpoint is None or not checkpoint.token:
+            return "", 0, "", False
+        try:
+            value = json.loads(checkpoint.token)
+        except json.JSONDecodeError:
+            return "", 0, "", False
+        if isinstance(value, dict) and str(value.get("mode")) == "logical_cdc":
+            xid = value.get("xid", "")
+            event_index = value.get("event_index", 0)
+            commit_lsn = value.get("commit_lsn", "")
+            advance_lsn = bool(value.get("advance_lsn", True))
+            return (
+                str(xid) if isinstance(xid, str) or isinstance(xid, int) else "",
+                int(event_index) if isinstance(event_index, int) or str(event_index).isdigit() else 0,
+                str(commit_lsn) if isinstance(commit_lsn, str) else "",
+                advance_lsn,
+            )
+        return "", 0, "", False
+
+    def _inspect_cdc_state(self, connection: Any, specs: list[PostgresTableSpec]) -> dict[str, Any] | None:
+        if self._capture_mode() == "trigger":
+            return self._inspect_trigger_cdc_state(connection, specs)
+        if self._capture_mode() == "logical":
+            return self._inspect_logical_cdc_state(connection, specs)
+        return None
+
+    def _inspect_trigger_cdc_state(self, connection: Any, specs: list[PostgresTableSpec]) -> dict[str, Any]:
+        trigger_names = [f"dn_cdc_{spec.schema_name}_{spec.table_name}" for spec in specs]
+        with connection.cursor() as cursor:
+            schema_exists_row = cursor.execute(
+                "select exists(select 1 from pg_namespace where nspname = 'denotary_cdc') as exists"
+            ).fetchone()
+            events_table_row = cursor.execute(
+                """
+                select exists(
+                    select 1
+                    from pg_class c
+                    join pg_namespace n on n.oid = c.relnamespace
+                    where n.nspname = 'denotary_cdc' and c.relname = 'events'
+                ) as exists
+                """
+            ).fetchone()
+            trigger_count_row = cursor.execute(
+                """
+                select count(*) as total
+                from pg_trigger
+                where tgname = any(%s) and not tgisinternal
+                """,
+                (trigger_names,),
+            ).fetchone()
+            pending_row = cursor.execute("select count(*) as total from denotary_cdc.events").fetchone()
+        return {
+            "schema": "denotary_cdc",
+            "events_table": "denotary_cdc.events",
+            "listener_channel": "denotary_cdc_events",
+            "schema_exists": bool(schema_exists_row["exists"]),
+            "events_table_exists": bool(events_table_row["exists"]),
+            "configured_trigger_count": len(trigger_names),
+            "installed_trigger_count": int(trigger_count_row["total"]),
+            "pending_event_rows": int(pending_row["total"]),
+        }
+
+    def _inspect_logical_cdc_state(self, connection: Any, specs: list[PostgresTableSpec]) -> dict[str, Any]:
+        with connection.cursor() as cursor:
+            wal_level_row = cursor.execute("show wal_level").fetchone()
+            slot_row = cursor.execute(
+                """
+                select slot_name, plugin, active, restart_lsn, confirmed_flush_lsn, wal_status
+                from pg_replication_slots
+                where slot_name = %s
+                """,
+                (self._logical_slot_name(),),
+            ).fetchone()
+        return {
+            "mode": "logical",
+            "slot_name": self._logical_slot_name(),
+            "plugin": self._logical_output_plugin(),
+            "tracked_table_count": len(specs),
+            "wal_level": str(wal_level_row["wal_level"]),
+            "slot_exists": slot_row is not None,
+            "slot_active": bool(slot_row["active"]) if slot_row else False,
+            "restart_lsn": str(slot_row["restart_lsn"]) if slot_row and slot_row["restart_lsn"] is not None else "",
+            "confirmed_flush_lsn": (
+                str(slot_row["confirmed_flush_lsn"])
+                if slot_row and slot_row["confirmed_flush_lsn"] is not None
+                else ""
+            ),
+            "wal_status": str(slot_row["wal_status"]) if slot_row and slot_row["wal_status"] is not None else "",
+        }
+
     def _sort_key(self, spec: PostgresTableSpec, row: dict[str, Any]) -> tuple[Any, ...]:
         commit_timestamp = self._normalize_timestamp(row[spec.commit_timestamp_column])
         pk_marker = tuple(self._coerce_pk_value(row[column]) for column in spec.primary_key_columns)
@@ -494,6 +852,8 @@ class PostgresAdapter(BaseAdapter):
             return normalized.replace(microsecond=0).isoformat().replace("+00:00", "Z")
         if isinstance(value, str):
             return value
+        if value is None:
+            return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
         raise ValueError(f"unsupported PostgreSQL timestamp value: {value!r}")
 
     def _pk_marker(self, primary_key: dict[str, Any], columns: list[str]) -> str:
@@ -507,8 +867,115 @@ class PostgresAdapter(BaseAdapter):
     def _quote_identifier(self, value: str) -> str:
         return '"' + value.replace('"', '""') + '"'
 
+    def _logical_slot_name(self) -> str:
+        return str(self.config.options.get("slot_name", f"denotary_{self.config.id}_slot"))
+
+    def _logical_output_plugin(self) -> str:
+        return str(self.config.options.get("output_plugin", "test_decoding"))
+
+    def _parse_test_decoding_change(
+        self,
+        data: str,
+        spec_map: dict[str, PostgresTableSpec],
+    ) -> tuple[PostgresTableSpec, str, dict[str, Any] | None, dict[str, Any] | None] | None:
+        match = re.match(r"table\s+([^.]+)\.([^:]+):\s+([A-Z]+):\s*(.*)$", data)
+        if not match:
+            return None
+        schema_name, table_name, operation, remainder = match.groups()
+        spec = spec_map.get(f"{schema_name}.{table_name}")
+        if spec is None:
+            return None
+
+        operation_lower = operation.lower()
+        if operation_lower == "insert":
+            after_row = self._parse_test_decoding_tuple(remainder)
+            return spec, operation_lower, None, after_row
+
+        old_tuple = self._extract_named_tuple(remainder, "old-tuple:")
+        new_tuple = self._extract_named_tuple(remainder, "new-tuple:")
+        old_key = self._extract_named_tuple(remainder, "old-key:")
+
+        if operation_lower == "update":
+            before_row = old_tuple or old_key or None
+            after_row = new_tuple or self._parse_test_decoding_tuple(remainder)
+            return spec, operation_lower, before_row, after_row
+        if operation_lower == "delete":
+            before_row = old_tuple or old_key or self._parse_test_decoding_tuple(remainder)
+            return spec, operation_lower, before_row, None
+        return None
+
+    def _extract_named_tuple(self, text: str, marker: str) -> dict[str, Any]:
+        marker_index = text.find(marker)
+        if marker_index < 0:
+            return {}
+        start = marker_index + len(marker)
+        next_indices = [
+            index
+            for index in (text.find(" old-key:", start), text.find(" old-tuple:", start), text.find(" new-tuple:", start))
+            if index >= 0
+        ]
+        end = min(next_indices) if next_indices else len(text)
+        return self._parse_test_decoding_tuple(text[start:end].strip())
+
+    def _parse_test_decoding_tuple(self, text: str) -> dict[str, Any]:
+        values: dict[str, Any] = {}
+        token_pattern = re.compile(r"([A-Za-z_][A-Za-z0-9_]*)\[[^\]]+\]:(NULL|'(?:''|[^'])*'|[^\s]+)")
+        for match in token_pattern.finditer(text):
+            key = match.group(1)
+            raw_value = match.group(2)
+            values[key] = self._decode_test_decoding_value(raw_value)
+        return values
+
+    def _decode_test_decoding_value(self, raw_value: str) -> Any:
+        if raw_value.upper() == "NULL":
+            return None
+        if raw_value.startswith("'") and raw_value.endswith("'"):
+            return raw_value[1:-1].replace("''", "'")
+        if re.fullmatch(r"-?\d+", raw_value):
+            return int(raw_value)
+        if raw_value.lower() in {"true", "false"}:
+            return raw_value.lower() == "true"
+        return raw_value
+
+    def _derive_primary_key(
+        self,
+        spec: PostgresTableSpec,
+        before_row: dict[str, Any] | None,
+        after_row: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        source_row = after_row or before_row or {}
+        return {column: source_row.get(column) for column in spec.primary_key_columns}
+
+    def _derive_commit_timestamp(
+        self,
+        spec: PostgresTableSpec,
+        before_row: dict[str, Any] | None,
+        after_row: dict[str, Any] | None,
+    ) -> str:
+        source_row = after_row or before_row or {}
+        value = source_row.get(spec.commit_timestamp_column)
+        return self._normalize_timestamp(value)
+
+    def _lsn_compare(self, left: str, right: str) -> int:
+        if not right:
+            return 1
+        return (self._lsn_to_int(left) > self._lsn_to_int(right)) - (self._lsn_to_int(left) < self._lsn_to_int(right))
+
+    def _lsn_to_int(self, value: str) -> int:
+        upper, lower = value.split("/")
+        return (int(upper, 16) << 32) + int(lower, 16)
+
     def _capture_mode(self) -> str:
         return str(self.config.options.get("capture_mode", "watermark")).lower()
+
+    def _spec_summary(self, spec: PostgresTableSpec) -> dict[str, Any]:
+        return {
+            "schema": spec.schema_name,
+            "table": spec.table_name,
+            "watermark_column": spec.watermark_column,
+            "commit_timestamp_column": spec.commit_timestamp_column,
+            "primary_key_columns": spec.primary_key_columns,
+        }
 
     def _ensure_listener(self) -> Any:
         if self._listener_connection is not None and not self._listener_connection.closed:

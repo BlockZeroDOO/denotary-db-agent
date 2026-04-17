@@ -148,7 +148,7 @@ class PostgresLiveIntegrationTest(unittest.TestCase):
         self.config_path = Path(self.temp_dir.name) / "config.json"
         self._write_config()
 
-    def _write_config(self, capture_mode: str = "watermark", backfill_mode: str = "full") -> None:
+    def _write_config(self, capture_mode: str = "watermark", backfill_mode: str = "full", row_limit: int = 100) -> None:
         config = {
             "agent_name": "live-postgres-test",
             "log_level": "INFO",
@@ -184,8 +184,12 @@ class PostgresLiveIntegrationTest(unittest.TestCase):
                         "capture_mode": capture_mode,
                         "watermark_column": "updated_at",
                         "commit_timestamp_column": "updated_at",
-                        "row_limit": 100,
+                        "row_limit": row_limit,
                         "cleanup_processed_events": True,
+                        "slot_name": "denotary_test_slot",
+                        "output_plugin": "test_decoding",
+                        "auto_create_slot": True,
+                        "replica_identity_full": True,
                     },
                 }
             ],
@@ -212,6 +216,15 @@ class PostgresLiveIntegrationTest(unittest.TestCase):
             with connection.cursor() as cursor:
                 cursor.execute("truncate table public.payments, public.invoices restart identity")
                 cursor.execute("drop schema if exists denotary_cdc cascade")
+                cursor.execute(
+                    """
+                    select slot_name
+                    from pg_replication_slots
+                    where slot_name = 'denotary_test_slot'
+                    """
+                )
+                if cursor.fetchone():
+                    cursor.execute("select pg_drop_replication_slot('denotary_test_slot')")
             connection.commit()
 
     def _cdc_event_count(self) -> int:
@@ -363,3 +376,117 @@ class PostgresLiveIntegrationTest(unittest.TestCase):
 
         deliveries = engine.store.list_deliveries("pg-core-ledger")
         self.assertEqual(len(deliveries), 3)
+
+    def test_live_postgres_logical_cdc_captures_insert_update_delete(self) -> None:
+        self._write_config(capture_mode="logical", backfill_mode="none")
+        engine = AgentEngine(load_config(self.config_path))
+        validation = engine.validate()
+        self.assertEqual(validation[0]["supports_cdc"], "true")
+
+        bootstrap = engine.bootstrap("pg-core-ledger")
+        self.assertEqual(bootstrap["sources"][0]["capture_mode"], "logical")
+        self.assertTrue(bootstrap["sources"][0]["cdc"]["slot_exists"])
+
+        empty_result = engine.run_once()
+        self.assertEqual(empty_result["processed"], 0)
+        self.assertEqual(empty_result["failed"], 0)
+
+        with psycopg.connect(
+            host="127.0.0.1",
+            port=55432,
+            user="denotary",
+            password="denotarypw",
+            dbname="ledger",
+        ) as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    insert into public.invoices (id, status, amount, updated_at)
+                    values (4001, 'draft', 88.00, '2026-04-17T12:00:01Z')
+                    """
+                )
+            connection.commit()
+
+        insert_result = engine.run_once()
+        self.assertEqual(insert_result["processed"], 1)
+        self.assertEqual(insert_result["failed"], 0)
+
+        with psycopg.connect(
+            host="127.0.0.1",
+            port=55432,
+            user="denotary",
+            password="denotarypw",
+            dbname="ledger",
+        ) as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    update public.invoices
+                    set status = 'issued', updated_at = '2026-04-17T12:00:02Z'
+                    where id = 4001
+                    """
+                )
+            connection.commit()
+
+        update_result = engine.run_once()
+        self.assertEqual(update_result["processed"], 1)
+        self.assertEqual(update_result["failed"], 0)
+
+        with psycopg.connect(
+            host="127.0.0.1",
+            port=55432,
+            user="denotary",
+            password="denotarypw",
+            dbname="ledger",
+        ) as connection:
+            with connection.cursor() as cursor:
+                cursor.execute("delete from public.invoices where id = 4001")
+            connection.commit()
+
+        delete_result = engine.run_once()
+        self.assertEqual(delete_result["processed"], 1)
+        self.assertEqual(delete_result["failed"], 0)
+
+        inspect = engine.inspect("pg-core-ledger")
+        self.assertEqual(inspect["sources"][0]["capture_mode"], "logical")
+        self.assertTrue(inspect["sources"][0]["cdc"]["slot_exists"])
+        deliveries = engine.store.list_deliveries("pg-core-ledger")
+        self.assertEqual(len(deliveries), 3)
+
+    def test_live_postgres_logical_cdc_preserves_multirow_same_transaction_with_small_row_limit(self) -> None:
+        self._write_config(capture_mode="logical", backfill_mode="none", row_limit=1)
+        engine = AgentEngine(load_config(self.config_path))
+        engine.validate()
+
+        with psycopg.connect(
+            host="127.0.0.1",
+            port=55432,
+            user="denotary",
+            password="denotarypw",
+            dbname="ledger",
+        ) as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    insert into public.invoices (id, status, amount, updated_at)
+                    values
+                        (5001, 'draft', 15.00, '2026-04-17T13:00:01Z'),
+                        (5002, 'draft', 25.00, '2026-04-17T13:00:01Z')
+                    """
+                )
+            connection.commit()
+
+        first_result = engine.run_once()
+        self.assertEqual(first_result["processed"], 1)
+        self.assertEqual(first_result["failed"], 0)
+
+        second_result = engine.run_once()
+        self.assertEqual(second_result["processed"], 1)
+        self.assertEqual(second_result["failed"], 0)
+
+        third_result = engine.run_once()
+        self.assertEqual(third_result["processed"], 0)
+        self.assertEqual(third_result["failed"], 0)
+
+        deliveries = engine.store.list_deliveries("pg-core-ledger")
+        self.assertEqual(len(deliveries), 2)

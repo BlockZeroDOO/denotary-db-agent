@@ -60,3 +60,23 @@ class BaseAdapter(ABC):
 
     def after_checkpoint_advanced(self, token: str) -> None:
         return None
+
+    def bootstrap(self) -> dict:
+        self.validate_connection()
+        return {
+            "source_id": self.config.id,
+            "adapter": self.config.adapter,
+            "bootstrap": "validated",
+        }
+
+    def inspect(self) -> dict:
+        capabilities = self.discover_capabilities()
+        return {
+            "source_id": self.config.id,
+            "adapter": self.config.adapter,
+            "source_type": capabilities.source_type,
+            "supports_cdc": capabilities.supports_cdc,
+            "supports_snapshot": capabilities.supports_snapshot,
+            "operations": list(capabilities.operations),
+            "notes": capabilities.notes,
+        }

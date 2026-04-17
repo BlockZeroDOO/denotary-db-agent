@@ -12,7 +12,7 @@ Current scope:
 - built-in enterprise signing and broadcast through `verifbill`
 - Finality Watcher registration and inclusion/finality updates
 - receipt / audit-chain retrieval and local proof bundle export
-- CLI for run / validate / status / replay / checkpoint / proof
+- CLI for run / validate / status / health / bootstrap / inspect / pause / resume / replay / checkpoint / proof
 
 The first wave of database targets is:
 
@@ -30,13 +30,15 @@ Current PostgreSQL status:
 - live `snapshot + watermark polling` baseline is implemented
 - trigger-managed CDC with `LISTEN/NOTIFY` wakeups is implemented
 - processed trigger events can be cleaned up automatically after checkpoint advance
+- logical decoding / WAL CDC through a logical replication slot is implemented
+- logical mode now uses a transaction-safe cursor and does not drop later rows from the same transaction when `row_limit` is small
 - deterministic checkpoints resume per table
 - full single-event cycle is implemented inside the agent:
   - prepare
   - sign and broadcast
   - watcher inclusion/finality
   - receipt + audit proof-chain export
-- `logical decoding / WAL CDC` remains the next PostgreSQL upgrade step
+- current logical mode uses PostgreSQL `test_decoding` output without external CDC middleware
 
 ## Quick Start
 
@@ -45,6 +47,11 @@ python -m venv .venv
 . .venv/Scripts/activate
 pip install -e .
 denotary-db-agent status --config examples/agent.example.json
+denotary-db-agent health --config examples/agent.example.json
+denotary-db-agent bootstrap --config examples/agent.example.json --source pg-core-ledger
+denotary-db-agent inspect --config examples/agent.example.json --source pg-core-ledger
+denotary-db-agent pause --config examples/agent.example.json --source pg-core-ledger
+denotary-db-agent resume --config examples/agent.example.json --source pg-core-ledger
 denotary-db-agent run --config examples/agent.example.json --once
 denotary-db-agent run --config examples/agent.example.json --interval-sec 5
 ```
@@ -65,6 +72,9 @@ See:
 ```bash
 python -m unittest discover -s tests -v
 python -m denotary_db_agent --config examples/agent.example.json status
+python -m denotary_db_agent --config examples/agent.example.json health
+python -m denotary_db_agent --config examples/agent.example.json bootstrap --source pg-core-ledger
+python -m denotary_db_agent --config examples/agent.example.json inspect --source pg-core-ledger
 python -m denotary_db_agent --config examples/agent.example.json proof --request-id <request_id>
 ```
 
@@ -72,6 +82,10 @@ Note:
 
 - `validate` performs live adapter validation for PostgreSQL and expects reachable deNotary services plus chain RPC when they are configured
 - `status` is safe to run without a live database
+- `health` shows local source state and best-effort health for configured chain/receipt/audit services
+- `bootstrap` installs or refreshes source-side runtime artifacts such as PostgreSQL trigger CDC objects or logical replication slot setup
+- `inspect` shows tracked tables and live PostgreSQL CDC state for a source
+- `pause` / `resume` let operators stop one source without changing the config file
 - `run --once` uses the configured `dnanchor` private key to sign `verifbill::submit` inside the agent
 - `run` without `--once` keeps the agent in daemon mode and, for PostgreSQL trigger sources, waits on `LISTEN/NOTIFY` before the fallback interval elapses
 - finalized receipts and proof chains are exported under `storage.proof_dir`
@@ -91,7 +105,7 @@ This harness:
 - creates test `invoices` and `payments` tables
 - inserts live rows
 - runs `denotary-db-agent` against the live database
-- verifies watcher registration, checkpoint resume behavior, and cleanup of processed trigger CDC rows
+- verifies watcher registration, checkpoint resume behavior, cleanup of processed trigger CDC rows, and logical decoding capture
 
 ## Full-Cycle Result
 

@@ -18,6 +18,15 @@ def build_parser() -> argparse.ArgumentParser:
 
     subparsers.add_parser("validate", help="Validate config and adapter connectivity")
     subparsers.add_parser("status", help="Show source status")
+    subparsers.add_parser("health", help="Show service and source health")
+    bootstrap_parser = subparsers.add_parser("bootstrap", help="Install or refresh source-side runtime artifacts")
+    bootstrap_parser.add_argument("--source", help="Source id")
+    inspect_parser = subparsers.add_parser("inspect", help="Inspect source configuration and live runtime state")
+    inspect_parser.add_argument("--source", help="Source id")
+    pause_parser = subparsers.add_parser("pause", help="Pause a source without editing config")
+    pause_parser.add_argument("--source", required=True, help="Source id")
+    resume_parser = subparsers.add_parser("resume", help="Resume a paused source")
+    resume_parser.add_argument("--source", required=True, help="Source id")
 
     replay_parser = subparsers.add_parser("replay", help="Reset checkpoint for a source")
     replay_parser.add_argument("--source", required=True, help="Source id")
@@ -42,6 +51,23 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "status":
         print(json.dumps(engine.status(), indent=2))
+        return 0
+    if args.command == "health":
+        print(json.dumps(engine.health(), indent=2))
+        return 0
+    if args.command == "bootstrap":
+        print(json.dumps(engine.bootstrap(args.source), indent=2))
+        return 0
+    if args.command == "inspect":
+        print(json.dumps(engine.inspect(args.source), indent=2))
+        return 0
+    if args.command == "pause":
+        engine.pause_source(args.source)
+        print(json.dumps({"ok": True, "source": args.source, "action": "paused"}, indent=2))
+        return 0
+    if args.command == "resume":
+        engine.resume_source(args.source)
+        print(json.dumps({"ok": True, "source": args.source, "action": "resumed"}, indent=2))
         return 0
     if args.command == "run":
         if args.once:

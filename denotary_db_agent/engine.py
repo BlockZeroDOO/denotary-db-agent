@@ -67,6 +67,9 @@ class AgentEngine:
             if item.enabled
         ]
 
+    def _is_paused(self, source_id: str) -> bool:
+        return self.store.is_source_paused(source_id)
+
     def validate(self) -> list[dict[str, str]]:
         results: list[dict[str, str]] = []
         if self.chain is not None:
@@ -107,6 +110,7 @@ class AgentEngine:
                 {
                     "source_id": runtime.config.id,
                     "adapter": runtime.config.adapter,
+                    "paused": self._is_paused(runtime.config.id),
                     "checkpoint": self._checkpoint_value(runtime.config.id),
                     "deliveries": len(self.store.list_deliveries(runtime.config.id)),
                     "proofs": len(self.store.list_proofs(runtime.config.id)),
@@ -116,6 +120,63 @@ class AgentEngine:
             ],
         }
 
+    def health(self) -> dict:
+        services: dict[str, dict[str, object]] = {
+            "ingress": {"configured": bool(self.config.denotary.ingress_url), "url": self.config.denotary.ingress_url},
+            "watcher": {"configured": bool(self.config.denotary.watcher_url), "url": self.config.denotary.watcher_url},
+            "receipt": {"configured": bool(self.receipt), "url": self.config.denotary.receipt_url},
+            "audit": {"configured": bool(self.audit), "url": self.config.denotary.audit_url},
+            "chain": {"configured": bool(self.chain), "url": self.config.denotary.chain_rpc_url},
+        }
+        if self.chain is not None:
+            try:
+                chain_info = self.chain.health()
+                services["chain"].update({"ok": True, "server_version": chain_info.get("server_version_string") or chain_info.get("server_version")})
+            except Exception as exc:  # noqa: BLE001
+                services["chain"].update({"ok": False, "error": str(exc)})
+        if self.receipt is not None:
+            try:
+                services["receipt"].update({"ok": True, "response": self.receipt.health()})
+            except Exception as exc:  # noqa: BLE001
+                services["receipt"].update({"ok": False, "error": str(exc)})
+        if self.audit is not None:
+            try:
+                services["audit"].update({"ok": True, "response": self.audit.health()})
+            except Exception as exc:  # noqa: BLE001
+                services["audit"].update({"ok": False, "error": str(exc)})
+        return {
+            "agent_name": self.config.agent_name,
+            "services": services,
+            "sources": [
+                {
+                    "source_id": runtime.config.id,
+                    "adapter": runtime.config.adapter,
+                    "paused": self._is_paused(runtime.config.id),
+                    "checkpoint": self._checkpoint_value(runtime.config.id),
+                    "deliveries": len(self.store.list_deliveries(runtime.config.id)),
+                    "proofs": len(self.store.list_proofs(runtime.config.id)),
+                    "dlq": len(self.store.list_dlq(runtime.config.id)),
+                }
+                for runtime in self.runtimes()
+            ],
+        }
+
+    def bootstrap(self, source_id: str | None = None) -> dict:
+        results = []
+        for runtime in self.runtimes():
+            if source_id and runtime.config.id != source_id:
+                continue
+            results.append(runtime.adapter.bootstrap())
+        return {"agent_name": self.config.agent_name, "sources": results}
+
+    def inspect(self, source_id: str | None = None) -> dict:
+        results = []
+        for runtime in self.runtimes():
+            if source_id and runtime.config.id != source_id:
+                continue
+            results.append(runtime.adapter.inspect())
+        return {"agent_name": self.config.agent_name, "sources": results}
+
     def run_once(self) -> dict[str, int]:
         return self._run_runtimes_once(self.runtimes())
 
@@ -123,10 +184,12 @@ class AgentEngine:
         processed = 0
         failed = 0
         for runtime in runtimes:
+            if self._is_paused(runtime.config.id):
+                continue
             checkpoint = self.store.get_checkpoint(runtime.config.id)
             runtime.adapter.resume_from_checkpoint(checkpoint)
             event_iter = runtime.adapter.read_snapshot(checkpoint)
-            if runtime.config.options.get("capture_mode") == "trigger":
+            if runtime.config.options.get("capture_mode") in {"trigger", "logical"}:
                 event_iter = runtime.adapter.start_stream(checkpoint)
             events = list(event_iter)
             if runtime.config.batch_enabled and events:
@@ -431,6 +494,12 @@ class AgentEngine:
     def reset_checkpoint(self, source_id: str) -> None:
         self.store.reset_checkpoint(source_id)
 
+    def pause_source(self, source_id: str) -> None:
+        self.store.set_source_paused(source_id, True, utc_now().isoformat())
+
+    def resume_source(self, source_id: str) -> None:
+        self.store.set_source_paused(source_id, False, utc_now().isoformat())
+
     def checkpoint_summary(self) -> list[dict[str, str]]:
         return [dict(item.__dict__) for item in self.store.list_checkpoints()]
 
@@ -440,7 +509,7 @@ class AgentEngine:
 
     def _wait_for_activity(self, runtimes: list[SourceRuntime], interval_sec: float) -> None:
         waiting_runtimes = [
-            runtime for runtime in runtimes if runtime.config.options.get("capture_mode") == "trigger"
+            runtime for runtime in runtimes if runtime.config.options.get("capture_mode") in {"trigger", "logical"}
         ]
         if not waiting_runtimes:
             time.sleep(interval_sec)

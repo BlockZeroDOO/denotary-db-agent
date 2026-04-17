@@ -63,6 +63,12 @@ class CheckpointStore:
                     export_path text,
                     updated_at text not null
                 );
+
+                create table if not exists source_controls (
+                    source_id text primary key,
+                    paused integer not null default 0,
+                    updated_at text not null
+                );
                 """
             )
 
@@ -228,4 +234,32 @@ class CheckpointStore:
                 rows = connection.execute(
                     "select id, source_id, reason, payload_json, created_at from dlq order by id desc"
                 ).fetchall()
+        return [dict(row) for row in rows]
+
+    def set_source_paused(self, source_id: str, paused: bool, updated_at: str) -> None:
+        with self._connect() as connection:
+            connection.execute(
+                """
+                insert into source_controls (source_id, paused, updated_at)
+                values (?, ?, ?)
+                on conflict(source_id) do update set
+                    paused = excluded.paused,
+                    updated_at = excluded.updated_at
+                """,
+                (source_id, 1 if paused else 0, updated_at),
+            )
+
+    def is_source_paused(self, source_id: str) -> bool:
+        with self._connect() as connection:
+            row = connection.execute(
+                "select paused from source_controls where source_id = ?",
+                (source_id,),
+            ).fetchone()
+        return bool(row["paused"]) if row is not None else False
+
+    def list_source_controls(self) -> list[dict[str, str | int]]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                "select source_id, paused, updated_at from source_controls order by source_id"
+            ).fetchall()
         return [dict(row) for row in rows]

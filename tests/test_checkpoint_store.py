@@ -41,3 +41,12 @@ class CheckpointStoreTest(unittest.TestCase):
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]["status"], "prepared_registered")
 
+    def test_source_pause_roundtrip(self) -> None:
+        self.assertFalse(self.store.is_source_paused("source-1"))
+        self.store.set_source_paused("source-1", True, "2026-04-17T10:00:00Z")
+        self.assertTrue(self.store.is_source_paused("source-1"))
+        controls = self.store.list_source_controls()
+        self.assertEqual(len(controls), 1)
+        self.assertEqual(int(controls[0]["paused"]), 1)
+        self.store.set_source_paused("source-1", False, "2026-04-17T10:10:00Z")
+        self.assertFalse(self.store.is_source_paused("source-1"))

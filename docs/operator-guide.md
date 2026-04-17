@@ -26,6 +26,7 @@ denotary-db-agent --config examples/agent.example.json run --once
 In the current scaffold this is intended for:
 
 - PostgreSQL watermark polling
+- PostgreSQL logical decoding polling from a logical slot
 - snapshot/bootstrap testing
 - local integration with `Ingress API`, `Finality Watcher`, `Receipt Service`, and `Audit API`
 - built-in `verifbill` signing/broadcast using the configured hot permission key
@@ -56,6 +57,60 @@ Returns:
 - proof bundle count
 - DLQ count
 
+### Health
+
+```bash
+denotary-db-agent --config examples/agent.example.json health
+```
+
+Returns:
+
+- local source runtime state
+- paused/resumed state
+- best-effort health for configured chain / receipt / audit services
+- configured ingress / watcher endpoints
+
+### Bootstrap
+
+```bash
+denotary-db-agent --config examples/agent.example.json bootstrap --source pg-core-ledger
+```
+
+For PostgreSQL sources this:
+
+- validates live connectivity
+- discovers tracked tables
+- for `capture_mode = "trigger"`, creates or refreshes `denotary_cdc` schema objects and table triggers
+- for `capture_mode = "logical"`, ensures logical prerequisites such as `wal_level=logical`, `REPLICA IDENTITY FULL`, and logical slot setup
+
+### Inspect
+
+```bash
+denotary-db-agent --config examples/agent.example.json inspect --source pg-core-ledger
+```
+
+For PostgreSQL this returns:
+
+- capture mode
+- tracked tables
+- primary key and watermark settings
+- trigger CDC schema status when `capture_mode = "trigger"`
+- logical slot status when `capture_mode = "logical"`
+- installed trigger count or slot state, depending on mode
+
+### Pause / Resume
+
+```bash
+denotary-db-agent --config examples/agent.example.json pause --source pg-core-ledger
+denotary-db-agent --config examples/agent.example.json resume --source pg-core-ledger
+```
+
+This is useful when:
+
+- you want to stop one noisy source
+- you are doing table maintenance or schema changes
+- you want to keep checkpoints and state but temporarily suppress new deliveries
+
 ### Proof
 
 ```bash
@@ -78,7 +133,7 @@ denotary-db-agent --config examples/agent.example.json checkpoint --source pg-co
 
 ## Current Adapter Targets
 
-- PostgreSQL: logical decoding / WAL plan
+- PostgreSQL: watermark polling, trigger CDC, and logical decoding
 - MySQL: row-based binlog plan
 - MariaDB: MariaDB binlog profile
 - SQL Server: CDC / Change Tracking plan
@@ -101,6 +156,9 @@ The current PostgreSQL adapter is the first live implementation and works as:
 - in trigger mode, capture `insert/update/delete` events via plugin-managed triggers
 - wake daemon loops through PostgreSQL `LISTEN/NOTIFY`
 - optionally delete processed rows from `denotary_cdc.events` after checkpoint advancement
+- in logical mode, read `insert/update/delete` from a PostgreSQL logical replication slot
+- in logical mode, advance the logical slot only after a successful delivery checkpoint
+- in logical mode, keep a transaction-safe cursor so multi-row transactions are replayed correctly even with a small `row_limit`
 
 Expected source options:
 
@@ -109,6 +167,10 @@ Expected source options:
 - optional `primary_key_columns` overrides keyed by `schema.table`
 - optional `row_limit`
 - optional `cleanup_processed_events` for trigger mode, default `true`
+- optional `slot_name` for logical mode
+- optional `output_plugin`, default `test_decoding`
+- optional `auto_create_slot`, default `true`
+- optional `replica_identity_full`, default `true`
 
 Recommended first-run behavior:
 
@@ -140,6 +202,8 @@ The harness validates:
 - checkpoint persistence
 - incremental resume after new rows are inserted
 - trigger CDC cleanup after processed events are checkpointed
+- logical decoding capture through a live replication slot
+- preservation of multi-row logical transactions when `row_limit = 1`
 
 ## Enterprise Signer Permission
 

@@ -2,6 +2,14 @@ services:
   postgres:
     image: postgres:16-alpine
     container_name: denotary-db-agent-postgres-live
+    command:
+      - postgres
+      - -c
+      - wal_level=logical
+      - -c
+      - max_replication_slots=10
+      - -c
+      - max_wal_senders=10
     environment:
       POSTGRES_USER: denotary
       POSTGRES_PASSWORD: denotarypw
@@ -15,4 +23,3 @@ services:
       retries: 20
     volumes:
       - ./init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
-

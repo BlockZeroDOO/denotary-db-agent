@@ -164,3 +164,21 @@ class EngineTest(unittest.TestCase):
         self.assertEqual(result["processed"], 2)
         self.assertEqual(result["failed"], 0)
         self.assertEqual(result["loops"], 2)
+
+    def test_pause_and_resume_source_controls_processing(self) -> None:
+        engine = AgentEngine(load_config(self.config_path))
+        engine.pause_source("pg-core-ledger")
+        paused_status = engine.status()
+        self.assertTrue(paused_status["sources"][0]["paused"])
+
+        paused_result = engine.run_once()
+        self.assertEqual(paused_result["processed"], 0)
+        self.assertEqual(paused_result["failed"], 0)
+
+        engine.resume_source("pg-core-ledger")
+        resumed_status = engine.health()
+        self.assertFalse(resumed_status["sources"][0]["paused"])
+
+        resumed_result = engine.run_once()
+        self.assertEqual(resumed_result["processed"], 1)
+        self.assertEqual(resumed_result["failed"], 0)

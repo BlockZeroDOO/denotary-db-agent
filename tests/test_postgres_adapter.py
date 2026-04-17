@@ -152,3 +152,159 @@ class PostgresAdapterTest(unittest.TestCase):
         parsed_checkpoint = json.loads(events[0].checkpoint_token)
         self.assertEqual(parsed_checkpoint["public.invoices"]["pk"], ["11"])
 
+    def test_bootstrap_reports_tracked_tables_for_trigger_mode(self) -> None:
+        config = self.make_config()
+        config.options["capture_mode"] = "trigger"
+        adapter = PostgresAdapter(config)
+        specs = [
+            PostgresTableSpec(
+                schema_name="public",
+                table_name="invoices",
+                watermark_column="updated_at",
+                commit_timestamp_column="updated_at",
+                primary_key_columns=["id"],
+                selected_columns=["id", "updated_at", "status"],
+            )
+        ]
+
+        @contextmanager
+        def dummy_connect():
+            yield object()
+
+        with patch.object(adapter, "validate_connection") as validate_connection, patch.object(
+            adapter, "_connect", dummy_connect
+        ), patch.object(adapter, "_load_table_specs", return_value=specs), patch.object(
+            adapter,
+            "_inspect_trigger_cdc_state",
+            return_value={"installed_trigger_count": 1, "pending_event_rows": 0},
+        ):
+            summary = adapter.bootstrap()
+
+        validate_connection.assert_called_once()
+        self.assertEqual(summary["capture_mode"], "trigger")
+        self.assertEqual(len(summary["tracked_tables"]), 1)
+        self.assertEqual(summary["tracked_tables"][0]["table"], "invoices")
+        self.assertEqual(summary["cdc"]["installed_trigger_count"], 1)
+
+    def test_inspect_reports_runtime_state_for_trigger_mode(self) -> None:
+        config = self.make_config()
+        config.options["capture_mode"] = "trigger"
+        adapter = PostgresAdapter(config)
+        specs = [
+            PostgresTableSpec(
+                schema_name="public",
+                table_name="payments",
+                watermark_column="updated_at",
+                commit_timestamp_column="updated_at",
+                primary_key_columns=["id"],
+                selected_columns=["id", "updated_at", "amount"],
+            )
+        ]
+
+        @contextmanager
+        def dummy_connect():
+            yield object()
+
+        with patch.object(adapter, "_connect", dummy_connect), patch.object(
+            adapter, "_load_table_specs", return_value=specs
+        ), patch.object(
+            adapter,
+            "_inspect_trigger_cdc_state",
+            return_value={"installed_trigger_count": 1, "pending_event_rows": 3},
+        ):
+            details = adapter.inspect()
+
+        self.assertEqual(details["capture_mode"], "trigger")
+        self.assertTrue(details["supports_cdc"])
+        self.assertEqual(details["tracked_tables"][0]["table"], "payments")
+        self.assertEqual(details["cdc"]["pending_event_rows"], 3)
+
+    def test_parse_test_decoding_update_change(self) -> None:
+        config = self.make_config()
+        config.options["capture_mode"] = "logical"
+        adapter = PostgresAdapter(config)
+        spec = PostgresTableSpec(
+            schema_name="public",
+            table_name="invoices",
+            watermark_column="updated_at",
+            commit_timestamp_column="updated_at",
+            primary_key_columns=["id"],
+            selected_columns=["id", "updated_at", "status"],
+        )
+        spec_map = {spec.key: spec}
+        decoded = adapter._parse_test_decoding_change(
+            "table public.invoices: UPDATE: old-key: id[bigint]:3001 old-tuple: id[bigint]:3001 status[text]:'draft' updated_at[timestamp with time zone]:'2026-04-17 11:00:01+00' new-tuple: id[bigint]:3001 status[text]:'issued' updated_at[timestamp with time zone]:'2026-04-17 11:00:02+00'",
+            spec_map,
+        )
+        assert decoded is not None
+        parsed_spec, operation, before_row, after_row = decoded
+        self.assertEqual(parsed_spec.table_name, "invoices")
+        self.assertEqual(operation, "update")
+        self.assertEqual(before_row["status"], "draft")
+        self.assertEqual(after_row["status"], "issued")
+
+    def test_parse_logical_checkpoint_roundtrip(self) -> None:
+        adapter = PostgresAdapter(self.make_config())
+        checkpoint = SourceCheckpoint(
+            source_id="pg-core-ledger",
+            token=json.dumps(
+                {
+                    "mode": "logical_cdc",
+                    "xid": "736",
+                    "lsn": "0/16B6A28",
+                    "commit_lsn": "0/16B6A40",
+                    "event_index": 2,
+                    "advance_lsn": False,
+                }
+            ),
+            updated_at="2026-04-17T10:00:00Z",
+        )
+        self.assertEqual(adapter._parse_logical_checkpoint(checkpoint), "0/16B6A40")
+        self.assertEqual(adapter._parse_logical_checkpoint_state(checkpoint), ("736", 2, "0/16B6A40", False))
+        self.assertGreater(adapter._lsn_compare("0/16B6A29", "0/16B6A28"), 0)
+
+    def test_logical_stream_emits_event_index_and_defers_slot_advance_inside_same_lsn(self) -> None:
+        config = self.make_config()
+        config.options["capture_mode"] = "logical"
+        config.options["row_limit"] = 1
+        adapter = PostgresAdapter(config)
+        spec = PostgresTableSpec(
+            schema_name="public",
+            table_name="invoices",
+            watermark_column="updated_at",
+            commit_timestamp_column="updated_at",
+            primary_key_columns=["id"],
+            selected_columns=["id", "updated_at", "status"],
+        )
+
+        @contextmanager
+        def dummy_connect():
+            yield object()
+
+        with patch.object(adapter, "_connect", dummy_connect), patch.object(
+            adapter, "_load_table_specs", return_value=[spec]
+        ), patch.object(adapter, "_ensure_logical_cdc_setup"), patch.object(
+            adapter,
+            "_fetch_logical_changes",
+            return_value=[
+                {"lsn": "0/16B6A28", "xid": "736", "data": "BEGIN"},
+                {
+                    "lsn": "0/16B6A28",
+                    "xid": "736",
+                    "data": "table public.invoices: INSERT: id[bigint]:1 status[text]:'draft' updated_at[timestamp with time zone]:'2026-04-17 12:00:01+00'",
+                },
+                {
+                    "lsn": "0/16B6A28",
+                    "xid": "736",
+                    "data": "table public.invoices: INSERT: id[bigint]:2 status[text]:'issued' updated_at[timestamp with time zone]:'2026-04-17 12:00:01+00'",
+                },
+                {"lsn": "0/16B6A40", "xid": "736", "data": "COMMIT"},
+            ],
+        ):
+            events = list(adapter.start_stream(None))
+
+        self.assertEqual(len(events), 1)
+        token = json.loads(events[0].checkpoint_token)
+        self.assertEqual(token["xid"], "736")
+        self.assertEqual(token["event_index"], 1)
+        self.assertFalse(token["advance_lsn"])

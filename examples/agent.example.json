@@ -51,7 +51,9 @@
         "cleanup_processed_events": true,
         "row_limit": 250,
         "slot_name": "denotary_slot",
-        "publication_name": "denotary_pub"
+        "output_plugin": "test_decoding",
+        "auto_create_slot": true,
+        "replica_identity_full": true
       }
     }
   ]
