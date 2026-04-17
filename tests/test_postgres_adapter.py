@@ -456,8 +456,14 @@ class PostgresAdapterTest(unittest.TestCase):
         def dummy_connect():
             yield object()
 
+        fake_session = unittest.mock.Mock()
+        fake_session.__enter__ = unittest.mock.Mock(return_value=fake_session)
+        fake_session.__exit__ = unittest.mock.Mock(return_value=None)
+
         with patch.object(adapter, "_connect", dummy_connect), patch.object(
             adapter, "_load_table_specs", return_value=[spec]
+        ), patch("denotary_db_agent.adapters.postgres.PostgresReplicationSession", return_value=fake_session), patch.object(
+            adapter, "_replication_conninfo", return_value="host=127.0.0.1"
         ), patch.object(adapter, "_ensure_logical_cdc_setup"), patch.object(
             adapter,
             "_fetch_pgoutput_stream_rows",
@@ -480,6 +486,31 @@ class PostgresAdapterTest(unittest.TestCase):
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0].operation, "insert")
         fetch_stream.assert_called_once()
+        self.assertIsNone(adapter._active_replication_session)
+
+    def test_after_checkpoint_advanced_updates_active_stream_session(self) -> None:
+        config = self.make_config()
+        config.options["capture_mode"] = "logical"
+        config.options["output_plugin"] = "pgoutput"
+        config.options["logical_runtime_mode"] = "stream"
+        adapter = PostgresAdapter(config)
+        fake_session = unittest.mock.Mock()
+        adapter._active_replication_session = fake_session
+
+        token = json.dumps(
+            {
+                "mode": "logical_cdc",
+                "xid": "736",
+                "lsn": "0/16B6A28",
+                "commit_lsn": "0/16B6A40",
+                "event_index": 1,
+                "advance_lsn": True,
+            }
+        )
+
+        adapter.after_checkpoint_advanced(token)
+
+        fake_session.update_acknowledged_lsn.assert_called_once_with("0/16B6A40")
 
     def test_parse_replication_frame_xlogdata(self) -> None:
         payload = (

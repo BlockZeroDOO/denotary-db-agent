@@ -46,6 +46,7 @@ Current PostgreSQL status:
   - default `logical_runtime_mode = "peek"` via `pg_logical_slot_peek_binary_changes()`
   - optional bounded `logical_runtime_mode = "stream"` via low-level replication protocol
 - bounded streaming now includes standby-status feedback using the last safe acknowledged LSN
+- in stream mode, post-delivery checkpoint advancement now updates the active replication session ack before close
 
 ## Quick Start
 
@@ -109,6 +110,7 @@ Note:
 - `run` without `--once` keeps the agent in daemon mode and, for PostgreSQL trigger sources, waits on `LISTEN/NOTIFY` before the fallback interval elapses
 - for PostgreSQL `pgoutput`, `logical_runtime_mode = "stream"` enables bounded replication-protocol reads instead of SQL slot peeking
 - streaming feedback only reports already acknowledged LSNs, so it doesn't replace post-delivery checkpoint advancement
+- in stream mode, that post-delivery checkpoint advancement feeds the active session ack directly; SQL slot advance remains the fallback for non-stream paths
 - finalized receipts and proof chains are exported under `storage.proof_dir`
 
 ## Live PostgreSQL Harness

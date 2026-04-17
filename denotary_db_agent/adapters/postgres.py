@@ -64,6 +64,7 @@ class PostgresAdapter(BaseAdapter):
         self._listener_connection: Any | None = None
         self._logical_warning_emitted = False
         self._logical_relation_cache: dict[int, PostgresLogicalRelation] = {}
+        self._active_replication_session: PostgresReplicationSession | None = None
 
     def discover_capabilities(self) -> AdapterCapabilities:
         capture_mode = str(self.config.options.get("capture_mode", "watermark")).lower()
@@ -227,7 +228,64 @@ class PostgresAdapter(BaseAdapter):
                 plugin = self._logical_output_plugin()
                 runtime_mode = self._logical_runtime_mode()
                 if plugin == "pgoutput" and runtime_mode == "stream":
-                    decoded_rows = self._fetch_pgoutput_stream_rows(spec_map, row_limit, self._parse_logical_checkpoint(checkpoint))
+                    with PostgresReplicationSession(
+                        conninfo=self._replication_conninfo(),
+                        slot_name=self._logical_slot_name(),
+                        publication_name=self._logical_publication_name(),
+                        start_lsn=self._parse_logical_checkpoint(checkpoint) or "0/0",
+                    ) as session:
+                        self._active_replication_session = session
+                        try:
+                            decoded_rows = self._fetch_pgoutput_stream_rows(session, spec_map, row_limit)
+                            processed_count = 0
+                            for xid, lsn, commit_lsn, advance_lsn, event_index, spec, operation, before_row, after_row in decoded_rows:
+                                if xid == last_xid and event_index <= last_event_index:
+                                    continue
+                                if processed_count >= row_limit:
+                                    break
+                                primary_key = self._derive_primary_key(spec, before_row, after_row)
+                                commit_timestamp = self._derive_commit_timestamp(spec, before_row, after_row)
+                                checkpoint_token = json.dumps(
+                                    {
+                                        "mode": "logical_cdc",
+                                        "xid": xid,
+                                        "lsn": lsn,
+                                        "commit_lsn": commit_lsn,
+                                        "event_index": event_index,
+                                        "advance_lsn": advance_lsn,
+                                    },
+                                    sort_keys=True,
+                                )
+                                yield ChangeEvent(
+                                    source_id=self.config.id,
+                                    source_type=self.source_type,
+                                    source_instance=self.config.source_instance,
+                                    database_name=self.config.database_name,
+                                    schema_or_namespace=spec.schema_name,
+                                    table_or_collection=spec.table_name,
+                                    operation=operation,  # type: ignore[arg-type]
+                                    primary_key=primary_key,
+                                    change_version=f"lsn:{lsn}:{event_index}",
+                                    commit_timestamp=commit_timestamp,
+                                    before=before_row,
+                                    after=after_row,
+                                    metadata={
+                                        "capture_mode": "logical-cdc",
+                                        "xid": xid,
+                                        "lsn": lsn,
+                                        "commit_lsn": commit_lsn,
+                                        "event_index": event_index,
+                                        "plugin": self._logical_output_plugin(),
+                                        "slot_name": self._logical_slot_name(),
+                                        "primary_key_columns": spec.primary_key_columns,
+                                        "runtime_mode": "stream",
+                                    },
+                                    checkpoint_token=checkpoint_token,
+                                )
+                                processed_count += 1
+                        finally:
+                            self._active_replication_session = None
+                    return
                 else:
                     decoded_rows = (
                         self._fetch_pgoutput_decoded_rows(connection, spec_map, row_limit)
@@ -417,6 +475,13 @@ class PostgresAdapter(BaseAdapter):
                 SourceCheckpoint(source_id=self.config.id, token=token, updated_at="")
             )
             if not commit_lsn or not advance_lsn:
+                return
+            if (
+                self._logical_output_plugin() == "pgoutput"
+                and self._logical_runtime_mode() == "stream"
+                and self._active_replication_session is not None
+            ):
+                self._active_replication_session.update_acknowledged_lsn(commit_lsn)
                 return
             with self._connect() as connection:
                 with connection.cursor() as cursor:
@@ -812,24 +877,18 @@ class PostgresAdapter(BaseAdapter):
 
     def _fetch_pgoutput_stream_rows(
         self,
+        session: PostgresReplicationSession,
         spec_map: dict[str, PostgresTableSpec],
         row_limit: int,
-        start_lsn: str,
     ) -> list[tuple[str, str, str, bool, int, PostgresTableSpec, str, dict[str, Any] | None, dict[str, Any] | None]]:
         max_messages = max(row_limit * 8, row_limit + 8)
         total_timeout_sec = float(self.config.options.get("logical_stream_timeout_sec", 2.0))
         idle_timeout_sec = float(self.config.options.get("logical_stream_idle_timeout_sec", 0.5))
-        with PostgresReplicationSession(
-            conninfo=self._replication_conninfo(),
-            slot_name=self._logical_slot_name(),
-            publication_name=self._logical_publication_name(),
-            start_lsn=start_lsn or "0/0",
-        ) as session:
-            frames = session.read_messages(
-                max_messages=max_messages,
-                total_timeout_sec=total_timeout_sec,
-                idle_timeout_sec=idle_timeout_sec,
-            )
+        frames = session.read_messages(
+            max_messages=max_messages,
+            total_timeout_sec=total_timeout_sec,
+            idle_timeout_sec=idle_timeout_sec,
+        )
 
         entries: list[dict[str, Any]] = []
         current_xid = ""
