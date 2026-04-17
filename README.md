@@ -73,6 +73,7 @@ denotary-db-agent run --config examples/agent.example.json --interval-sec 5
 See:
 
 - [examples/agent.example.json](examples/agent.example.json)
+- [docs/config-reference.md](docs/config-reference.md)
 - [docs/architecture.md](docs/architecture.md)
 - [docs/operator-guide.md](docs/operator-guide.md)
 - [docs/supported-databases.md](docs/supported-databases.md)
