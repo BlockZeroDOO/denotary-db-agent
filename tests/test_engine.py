@@ -508,3 +508,24 @@ class EngineTest(unittest.TestCase):
         self.assertEqual([row["reason"] for row in dlq], ["new-error"])
         self.assertFalse(os.path.exists(stale_proof))
         self.assertTrue(os.path.exists(fresh_proof))
+
+    def test_periodic_diagnostics_snapshot_is_written_and_pruned(self) -> None:
+        config = json.loads(self.config_path.read_text(encoding="utf-8"))
+        config["storage"]["diagnostics_snapshot_interval_sec"] = 1.0
+        config["storage"]["diagnostics_snapshot_retention"] = 1
+        self.config_path.write_text(json.dumps(config), encoding="utf-8")
+
+        engine = AgentEngine(load_config(self.config_path))
+        diagnostics_dir = Path(engine.config.storage.state_db).resolve().parent / "diagnostics"
+        diagnostics_dir.mkdir(parents=True, exist_ok=True)
+        old_snapshot = diagnostics_dir / "diagnostics-all-20260417T100000Z.json"
+        old_snapshot.write_text("{}", encoding="utf-8")
+
+        snapshot_path = engine._maybe_write_periodic_diagnostics_snapshot()
+        self.assertIsNotNone(snapshot_path)
+        assert snapshot_path is not None
+        self.assertTrue(Path(snapshot_path).exists())
+        self.assertFalse(old_snapshot.exists())
+
+        second_snapshot = engine._maybe_write_periodic_diagnostics_snapshot()
+        self.assertIsNone(second_snapshot)

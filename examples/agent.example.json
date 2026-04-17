@@ -23,7 +23,9 @@
     "proof_dir": "./data/proofs",
     "proof_retention": 1000,
     "delivery_retention": 5000,
-    "dlq_retention": 1000
+    "dlq_retention": 1000,
+    "diagnostics_snapshot_interval_sec": 900,
+    "diagnostics_snapshot_retention": 20
   },
   "sources": [
     {

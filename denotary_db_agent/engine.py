@@ -10,6 +10,7 @@ from denotary_db_agent.adapters.registry import build_adapter
 from denotary_db_agent.canonical import build_batch_external_ref, canonicalize_event
 from denotary_db_agent.checkpoint_store import CheckpointStore
 from denotary_db_agent.config import AgentConfig, SourceConfig
+from denotary_db_agent.diagnostics_snapshots import export_diagnostics_snapshot
 from denotary_db_agent.models import DeliveryAttempt, ProofArtifact, event_debug_dict, utc_now
 from denotary_db_agent.transport import (
     AuditClient,
@@ -61,6 +62,7 @@ class AgentEngine:
         )
         self.retry_policy = RetryPolicy()
         self._runtime_cache: dict[str, SourceRuntime] = {}
+        self._last_diagnostics_snapshot_monotonic: float | None = None
 
     def close(self) -> None:
         for runtime in self._runtime_cache.values():
@@ -408,6 +410,7 @@ class AgentEngine:
                 total_processed += result["processed"]
                 total_failed += result["failed"]
                 loops += 1
+                self._maybe_write_periodic_diagnostics_snapshot()
                 if max_loops is not None and loops >= max_loops:
                     return {"processed": total_processed, "failed": total_failed, "loops": loops}
                 self._wait_for_activity(runtimes, interval_sec)
@@ -742,3 +745,20 @@ class AgentEngine:
                         os.remove(str(export_path))
                 except FileNotFoundError:
                     continue
+
+    def _maybe_write_periodic_diagnostics_snapshot(self) -> str | None:
+        interval_sec = self.config.storage.diagnostics_snapshot_interval_sec
+        if interval_sec <= 0:
+            return None
+        now = monotonic()
+        if self._last_diagnostics_snapshot_monotonic is not None and now - self._last_diagnostics_snapshot_monotonic < interval_sec:
+            return None
+        diagnostics = self.diagnostics()
+        snapshot_path, _removed = export_diagnostics_snapshot(
+            diagnostics,
+            state_db=self.config.storage.state_db,
+            source_id=None,
+            retention=self.config.storage.diagnostics_snapshot_retention,
+        )
+        self._last_diagnostics_snapshot_monotonic = now
+        return str(snapshot_path)

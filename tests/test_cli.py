@@ -7,9 +7,9 @@ from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
-from denotary_db_agent.cli import (
+from denotary_db_agent.cli import main
+from denotary_db_agent.diagnostics_snapshots import (
     default_diagnostics_snapshot_path,
-    main,
     prune_diagnostics_snapshots,
     write_json_snapshot,
 )
@@ -19,7 +19,7 @@ class CliTest(unittest.TestCase):
     def test_default_diagnostics_snapshot_path_uses_state_db_parent(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             state_db = Path(temp_dir) / "runtime" / "state.sqlite3"
-            path = default_diagnostics_snapshot_path("config.json", str(state_db), "pg-core-ledger")
+            path = default_diagnostics_snapshot_path(str(state_db), "pg-core-ledger")
 
         self.assertEqual(path.parent.name, "diagnostics")
         self.assertIn("pg-core-ledger", path.name)

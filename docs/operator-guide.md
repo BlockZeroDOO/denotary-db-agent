@@ -352,6 +352,11 @@ Recommended starting point for long-running PostgreSQL installations:
   "proof_dir": "./data/proofs",
   "proof_retention": 1000,
   "delivery_retention": 5000,
-  "dlq_retention": 1000
+  "dlq_retention": 1000,
+  "diagnostics_snapshot_interval_sec": 900,
+  "diagnostics_snapshot_retention": 20
 }
 ```
+
+With `diagnostics_snapshot_interval_sec > 0`, daemon mode writes an all-sources diagnostics snapshot on its own schedule.
+This is useful when operators want periodic health evidence even if nobody runs `diagnostics --save-snapshot` manually.

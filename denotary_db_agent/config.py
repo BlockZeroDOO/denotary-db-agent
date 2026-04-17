@@ -50,6 +50,8 @@ class StorageConfig:
     proof_retention: int = 0
     delivery_retention: int = 0
     dlq_retention: int = 0
+    diagnostics_snapshot_interval_sec: float = 0.0
+    diagnostics_snapshot_retention: int = 20
 
 
 @dataclass
@@ -86,6 +88,13 @@ def _require_non_negative_int(mapping: dict[str, Any], field_name: str, default:
     value = int(mapping.get(field_name, default))
     if value < 0:
         raise ValueError(f"{field_name} must be non-negative")
+    return value
+
+
+def _require_positive_int(mapping: dict[str, Any], field_name: str, default: int) -> int:
+    value = int(mapping.get(field_name, default))
+    if value < 1:
+        raise ValueError(f"{field_name} must be at least 1")
     return value
 
 
@@ -127,6 +136,8 @@ def load_config(path: str | Path) -> AgentConfig:
         proof_retention=_require_non_negative_int(storage_raw, "proof_retention", 0),
         delivery_retention=_require_non_negative_int(storage_raw, "delivery_retention", 0),
         dlq_retention=_require_non_negative_int(storage_raw, "dlq_retention", 0),
+        diagnostics_snapshot_interval_sec=max(float(storage_raw.get("diagnostics_snapshot_interval_sec", 0.0)), 0.0),
+        diagnostics_snapshot_retention=_require_positive_int(storage_raw, "diagnostics_snapshot_retention", 20),
     )
 
     sources: list[SourceConfig] = []

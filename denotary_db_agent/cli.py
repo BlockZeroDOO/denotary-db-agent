@@ -2,10 +2,14 @@ from __future__ import annotations
 
 import argparse
 import json
-from datetime import datetime, timezone
-from pathlib import Path
 
 from denotary_db_agent.config import load_config
+from denotary_db_agent.diagnostics_snapshots import (
+    default_diagnostics_snapshot_path,
+    export_diagnostics_snapshot,
+    prune_diagnostics_snapshots,
+    write_json_snapshot,
+)
 from denotary_db_agent.engine import AgentEngine
 
 
@@ -57,36 +61,6 @@ def build_parser() -> argparse.ArgumentParser:
     proof_parser.add_argument("--request-id", required=True, help="Request id")
     return parser
 
-
-def default_diagnostics_snapshot_path(config_path: str, state_db: str, source_id: str | None) -> Path:
-    del config_path
-    base_dir = Path(state_db).resolve().parent / "diagnostics"
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    suffix = source_id or "all"
-    return base_dir / f"diagnostics-{suffix}-{timestamp}.json"
-
-
-def write_json_snapshot(payload: dict, output_path: str | Path) -> Path:
-    path = Path(output_path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
-    return path
-
-
-def prune_diagnostics_snapshots(snapshot_path: str | Path, keep_count: int, source_id: str | None) -> list[Path]:
-    if keep_count < 1:
-        raise ValueError("snapshot retention must be at least 1")
-    path = Path(snapshot_path)
-    suffix = source_id or "all"
-    matches = sorted(path.parent.glob(f"diagnostics-{suffix}-*.json"), key=lambda item: item.name, reverse=True)
-    removed: list[Path] = []
-    for old_path in matches[keep_count:]:
-        if old_path.exists():
-            old_path.unlink()
-            removed.append(old_path)
-    return removed
-
-
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -105,17 +79,23 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "diagnostics":
         diagnostics = engine.diagnostics(args.source)
         if args.output:
-            snapshot_path = write_json_snapshot(diagnostics, args.output)
-            diagnostics["snapshot_path"] = str(snapshot_path)
-            removed = prune_diagnostics_snapshots(snapshot_path, args.snapshot_retention, args.source)
-            diagnostics["pruned_snapshot_paths"] = [str(item) for item in removed]
-        elif args.save_snapshot:
-            snapshot_path = write_json_snapshot(
+            snapshot_path, removed = export_diagnostics_snapshot(
                 diagnostics,
-                default_diagnostics_snapshot_path(args.config, config.storage.state_db, args.source),
+                state_db=config.storage.state_db,
+                source_id=args.source,
+                output_path=args.output,
+                retention=args.snapshot_retention,
             )
             diagnostics["snapshot_path"] = str(snapshot_path)
-            removed = prune_diagnostics_snapshots(snapshot_path, args.snapshot_retention, args.source)
+            diagnostics["pruned_snapshot_paths"] = [str(item) for item in removed]
+        elif args.save_snapshot:
+            snapshot_path, removed = export_diagnostics_snapshot(
+                diagnostics,
+                state_db=config.storage.state_db,
+                source_id=args.source,
+                retention=args.snapshot_retention,
+            )
+            diagnostics["snapshot_path"] = str(snapshot_path)
             diagnostics["pruned_snapshot_paths"] = [str(item) for item in removed]
         print(json.dumps(diagnostics, indent=2))
         return 0

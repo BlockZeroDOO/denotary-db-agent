@@ -205,7 +205,9 @@ Example:
   "proof_dir": "./data/proofs",
   "proof_retention": 1000,
   "delivery_retention": 5000,
-  "dlq_retention": 1000
+  "dlq_retention": 1000,
+  "diagnostics_snapshot_interval_sec": 900,
+  "diagnostics_snapshot_retention": 20
 }
 ```
 
@@ -256,6 +258,24 @@ Example:
   - `0` disables pruning
   - positive values keep only the newest N DLQ rows per source
 - Purpose: keep local failure history bounded without manual SQLite cleanup
+
+### `diagnostics_snapshot_interval_sec`
+
+- Type: `number`
+- Required: no
+- Default: `0.0`
+- Meaning:
+  - `0` disables periodic diagnostics snapshots in daemon mode
+  - positive values write one all-sources diagnostics snapshot at most once per interval
+- Purpose: autonomous operator history without requiring manual `diagnostics --save-snapshot`
+
+### `diagnostics_snapshot_retention`
+
+- Type: `integer`
+- Required: no
+- Default: `20`
+- Must be at least: `1`
+- Purpose: keep only the newest N periodic diagnostics snapshots for the `all` source group
 
 ## `sources[]`
 
@@ -687,6 +707,8 @@ For a first real deployment:
   - `delivery_retention`
   - `dlq_retention`
 - when `proof_retention` is enabled, pruned proof bundle files are deleted from disk together with their SQLite metadata rows.
+- daemon mode can also emit periodic diagnostics snapshots when `diagnostics_snapshot_interval_sec > 0`.
+- those periodic snapshots use `diagnostics_snapshot_retention` for pruning.
 
 ## Security Notes
 
