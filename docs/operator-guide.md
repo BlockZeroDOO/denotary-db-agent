@@ -38,6 +38,9 @@ denotary-db-agent --config examples/agent.example.json run --interval-sec 5
 
 This keeps the PostgreSQL plugin running continuously and re-checking sources on the given interval.
 
+For PostgreSQL sources in `capture_mode = "trigger"` the daemon also waits on database `LISTEN/NOTIFY`
+signals, so inserts/updates/deletes can wake the agent before the fallback interval expires.
+
 ### Status
 
 ```bash
@@ -95,6 +98,9 @@ The current PostgreSQL adapter is the first live implementation and works as:
 - export a local proof bundle JSON file
 - persist per-table checkpoints in the local SQLite state store
 - resume from the last delivered watermark/primary-key position
+- in trigger mode, capture `insert/update/delete` events via plugin-managed triggers
+- wake daemon loops through PostgreSQL `LISTEN/NOTIFY`
+- optionally delete processed rows from `denotary_cdc.events` after checkpoint advancement
 
 Expected source options:
 
@@ -102,6 +108,7 @@ Expected source options:
 - `commit_timestamp_column`
 - optional `primary_key_columns` overrides keyed by `schema.table`
 - optional `row_limit`
+- optional `cleanup_processed_events` for trigger mode, default `true`
 
 Recommended first-run behavior:
 
@@ -132,6 +139,7 @@ The harness validates:
 - initial snapshot/backfill delivery
 - checkpoint persistence
 - incremental resume after new rows are inserted
+- trigger CDC cleanup after processed events are checkpointed
 
 ## Enterprise Signer Permission
 

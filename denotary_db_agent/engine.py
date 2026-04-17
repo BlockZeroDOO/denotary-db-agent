@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
+from time import monotonic
 
 from denotary_db_agent.adapters.base import BaseAdapter
 from denotary_db_agent.adapters.registry import build_adapter
@@ -116,9 +117,12 @@ class AgentEngine:
         }
 
     def run_once(self) -> dict[str, int]:
+        return self._run_runtimes_once(self.runtimes())
+
+    def _run_runtimes_once(self, runtimes: list[SourceRuntime]) -> dict[str, int]:
         processed = 0
         failed = 0
-        for runtime in self.runtimes():
+        for runtime in runtimes:
             checkpoint = self.store.get_checkpoint(runtime.config.id)
             runtime.adapter.resume_from_checkpoint(checkpoint)
             event_iter = runtime.adapter.read_snapshot(checkpoint)
@@ -153,14 +157,22 @@ class AgentEngine:
         total_processed = 0
         total_failed = 0
         loops = 0
-        while True:
-            result = self.run_once()
-            total_processed += result["processed"]
-            total_failed += result["failed"]
-            loops += 1
-            if max_loops is not None and loops >= max_loops:
-                return {"processed": total_processed, "failed": total_failed, "loops": loops}
-            time.sleep(interval_sec)
+        runtimes = self.runtimes()
+        try:
+            while True:
+                result = self._run_runtimes_once(runtimes)
+                total_processed += result["processed"]
+                total_failed += result["failed"]
+                loops += 1
+                if max_loops is not None and loops >= max_loops:
+                    return {"processed": total_processed, "failed": total_failed, "loops": loops}
+                self._wait_for_activity(runtimes, interval_sec)
+        finally:
+            for runtime in runtimes:
+                try:
+                    runtime.adapter.stop_stream()
+                except Exception:
+                    pass
 
     def _process_event(self, runtime: SourceRuntime, event) -> None:
         envelope = canonicalize_event(event)
@@ -195,6 +207,7 @@ class AgentEngine:
                 if self.chain is None:
                     token = runtime.adapter.serialize_checkpoint(event)
                     self.store.set_checkpoint(runtime.config.id, token, now)
+                    runtime.adapter.after_checkpoint_advanced(token)
                     return
 
                 broadcast = self.chain.push_prepared_action(prepared.prepared_action)
@@ -259,6 +272,7 @@ class AgentEngine:
 
                 token = runtime.adapter.serialize_checkpoint(event)
                 self.store.set_checkpoint(runtime.config.id, token, now)
+                runtime.adapter.after_checkpoint_advanced(token)
                 return
             except Exception as exc:  # noqa: BLE001
                 last_error = str(exc)
@@ -334,6 +348,7 @@ class AgentEngine:
                 if self.chain is None:
                     token = runtime.adapter.serialize_checkpoint(events[-1])
                     self.store.set_checkpoint(runtime.config.id, token, now)
+                    runtime.adapter.after_checkpoint_advanced(token)
                     return
 
                 broadcast = self.chain.push_prepared_action(prepared.prepared_action)
@@ -398,6 +413,7 @@ class AgentEngine:
 
                 token = runtime.adapter.serialize_checkpoint(events[-1])
                 self.store.set_checkpoint(runtime.config.id, token, now)
+                runtime.adapter.after_checkpoint_advanced(token)
                 return
             except Exception as exc:  # noqa: BLE001
                 last_error = str(exc)
@@ -421,3 +437,21 @@ class AgentEngine:
     def _checkpoint_value(self, source_id: str) -> str | None:
         checkpoint = self.store.get_checkpoint(source_id)
         return checkpoint.token if checkpoint else None
+
+    def _wait_for_activity(self, runtimes: list[SourceRuntime], interval_sec: float) -> None:
+        waiting_runtimes = [
+            runtime for runtime in runtimes if runtime.config.options.get("capture_mode") == "trigger"
+        ]
+        if not waiting_runtimes:
+            time.sleep(interval_sec)
+            return
+
+        deadline = monotonic() + interval_sec
+        slice_timeout = max(0.05, interval_sec / max(len(waiting_runtimes), 1))
+        while monotonic() < deadline:
+            for runtime in waiting_runtimes:
+                remaining = deadline - monotonic()
+                if remaining <= 0:
+                    return
+                if runtime.adapter.wait_for_changes(min(slice_timeout, remaining)):
+                    return

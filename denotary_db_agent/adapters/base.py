@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Iterable
@@ -51,3 +52,11 @@ class BaseAdapter(ABC):
     @abstractmethod
     def resume_from_checkpoint(self, checkpoint: SourceCheckpoint | None) -> None:
         raise NotImplementedError
+
+    def wait_for_changes(self, timeout_sec: float) -> bool:
+        if timeout_sec > 0:
+            time.sleep(timeout_sec)
+        return False
+
+    def after_checkpoint_advanced(self, token: str) -> None:
+        return None

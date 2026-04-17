@@ -35,6 +35,10 @@ class PostgresTableSpec:
 class PostgresAdapter(BaseAdapter):
     source_type = "postgresql"
 
+    def __init__(self, config):
+        super().__init__(config)
+        self._listener_connection: Any | None = None
+
     def discover_capabilities(self) -> AdapterCapabilities:
         capture_mode = str(self.config.options.get("capture_mode", "watermark")).lower()
         return AdapterCapabilities(
@@ -44,7 +48,7 @@ class PostgresAdapter(BaseAdapter):
             supports_snapshot=True,
             operations=("snapshot",) if capture_mode != "trigger" else ("insert", "update", "delete"),
             notes=(
-                "Trigger-based built-in CDC is enabled for PostgreSQL."
+                "Trigger-based built-in CDC is enabled for PostgreSQL with optional LISTEN/NOTIFY wakeups."
                 if capture_mode == "trigger"
                 else "Live baseline implementation uses watermark-based snapshot polling. Logical decoding / WAL CDC remains the next PostgreSQL upgrade step."
             ),
@@ -110,6 +114,9 @@ class PostgresAdapter(BaseAdapter):
                 )
 
     def stop_stream(self) -> None:
+        if self._listener_connection is not None:
+            self._listener_connection.close()
+            self._listener_connection = None
         return None
 
     def read_snapshot(self, checkpoint: SourceCheckpoint | None = None) -> Iterable[ChangeEvent]:
@@ -185,6 +192,34 @@ class PostgresAdapter(BaseAdapter):
 
     def resume_from_checkpoint(self, checkpoint: SourceCheckpoint | None) -> None:
         return None
+
+    def wait_for_changes(self, timeout_sec: float) -> bool:
+        if self._capture_mode() != "trigger":
+            return super().wait_for_changes(timeout_sec)
+        try:
+            listener = self._ensure_listener()
+            for _ in listener.notifies(timeout=timeout_sec, stop_after=1):
+                return True
+        except Exception:
+            if self._listener_connection is not None:
+                try:
+                    self._listener_connection.close()
+                except Exception:
+                    pass
+                self._listener_connection = None
+        return False
+
+    def after_checkpoint_advanced(self, token: str) -> None:
+        if self._capture_mode() != "trigger":
+            return
+        if not bool(self.config.options.get("cleanup_processed_events", True)):
+            return
+        event_id = self._parse_trigger_checkpoint(SourceCheckpoint(source_id=self.config.id, token=token, updated_at=""))
+        if event_id <= 0:
+            return
+        with self._connect() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute("delete from denotary_cdc.events where event_id <= %s", (event_id,))
 
     @contextmanager
     def _connect(self) -> Iterator[Any]:
@@ -298,6 +333,7 @@ class PostgresAdapter(BaseAdapter):
                     source_row jsonb;
                     pk jsonb := '{}'::jsonb;
                     col text;
+                    inserted_event_id bigint;
                 begin
                     if TG_OP = 'DELETE' then
                         source_row := to_jsonb(OLD);
@@ -325,7 +361,9 @@ class PostgresAdapter(BaseAdapter):
                         case when TG_OP in ('UPDATE', 'DELETE') then to_jsonb(OLD) else null end,
                         case when TG_OP in ('INSERT', 'UPDATE') then to_jsonb(NEW) else null end,
                         now()
-                    );
+                    ) returning event_id into inserted_event_id;
+
+                    perform pg_notify('denotary_cdc_events', inserted_event_id::text);
 
                     if TG_OP = 'DELETE' then
                         return OLD;
@@ -471,3 +509,23 @@ class PostgresAdapter(BaseAdapter):
 
     def _capture_mode(self) -> str:
         return str(self.config.options.get("capture_mode", "watermark")).lower()
+
+    def _ensure_listener(self) -> Any:
+        if self._listener_connection is not None and not self._listener_connection.closed:
+            return self._listener_connection
+        if psycopg is None:
+            raise RuntimeError("psycopg is required for PostgreSQL LISTEN/NOTIFY")
+        listener = psycopg.connect(
+            host=self.config.connection.get("host"),
+            port=self.config.connection.get("port"),
+            user=self.config.connection.get("username"),
+            password=self.config.connection.get("password"),
+            dbname=self.config.connection.get("database"),
+            sslmode=self.config.connection.get("sslmode", "prefer"),
+            connect_timeout=int(self.config.connection.get("connect_timeout", 5)),
+            autocommit=True,
+        )
+        with listener.cursor() as cursor:
+            cursor.execute("listen denotary_cdc_events")
+        self._listener_connection = listener
+        return listener

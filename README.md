@@ -28,13 +28,15 @@ This initial implementation focuses on the platform layer and adapter contract. 
 Current PostgreSQL status:
 
 - live `snapshot + watermark polling` baseline is implemented
+- trigger-managed CDC with `LISTEN/NOTIFY` wakeups is implemented
+- processed trigger events can be cleaned up automatically after checkpoint advance
 - deterministic checkpoints resume per table
 - full single-event cycle is implemented inside the agent:
   - prepare
   - sign and broadcast
   - watcher inclusion/finality
   - receipt + audit proof-chain export
-- `logical decoding / WAL CDC` is the planned next PostgreSQL upgrade step
+- `logical decoding / WAL CDC` remains the next PostgreSQL upgrade step
 
 ## Quick Start
 
@@ -71,7 +73,7 @@ Note:
 - `validate` performs live adapter validation for PostgreSQL and expects reachable deNotary services plus chain RPC when they are configured
 - `status` is safe to run without a live database
 - `run --once` uses the configured `dnanchor` private key to sign `verifbill::submit` inside the agent
-- `run` without `--once` keeps the agent in daemon mode and polls on the configured interval
+- `run` without `--once` keeps the agent in daemon mode and, for PostgreSQL trigger sources, waits on `LISTEN/NOTIFY` before the fallback interval elapses
 - finalized receipts and proof chains are exported under `storage.proof_dir`
 
 ## Live PostgreSQL Harness
@@ -89,7 +91,7 @@ This harness:
 - creates test `invoices` and `payments` tables
 - inserts live rows
 - runs `denotary-db-agent` against the live database
-- verifies watcher registration and checkpoint resume behavior
+- verifies watcher registration, checkpoint resume behavior, and cleanup of processed trigger CDC rows
 
 ## Full-Cycle Result
 

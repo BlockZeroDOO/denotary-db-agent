@@ -185,6 +185,7 @@ class PostgresLiveIntegrationTest(unittest.TestCase):
                         "watermark_column": "updated_at",
                         "commit_timestamp_column": "updated_at",
                         "row_limit": 100,
+                        "cleanup_processed_events": True,
                     },
                 }
             ],
@@ -210,7 +211,21 @@ class PostgresLiveIntegrationTest(unittest.TestCase):
         ) as connection:
             with connection.cursor() as cursor:
                 cursor.execute("truncate table public.payments, public.invoices restart identity")
+                cursor.execute("drop schema if exists denotary_cdc cascade")
             connection.commit()
+
+    def _cdc_event_count(self) -> int:
+        with psycopg.connect(
+            host="127.0.0.1",
+            port=55432,
+            user="denotary",
+            password="denotarypw",
+            dbname="ledger",
+        ) as connection:
+            with connection.cursor() as cursor:
+                cursor.execute("select count(*) from denotary_cdc.events")
+                row = cursor.fetchone()
+                return int(row[0] if row else 0)
 
     def _seed_initial_rows(self) -> None:
         with psycopg.connect(
@@ -306,6 +321,7 @@ class PostgresLiveIntegrationTest(unittest.TestCase):
         insert_result = engine.run_once()
         self.assertEqual(insert_result["processed"], 1)
         self.assertEqual(insert_result["failed"], 0)
+        self.assertEqual(self._cdc_event_count(), 0)
 
         with psycopg.connect(
             host="127.0.0.1",
@@ -327,6 +343,7 @@ class PostgresLiveIntegrationTest(unittest.TestCase):
         update_result = engine.run_once()
         self.assertEqual(update_result["processed"], 1)
         self.assertEqual(update_result["failed"], 0)
+        self.assertEqual(self._cdc_event_count(), 0)
 
         with psycopg.connect(
             host="127.0.0.1",
@@ -342,6 +359,7 @@ class PostgresLiveIntegrationTest(unittest.TestCase):
         delete_result = engine.run_once()
         self.assertEqual(delete_result["processed"], 1)
         self.assertEqual(delete_result["failed"], 0)
+        self.assertEqual(self._cdc_event_count(), 0)
 
         deliveries = engine.store.list_deliveries("pg-core-ledger")
         self.assertEqual(len(deliveries), 3)

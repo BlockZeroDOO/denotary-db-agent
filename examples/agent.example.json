@@ -45,8 +45,10 @@
         "database": "ledger"
       },
       "options": {
+        "capture_mode": "watermark",
         "watermark_column": "updated_at",
         "commit_timestamp_column": "updated_at",
+        "cleanup_processed_events": true,
         "row_limit": 250,
         "slot_name": "denotary_slot",
         "publication_name": "denotary_pub"
