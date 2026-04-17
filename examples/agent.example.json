@@ -65,6 +65,7 @@
         "logical_stream_error_history_size": 5,
         "logical_stream_fallback_failure_threshold": 3,
         "logical_stream_fallback_sec": 30.0,
+        "logical_stream_probation_sec": 15.0,
         "logical_warn_retained_wal_bytes": 268435456,
         "logical_warn_flush_lag_bytes": 67108864
       }

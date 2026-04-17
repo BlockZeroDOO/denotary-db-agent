@@ -81,6 +81,9 @@ class PostgresAdapter(BaseAdapter):
         self._stream_force_peek_until_monotonic = 0.0
         self._stream_force_peek_until = ""
         self._stream_force_peek_reason = ""
+        self._stream_probation_until_monotonic = 0.0
+        self._stream_probation_until = ""
+        self._stream_probation_reason = ""
 
     def discover_capabilities(self) -> AdapterCapabilities:
         capture_mode = str(self.config.options.get("capture_mode", "watermark")).lower()
@@ -1344,6 +1347,10 @@ class PostgresAdapter(BaseAdapter):
             "stream_fallback_remaining_sec": round(self._stream_force_peek_remaining_sec(), 3),
             "stream_fallback_until": self._stream_force_peek_until,
             "stream_fallback_reason": self._stream_force_peek_reason,
+            "stream_probation_active": self._stream_probation_remaining_sec() > 0,
+            "stream_probation_remaining_sec": round(self._stream_probation_remaining_sec(), 3),
+            "stream_probation_until": self._stream_probation_until,
+            "stream_probation_reason": self._stream_probation_reason,
         }
 
     def _sort_key(self, spec: PostgresTableSpec, row: dict[str, Any]) -> tuple[Any, ...]:
@@ -1390,6 +1397,8 @@ class PostgresAdapter(BaseAdapter):
         configured = self._logical_runtime_mode()
         if configured == "stream" and self._stream_force_peek_remaining_sec() > 0:
             return "peek"
+        if configured == "stream":
+            self._activate_stream_probation_after_fallback_if_needed()
         return configured
 
     def _logical_publication_name(self) -> str:
@@ -1496,6 +1505,28 @@ class PostgresAdapter(BaseAdapter):
         if self._stream_force_peek_until_monotonic <= 0:
             return 0.0
         return max(0.0, self._stream_force_peek_until_monotonic - time.monotonic())
+
+    def _activate_stream_probation_after_fallback_if_needed(self) -> None:
+        if self._stream_force_peek_until_monotonic <= 0:
+            return
+        if self._stream_force_peek_remaining_sec() > 0:
+            return
+        if self._stream_probation_remaining_sec() > 0:
+            return
+        probation_sec = float(self.config.options.get("logical_stream_probation_sec", 15.0))
+        self._stream_probation_until_monotonic = time.monotonic() + max(0.0, probation_sec)
+        self._stream_probation_until = datetime.fromtimestamp(
+            time.time() + max(0.0, probation_sec), timezone.utc
+        ).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+        self._stream_probation_reason = self._stream_force_peek_reason or "fallback_recovery"
+        self._stream_force_peek_until_monotonic = 0.0
+        self._stream_force_peek_until = ""
+        self._stream_force_peek_reason = ""
+
+    def _stream_probation_remaining_sec(self) -> float:
+        if self._stream_probation_until_monotonic <= 0:
+            return 0.0
+        return max(0.0, self._stream_probation_until_monotonic - time.monotonic())
 
     def _append_stream_error_history(self, entry: dict[str, str]) -> None:
         max_entries = int(self.config.options.get("logical_stream_error_history_size", 5))

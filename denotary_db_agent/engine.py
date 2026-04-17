@@ -213,6 +213,8 @@ class AgentEngine:
             return "critical"
         if cdc.get("stream_fallback_active") is True:
             return "degraded"
+        if cdc.get("stream_probation_active") is True:
+            return "degraded"
         if cdc.get("stream_backoff_active") is True:
             failure_streak = int(cdc.get("stream_failure_streak") or 0)
             return "critical" if failure_streak >= 3 else "degraded"
@@ -236,6 +238,12 @@ class AgentEngine:
             fallback_reason = cdc.get("stream_fallback_reason") or "runtime_error"
             fallback_until = cdc.get("stream_fallback_until") or "unknown"
             warnings.append(f"postgres stream is temporarily using peek fallback after {fallback_reason}; retry stream after {fallback_until}")
+        if cdc.get("stream_probation_active") is True:
+            probation_reason = cdc.get("stream_probation_reason") or "fallback_recovery"
+            probation_until = cdc.get("stream_probation_until") or "unknown"
+            warnings.append(
+                f"postgres stream is in probation after returning from fallback due to {probation_reason}; observe until {probation_until}"
+            )
         if cdc.get("stream_backoff_active") is True:
             error_kind = cdc.get("stream_last_error_kind") or "runtime_error"
             backoff_until = cdc.get("stream_backoff_until") or "unknown"

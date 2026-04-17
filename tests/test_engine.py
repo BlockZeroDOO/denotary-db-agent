@@ -301,6 +301,43 @@ class EngineTest(unittest.TestCase):
             health["sources"][0]["warnings"],
         )
 
+    def test_health_marks_stream_probation_as_degraded(self) -> None:
+        engine = AgentEngine(load_config(self.config_path))
+        source_config = engine.config.sources[0]
+
+        fake_adapter = SimpleNamespace(
+            inspect=lambda: {
+                "capture_mode": "logical",
+                "cdc": {
+                    "slot_exists": True,
+                    "publication_in_sync": True,
+                    "replica_identity_in_sync": True,
+                    "stream_fallback_active": False,
+                    "stream_probation_active": True,
+                    "stream_probation_until": "2026-04-18T12:06:00Z",
+                    "stream_probation_reason": "connection_lost",
+                    "stream_backoff_active": False,
+                    "stream_failure_streak": 0,
+                    "retained_wal_bytes": 0,
+                    "flush_lag_bytes": 0,
+                },
+            }
+        )
+
+        with unittest.mock.patch.object(
+            engine,
+            "runtimes",
+            return_value=[SourceRuntime(config=source_config, adapter=fake_adapter)],
+        ):
+            health = engine.health()
+
+        self.assertFalse(health["sources"][0]["ok"])
+        self.assertEqual(health["sources"][0]["severity"], "degraded")
+        self.assertIn(
+            "postgres stream is in probation after returning from fallback due to connection_lost; observe until 2026-04-18T12:06:00Z",
+            health["sources"][0]["warnings"],
+        )
+
     def test_runtimes_reuse_adapter_instances_between_calls(self) -> None:
         engine = AgentEngine(load_config(self.config_path))
 

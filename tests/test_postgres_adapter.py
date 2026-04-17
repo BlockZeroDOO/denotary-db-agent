@@ -713,6 +713,22 @@ class PostgresAdapterTest(unittest.TestCase):
 
         self.assertEqual(adapter._effective_logical_runtime_mode(), "peek")
 
+    def test_effective_runtime_mode_reenters_stream_and_starts_probation_after_fallback_expires(self) -> None:
+        config = self.make_config()
+        config.options["capture_mode"] = "logical"
+        config.options["output_plugin"] = "pgoutput"
+        config.options["logical_runtime_mode"] = "stream"
+        config.options["logical_stream_probation_sec"] = 20.0
+        adapter = PostgresAdapter(config)
+        adapter._stream_force_peek_until_monotonic = time.monotonic() - 0.1
+        adapter._stream_force_peek_until = "2026-04-18T12:00:01Z"
+        adapter._stream_force_peek_reason = "connection_lost"
+
+        self.assertEqual(adapter._effective_logical_runtime_mode(), "stream")
+        self.assertGreater(adapter._stream_probation_remaining_sec(), 0.0)
+        self.assertEqual(adapter._stream_probation_reason, "connection_lost")
+        self.assertEqual(adapter._stream_force_peek_reason, "")
+
     def test_stream_runtime_skips_fetch_during_backoff_window(self) -> None:
         config = self.make_config()
         config.options["capture_mode"] = "logical"
