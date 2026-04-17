@@ -157,3 +157,10 @@ class EngineTest(unittest.TestCase):
         deliveries = engine.store.list_deliveries("pg-core-ledger")
         self.assertEqual(len(deliveries), 1)
         self.assertEqual(deliveries[0]["status"], "prepared_registered")
+
+    def test_run_forever_stops_after_max_loops(self) -> None:
+        engine = AgentEngine(load_config(self.config_path))
+        result = engine.run_forever(interval_sec=0.01, max_loops=2)
+        self.assertEqual(result["processed"], 2)
+        self.assertEqual(result["failed"], 0)
+        self.assertEqual(result["loops"], 2)

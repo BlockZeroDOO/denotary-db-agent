@@ -44,6 +44,7 @@ python -m venv .venv
 pip install -e .
 denotary-db-agent status --config examples/agent.example.json
 denotary-db-agent run --config examples/agent.example.json --once
+denotary-db-agent run --config examples/agent.example.json --interval-sec 5
 ```
 
 ## Config
@@ -70,6 +71,7 @@ Note:
 - `validate` performs live adapter validation for PostgreSQL and expects reachable deNotary services plus chain RPC when they are configured
 - `status` is safe to run without a live database
 - `run --once` uses the configured `dnanchor` private key to sign `verifbill::submit` inside the agent
+- `run` without `--once` keeps the agent in daemon mode and polls on the configured interval
 - finalized receipts and proof chains are exported under `storage.proof_dir`
 
 ## Live PostgreSQL Harness

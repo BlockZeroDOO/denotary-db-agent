@@ -120,7 +120,10 @@ class AgentEngine:
         for runtime in self.runtimes():
             checkpoint = self.store.get_checkpoint(runtime.config.id)
             runtime.adapter.resume_from_checkpoint(checkpoint)
-            for event in runtime.adapter.read_snapshot(checkpoint):
+            event_iter = runtime.adapter.read_snapshot(checkpoint)
+            if runtime.config.options.get("capture_mode") == "trigger":
+                event_iter = runtime.adapter.start_stream(checkpoint)
+            for event in event_iter:
                 try:
                     self._process_event(runtime, event)
                     processed += 1
@@ -128,6 +131,22 @@ class AgentEngine:
                     failed += 1
                     self.store.push_dlq(runtime.config.id, str(exc), event_debug_dict(event), utc_now().isoformat())
         return {"processed": processed, "failed": failed}
+
+    def run_forever(self, interval_sec: float, max_loops: int | None = None) -> dict[str, int]:
+        if interval_sec <= 0:
+            raise ValueError("interval_sec must be positive")
+
+        total_processed = 0
+        total_failed = 0
+        loops = 0
+        while True:
+            result = self.run_once()
+            total_processed += result["processed"]
+            total_failed += result["failed"]
+            loops += 1
+            if max_loops is not None and loops >= max_loops:
+                return {"processed": total_processed, "failed": total_failed, "loops": loops}
+            time.sleep(interval_sec)
 
     def _process_event(self, runtime: SourceRuntime, event) -> None:
         envelope = canonicalize_event(event)

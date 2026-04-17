@@ -133,10 +133,10 @@ class PostgresLiveIntegrationTest(unittest.TestCase):
         MockIngressHandler.counter = 0
         MockWatcherHandler.registrations = []
         self.temp_dir = tempfile.TemporaryDirectory()
-        ingress_port = free_port()
-        watcher_port = free_port()
-        self.ingress_server = ThreadingHTTPServer(("127.0.0.1", ingress_port), MockIngressHandler)
-        self.watcher_server = ThreadingHTTPServer(("127.0.0.1", watcher_port), MockWatcherHandler)
+        self.ingress_port = free_port()
+        self.watcher_port = free_port()
+        self.ingress_server = ThreadingHTTPServer(("127.0.0.1", self.ingress_port), MockIngressHandler)
+        self.watcher_server = ThreadingHTTPServer(("127.0.0.1", self.watcher_port), MockWatcherHandler)
         self.threads = [
             threading.Thread(target=self.ingress_server.serve_forever, daemon=True),
             threading.Thread(target=self.watcher_server.serve_forever, daemon=True),
@@ -146,12 +146,15 @@ class PostgresLiveIntegrationTest(unittest.TestCase):
 
         self._truncate_tables()
         self.config_path = Path(self.temp_dir.name) / "config.json"
+        self._write_config()
+
+    def _write_config(self, capture_mode: str = "watermark", backfill_mode: str = "full") -> None:
         config = {
             "agent_name": "live-postgres-test",
             "log_level": "INFO",
             "denotary": {
-                "ingress_url": f"http://127.0.0.1:{ingress_port}",
-                "watcher_url": f"http://127.0.0.1:{watcher_port}",
+                "ingress_url": f"http://127.0.0.1:{self.ingress_port}",
+                "watcher_url": f"http://127.0.0.1:{self.watcher_port}",
                 "watcher_auth_token": "token",
                 "submitter": "enterpriseac1",
                 "schema_id": 1,
@@ -175,9 +178,10 @@ class PostgresLiveIntegrationTest(unittest.TestCase):
                         "password": "denotarypw",
                         "database": "ledger",
                     },
-                    "backfill_mode": "full",
+                    "backfill_mode": backfill_mode,
                     "batch_size": 100,
                     "options": {
+                        "capture_mode": capture_mode,
                         "watermark_column": "updated_at",
                         "commit_timestamp_column": "updated_at",
                         "row_limit": 100,
@@ -272,3 +276,72 @@ class PostgresLiveIntegrationTest(unittest.TestCase):
         self.assertEqual(len(MockWatcherHandler.registrations), 4)
         deliveries = engine.store.list_deliveries("pg-core-ledger")
         self.assertEqual(len(deliveries), 4)
+
+    def test_live_postgres_trigger_cdc_captures_insert_update_delete(self) -> None:
+        self._write_config(capture_mode="trigger", backfill_mode="none")
+        engine = AgentEngine(load_config(self.config_path))
+        validation = engine.validate()
+        self.assertEqual(validation[0]["supports_cdc"], "true")
+
+        empty_result = engine.run_once()
+        self.assertEqual(empty_result["processed"], 0)
+        self.assertEqual(empty_result["failed"], 0)
+
+        with psycopg.connect(
+            host="127.0.0.1",
+            port=55432,
+            user="denotary",
+            password="denotarypw",
+            dbname="ledger",
+        ) as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    insert into public.invoices (id, status, amount, updated_at)
+                    values (3001, 'draft', 77.00, '2026-04-17T11:00:01Z')
+                    """
+                )
+            connection.commit()
+
+        insert_result = engine.run_once()
+        self.assertEqual(insert_result["processed"], 1)
+        self.assertEqual(insert_result["failed"], 0)
+
+        with psycopg.connect(
+            host="127.0.0.1",
+            port=55432,
+            user="denotary",
+            password="denotarypw",
+            dbname="ledger",
+        ) as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    update public.invoices
+                    set status = 'issued', updated_at = '2026-04-17T11:00:02Z'
+                    where id = 3001
+                    """
+                )
+            connection.commit()
+
+        update_result = engine.run_once()
+        self.assertEqual(update_result["processed"], 1)
+        self.assertEqual(update_result["failed"], 0)
+
+        with psycopg.connect(
+            host="127.0.0.1",
+            port=55432,
+            user="denotary",
+            password="denotarypw",
+            dbname="ledger",
+        ) as connection:
+            with connection.cursor() as cursor:
+                cursor.execute("delete from public.invoices where id = 3001")
+            connection.commit()
+
+        delete_result = engine.run_once()
+        self.assertEqual(delete_result["processed"], 1)
+        self.assertEqual(delete_result["failed"], 0)
+
+        deliveries = engine.store.list_deliveries("pg-core-ledger")
+        self.assertEqual(len(deliveries), 3)

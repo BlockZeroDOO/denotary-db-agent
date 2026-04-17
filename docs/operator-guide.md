@@ -30,6 +30,14 @@ In the current scaffold this is intended for:
 - local integration with `Ingress API`, `Finality Watcher`, `Receipt Service`, and `Audit API`
 - built-in `verifbill` signing/broadcast using the configured hot permission key
 
+### Run As Daemon
+
+```bash
+denotary-db-agent --config examples/agent.example.json run --interval-sec 5
+```
+
+This keeps the PostgreSQL plugin running continuously and re-checking sources on the given interval.
+
 ### Status
 
 ```bash

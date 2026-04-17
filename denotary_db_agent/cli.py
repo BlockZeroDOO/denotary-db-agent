@@ -14,6 +14,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     run_parser = subparsers.add_parser("run", help="Run the agent")
     run_parser.add_argument("--once", action="store_true", help="Run one snapshot/backfill pass and exit")
+    run_parser.add_argument("--interval-sec", type=float, default=5.0, help="Polling interval for continuous run mode")
 
     subparsers.add_parser("validate", help="Validate config and adapter connectivity")
     subparsers.add_parser("status", help="Show source status")
@@ -46,7 +47,9 @@ def main(argv: list[str] | None = None) -> int:
         if args.once:
             print(json.dumps(engine.run_once(), indent=2))
             return 0
-        raise SystemExit("continuous run mode is not implemented yet; use --once in the scaffold")
+        print(json.dumps({"status": "running", "interval_sec": args.interval_sec}, indent=2), flush=True)
+        print(json.dumps(engine.run_forever(args.interval_sec), indent=2))
+        return 0
     if args.command == "replay":
         engine.reset_checkpoint(args.source)
         print(json.dumps({"ok": True, "source": args.source, "action": "checkpoint_reset"}, indent=2))
