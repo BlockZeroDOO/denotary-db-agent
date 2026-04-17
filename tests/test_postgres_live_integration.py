@@ -866,5 +866,12 @@ class PostgresLiveIntegrationTest(unittest.TestCase):
         self.assertEqual(second_result["processed"], 1)
         self.assertEqual(second_result["failed"], 0)
 
+        inspect = engine.inspect("pg-core-ledger")
+        self.assertEqual(inspect["sources"][0]["cdc"]["runtime_mode"], "stream")
+        self.assertEqual(inspect["sources"][0]["cdc"]["stream_connect_count"], 2)
+        self.assertEqual(inspect["sources"][0]["cdc"]["stream_reconnect_count"], 1)
+        self.assertTrue(inspect["sources"][0]["cdc"]["stream_last_connect_at"])
+        self.assertTrue(inspect["sources"][0]["cdc"]["stream_last_reconnect_at"])
+
         deliveries = engine.store.list_deliveries("pg-core-ledger")
         self.assertEqual(len(deliveries), 2)

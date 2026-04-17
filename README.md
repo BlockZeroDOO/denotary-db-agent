@@ -94,6 +94,7 @@ Note:
 - `status` is safe to run without a live database
 - `health` shows local source state and best-effort health for configured chain/receipt/audit services
 - `health` now also surfaces logical slot warnings such as publication drift, REPLICA IDENTITY drift, and WAL lag thresholds
+- `inspect` / `health` now surface PostgreSQL stream runtime stats such as active session state, acknowledged LSN, and reconnect counters
 - `bootstrap` installs or refreshes source-side runtime artifacts such as PostgreSQL trigger CDC objects, logical replication slot setup, and `pgoutput` publications
 - `inspect` shows tracked tables, selected columns, and live PostgreSQL CDC state for a source
 - for `pgoutput`, `inspect` also shows whether publication tables are in sync with tracked tables

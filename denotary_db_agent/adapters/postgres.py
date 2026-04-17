@@ -66,6 +66,10 @@ class PostgresAdapter(BaseAdapter):
         self._logical_relation_cache: dict[int, PostgresLogicalRelation] = {}
         self._active_replication_session: PostgresReplicationSession | None = None
         self._active_replication_start_lsn = "0/0"
+        self._stream_connect_count = 0
+        self._stream_reconnect_count = 0
+        self._stream_last_connect_at = ""
+        self._stream_last_reconnect_at = ""
 
     def discover_capabilities(self) -> AdapterCapabilities:
         capture_mode = str(self.config.options.get("capture_mode", "watermark")).lower()
@@ -1225,7 +1229,13 @@ class PostgresAdapter(BaseAdapter):
                 ([spec.key for spec in specs],),
             ).fetchall()
         publication_in_sync = publication_tables == tracked_tables
-        pending_changes = self._logical_has_pending_changes(connection) if slot_row is not None else False
+        if slot_row is not None:
+            try:
+                pending_changes = self._logical_has_pending_changes(connection)
+            except Exception:
+                pending_changes = bool(slot_row["active"])
+        else:
+            pending_changes = False
         replica_identity_by_table = {
             f"{row['schema_name']}.{row['table_name']}": str(row["replica_identity"])
             for row in replica_identity_rows
@@ -1239,6 +1249,7 @@ class PostgresAdapter(BaseAdapter):
             "mode": "logical",
             "slot_name": self._logical_slot_name(),
             "plugin": plugin,
+            "runtime_mode": self._logical_runtime_mode(),
             "publication_name": publication_name,
             "publication_exists": publication_row is not None,
             "tracked_tables": tracked_tables,
@@ -1274,6 +1285,17 @@ class PostgresAdapter(BaseAdapter):
                 else ""
             ),
             "wal_status": str(slot_row["wal_status"]) if slot_row and slot_row["wal_status"] is not None else "",
+            "stream_session_active": self._active_replication_session is not None and self._active_replication_session.is_open,
+            "stream_start_lsn": self._active_replication_start_lsn,
+            "stream_acknowledged_lsn": (
+                self._active_replication_session.acknowledged_lsn
+                if self._active_replication_session is not None
+                else self._active_replication_start_lsn
+            ),
+            "stream_connect_count": self._stream_connect_count,
+            "stream_reconnect_count": self._stream_reconnect_count,
+            "stream_last_connect_at": self._stream_last_connect_at,
+            "stream_last_reconnect_at": self._stream_last_reconnect_at,
         }
 
     def _sort_key(self, spec: PostgresTableSpec, row: dict[str, Any]) -> tuple[Any, ...]:
@@ -1334,6 +1356,12 @@ class PostgresAdapter(BaseAdapter):
         session.__enter__()
         self._active_replication_session = session
         self._active_replication_start_lsn = desired_lsn
+        now = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+        self._stream_connect_count += 1
+        self._stream_last_connect_at = now
+        if self._stream_connect_count > 1:
+            self._stream_reconnect_count += 1
+            self._stream_last_reconnect_at = now
         return session
 
     def _close_replication_session(self, *, send_feedback: bool) -> None:

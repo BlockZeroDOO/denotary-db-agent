@@ -387,6 +387,7 @@ class PostgresAdapterTest(unittest.TestCase):
                 "mode": "logical",
                 "slot_name": "denotary_pg_core_ledger_slot",
                 "plugin": "pgoutput",
+                "runtime_mode": "stream",
                 "publication_name": "denotary_pg_core_ledger_pub",
                 "publication_exists": True,
                 "tracked_tables": ["public.invoices"],
@@ -406,12 +407,20 @@ class PostgresAdapterTest(unittest.TestCase):
                 "restart_lsn": "",
                 "confirmed_flush_lsn": "",
                 "wal_status": "reserved",
+                "stream_session_active": False,
+                "stream_start_lsn": "0/0",
+                "stream_acknowledged_lsn": "0/0",
+                "stream_connect_count": 0,
+                "stream_reconnect_count": 0,
+                "stream_last_connect_at": "",
+                "stream_last_reconnect_at": "",
             },
         ):
             details = adapter.inspect()
 
         self.assertEqual(details["capture_mode"], "logical")
         self.assertEqual(details["cdc"]["plugin"], "pgoutput")
+        self.assertEqual(details["cdc"]["runtime_mode"], "stream")
         self.assertEqual(details["cdc"]["publication_name"], "denotary_pg_core_ledger_pub")
         self.assertEqual(details["cdc"]["publication_tables"], ["public.invoices"])
         self.assertTrue(details["cdc"]["publication_in_sync"])
@@ -540,12 +549,16 @@ class PostgresAdapterTest(unittest.TestCase):
         def dummy_connect():
             yield object()
 
-        first_session = unittest.mock.Mock()
+        first_session = unittest.mock.MagicMock()
         first_session.is_open = True
         first_session.close = unittest.mock.Mock()
-        second_session = unittest.mock.Mock()
+        first_session.__enter__.return_value = first_session
+        first_session.__exit__.return_value = None
+        second_session = unittest.mock.MagicMock()
         second_session.is_open = True
         second_session.close = unittest.mock.Mock()
+        second_session.__enter__.return_value = second_session
+        second_session.__exit__.return_value = None
 
         with patch.object(adapter, "_connect", dummy_connect), patch.object(
             adapter, "_load_table_specs", return_value=[spec]
@@ -578,6 +591,34 @@ class PostgresAdapterTest(unittest.TestCase):
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0].operation, "insert")
         self.assertEqual(ensure_session.call_count, 2)
+
+    def test_replication_session_stats_increment_on_reconnect(self) -> None:
+        config = self.make_config()
+        config.options["capture_mode"] = "logical"
+        config.options["output_plugin"] = "pgoutput"
+        config.options["logical_runtime_mode"] = "stream"
+        adapter = PostgresAdapter(config)
+
+        first_session = unittest.mock.MagicMock()
+        first_session.is_open = True
+        first_session.__enter__.return_value = first_session
+        first_session.__exit__.return_value = None
+        second_session = unittest.mock.MagicMock()
+        second_session.is_open = True
+        second_session.__enter__.return_value = second_session
+        second_session.__exit__.return_value = None
+
+        with patch("denotary_db_agent.adapters.postgres.PostgresReplicationSession", side_effect=[first_session, second_session]), patch.object(
+            adapter, "_replication_conninfo", return_value="host=127.0.0.1"
+        ):
+            adapter._ensure_replication_session("0/16B6A28")
+            adapter._close_replication_session(send_feedback=False)
+            adapter._ensure_replication_session("0/16B6A40")
+
+        self.assertEqual(adapter._stream_connect_count, 2)
+        self.assertEqual(adapter._stream_reconnect_count, 1)
+        self.assertTrue(adapter._stream_last_connect_at)
+        self.assertTrue(adapter._stream_last_reconnect_at)
 
     def test_parse_replication_frame_xlogdata(self) -> None:
         payload = (

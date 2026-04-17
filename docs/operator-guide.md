@@ -109,6 +109,8 @@ For PostgreSQL this returns:
 - whether tracked logical tables are currently in sync with the expected REPLICA IDENTITY mode
 - `pending_changes` for logical slots
 - `current_wal_lsn`, `retained_wal_bytes`, and `flush_lag_bytes` for logical slots
+- `stream_session_active`, `stream_start_lsn`, and `stream_acknowledged_lsn` for PostgreSQL stream mode
+- `stream_connect_count`, `stream_reconnect_count`, `stream_last_connect_at`, and `stream_last_reconnect_at`
 - installed trigger count or logical/publication state, depending on mode
 
 ### Refresh
