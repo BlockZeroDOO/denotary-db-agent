@@ -529,3 +529,48 @@ class EngineTest(unittest.TestCase):
 
         second_snapshot = engine._maybe_write_periodic_diagnostics_snapshot()
         self.assertIsNone(second_snapshot)
+
+    def test_metrics_reports_compact_source_counters(self) -> None:
+        engine = AgentEngine(load_config(self.config_path))
+        source_config = engine.config.sources[0]
+
+        fake_adapter = SimpleNamespace(
+            inspect=lambda: {
+                "source_id": source_config.id,
+                "adapter": source_config.adapter,
+                "capture_mode": "logical",
+                "cdc": {
+                    "runtime_mode": "stream",
+                    "effective_runtime_mode": "peek",
+                    "stream_session_active": False,
+                    "stream_reconnect_count": 2,
+                    "stream_failure_streak": 1,
+                    "stream_backoff_active": True,
+                    "stream_fallback_active": True,
+                    "stream_probation_active": False,
+                    "slot_exists": True,
+                    "pending_changes": True,
+                    "retained_wal_bytes": 1234,
+                    "flush_lag_bytes": 567,
+                },
+            }
+        )
+
+        with unittest.mock.patch.object(
+            engine,
+            "runtimes",
+            return_value=[SourceRuntime(config=source_config, adapter=fake_adapter)],
+        ):
+            metrics = engine.metrics(source_config.id)
+
+        self.assertEqual(metrics["totals"]["source_count"], 1)
+        self.assertEqual(metrics["totals"]["degraded_count"], 1)
+        self.assertEqual(len(metrics["sources"]), 1)
+        source = metrics["sources"][0]
+        self.assertEqual(source["source_id"], source_config.id)
+        self.assertEqual(source["severity"], "degraded")
+        self.assertTrue(source["logical_slot_pending_changes"])
+        self.assertEqual(source["logical_slot_retained_wal_bytes"], 1234)
+        self.assertEqual(source["stream_effective_runtime_mode"], "peek")
+        self.assertEqual(source["stream_reconnect_count"], 2)
+        self.assertTrue(source["stream_backoff_active"])

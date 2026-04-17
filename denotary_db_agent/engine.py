@@ -357,6 +357,77 @@ class AgentEngine:
             results.append(entry)
         return {"agent_name": self.config.agent_name, "sources": results}
 
+    def metrics(self, source_id: str | None = None) -> dict:
+        diagnostics = self.diagnostics(source_id)
+        sources: list[dict[str, object]] = []
+        totals = {
+            "source_count": 0,
+            "ok_count": 0,
+            "paused_count": 0,
+            "delivery_count": 0,
+            "proof_count": 0,
+            "dlq_count": 0,
+            "degraded_count": 0,
+            "critical_count": 0,
+            "error_count": 0,
+        }
+
+        for health_source in self.health()["sources"]:
+            current_source_id = str(health_source["source_id"])
+            if source_id and current_source_id != source_id:
+                continue
+            diagnostics_source = next(
+                (item for item in diagnostics["sources"] if str(item.get("source_id")) == current_source_id),
+                {},
+            )
+            stream = diagnostics_source.get("stream", {}) if isinstance(diagnostics_source, dict) else {}
+            logical_slot = diagnostics_source.get("logical_slot", {}) if isinstance(diagnostics_source, dict) else {}
+            severity = str(health_source.get("severity", "unknown"))
+
+            entry = {
+                "source_id": current_source_id,
+                "adapter": health_source.get("adapter"),
+                "capture_mode": health_source.get("capture_mode"),
+                "severity": severity,
+                "ok": bool(health_source.get("ok", False)),
+                "paused": bool(health_source.get("paused", False)),
+                "runtime_signature_stored": bool(health_source.get("runtime_signature_stored", False)),
+                "delivery_count": int(health_source.get("deliveries", 0) or 0),
+                "proof_count": int(health_source.get("proofs", 0) or 0),
+                "dlq_count": int(health_source.get("dlq", 0) or 0),
+                "warning_count": len(list(health_source.get("warnings", []))),
+                "logical_slot_pending_changes": bool(logical_slot.get("pending_changes", False)),
+                "logical_slot_retained_wal_bytes": int(logical_slot.get("retained_wal_bytes", 0) or 0),
+                "logical_slot_flush_lag_bytes": int(logical_slot.get("flush_lag_bytes", 0) or 0),
+                "stream_effective_runtime_mode": stream.get("effective_runtime_mode"),
+                "stream_session_active": bool(stream.get("session_active", False)),
+                "stream_reconnect_count": int(stream.get("reconnect_count", 0) or 0),
+                "stream_failure_streak": int(stream.get("failure_streak", 0) or 0),
+                "stream_backoff_active": bool(stream.get("backoff_active", False)),
+                "stream_fallback_active": bool(stream.get("fallback_active", False)),
+                "stream_probation_active": bool(stream.get("probation_active", False)),
+            }
+            sources.append(entry)
+
+            totals["source_count"] += 1
+            totals["ok_count"] += 1 if entry["ok"] else 0
+            totals["paused_count"] += 1 if entry["paused"] else 0
+            totals["delivery_count"] += int(entry["delivery_count"])
+            totals["proof_count"] += int(entry["proof_count"])
+            totals["dlq_count"] += int(entry["dlq_count"])
+            if severity == "degraded":
+                totals["degraded_count"] += 1
+            elif severity == "critical":
+                totals["critical_count"] += 1
+            elif severity == "error":
+                totals["error_count"] += 1
+
+        return {
+            "agent_name": self.config.agent_name,
+            "totals": totals,
+            "sources": sources,
+        }
+
     def run_once(self) -> dict[str, int]:
         return self._run_runtimes_once(self.runtimes())
 

@@ -155,3 +155,42 @@ class CliTest(unittest.TestCase):
             self.assertEqual(len(payload["pruned_snapshot_paths"]), 1)
             remaining = sorted(diagnostics_dir.glob("diagnostics-pg-core-ledger-*.json"))
             self.assertEqual(len(remaining), 2)
+
+    def test_metrics_command_prints_engine_metrics(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "config.json"
+            config_path.write_text("{}", encoding="utf-8")
+            fake_config = type(
+                "FakeConfig",
+                (),
+                {
+                    "storage": type("FakeStorage", (), {"state_db": str(Path(temp_dir) / "runtime" / "state.sqlite3")})(),
+                },
+            )()
+            fake_engine = type(
+                "FakeEngine",
+                (),
+                {
+                    "metrics": lambda self, source: {"agent_name": "denotary-db-agent", "totals": {"source_count": 1}, "sources": [{"source_id": source}]},
+                },
+            )()
+
+            stdout = StringIO()
+            with patch("denotary_db_agent.cli.load_config", return_value=fake_config), patch(
+                "denotary_db_agent.cli.AgentEngine",
+                return_value=fake_engine,
+            ), patch("sys.stdout", stdout):
+                exit_code = main(
+                    [
+                        "--config",
+                        str(config_path),
+                        "metrics",
+                        "--source",
+                        "pg-core-ledger",
+                    ]
+                )
+
+            self.assertEqual(exit_code, 0)
+            payload = json.loads(stdout.getvalue())
+            self.assertEqual(payload["totals"]["source_count"], 1)
+            self.assertEqual(payload["sources"][0]["source_id"], "pg-core-ledger")

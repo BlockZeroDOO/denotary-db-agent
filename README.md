@@ -13,6 +13,7 @@ Current scope:
 - Finality Watcher registration and inclusion/finality updates
 - receipt / audit-chain retrieval and local proof bundle export
 - CLI for run / validate / status / health / diagnostics / bootstrap / inspect / refresh / pause / resume / replay / checkpoint / proof
+- CLI for run / validate / status / health / metrics / diagnostics / bootstrap / inspect / refresh / pause / resume / replay / checkpoint / proof
 
 The first wave of database targets is:
 
@@ -56,6 +57,7 @@ python -m venv .venv
 pip install -e .
 denotary-db-agent status --config examples/agent.example.json
 denotary-db-agent health --config examples/agent.example.json
+denotary-db-agent metrics --config examples/agent.example.json --source pg-core-ledger
 denotary-db-agent diagnostics --config examples/agent.example.json --source pg-core-ledger
 denotary-db-agent diagnostics --config examples/agent.example.json --source pg-core-ledger --save-snapshot
 denotary-db-agent diagnostics --config examples/agent.example.json --source pg-core-ledger --save-snapshot --snapshot-retention 10
@@ -86,6 +88,7 @@ See:
 python -m unittest discover -s tests -v
 python -m denotary_db_agent --config examples/agent.example.json status
 python -m denotary_db_agent --config examples/agent.example.json health
+python -m denotary_db_agent --config examples/agent.example.json metrics --source pg-core-ledger
 python -m denotary_db_agent --config examples/agent.example.json diagnostics --source pg-core-ledger
 python -m denotary_db_agent --config examples/agent.example.json diagnostics --source pg-core-ledger --save-snapshot
 python -m denotary_db_agent --config examples/agent.example.json diagnostics --source pg-core-ledger --save-snapshot --snapshot-retention 10
@@ -102,6 +105,7 @@ Note:
 - `health` shows local source state and best-effort health for configured chain/receipt/audit services
 - `health` now also surfaces logical slot warnings such as publication drift, REPLICA IDENTITY drift, and WAL lag thresholds
 - `health` now classifies each source as `healthy`, `degraded`, `critical`, or `error`
+- `metrics` gives a compact export-friendly summary of source counters, backlog indicators, stream state, and severity
 - `diagnostics` gives a compact stream/logical-slot focused report per source
 - `diagnostics --save-snapshot` writes the report to a timestamped JSON file under the local runtime directory
 - snapshot retention defaults to keeping the newest `20` matching diagnostics files per source when saving snapshots
