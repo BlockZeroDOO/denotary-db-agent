@@ -1309,7 +1309,12 @@ class PostgresAdapter(BaseAdapter):
         return str(self.config.options.get("output_plugin", "test_decoding"))
 
     def _logical_runtime_mode(self) -> str:
-        return str(self.config.options.get("logical_runtime_mode", "peek")).lower()
+        configured = self.config.options.get("logical_runtime_mode")
+        if configured is not None:
+            return str(configured).lower()
+        if self._logical_output_plugin() == "pgoutput":
+            return "stream"
+        return "peek"
 
     def _logical_publication_name(self) -> str:
         return str(self.config.options.get("publication_name", f"denotary_{self.config.id}_pub"))

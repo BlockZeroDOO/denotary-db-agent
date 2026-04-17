@@ -196,7 +196,8 @@ The current PostgreSQL adapter is the first live implementation and works as:
 - in logical mode, surface slot backlog and WAL lag in `inspect`
 - in logical mode, wake daemon loops when the logical slot already has pending changes
 - in `pgoutput` mode, manage the publication lifecycle inside the agent
-- in `pgoutput` mode, support both default SQL peeking and optional bounded replication-protocol streaming
+- in `pgoutput` mode, use bounded replication-protocol streaming by default
+- in `pgoutput` mode, keep explicit SQL peeking as a fallback runtime mode
 - bounded streaming sends standby-status feedback using the last already-acknowledged LSN
 - when stream mode is active, post-delivery checkpoint advancement updates the active session ack directly
 
@@ -209,7 +210,7 @@ Expected source options:
 - optional `cleanup_processed_events` for trigger mode, default `true`
 - optional `slot_name` for logical mode
 - optional `output_plugin`, default `test_decoding`
-- optional `logical_runtime_mode`, default `peek`
+- optional `logical_runtime_mode`, default `stream` for `pgoutput`
 - optional `publication_name` for `output_plugin = "pgoutput"`
 - optional `auto_create_slot`, default `true`
 - optional `auto_create_publication`, default `true`
@@ -253,7 +254,7 @@ The harness validates:
 - logical decoding capture through a live replication slot
 - preservation of multi-row logical transactions when `row_limit = 1`
 - `pgoutput` publication bootstrap / inspect with live PostgreSQL state
-- `pgoutput` live insert/update/delete capture through `pg_logical_slot_peek_binary_changes()`
+- `pgoutput` live insert/update/delete capture through both bounded streaming and SQL peeking
 
 ## Enterprise Signer Permission
 

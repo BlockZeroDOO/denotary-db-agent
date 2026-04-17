@@ -43,8 +43,8 @@ Current PostgreSQL status:
   - receipt + audit proof-chain export
 - current logical polling supports both PostgreSQL `test_decoding` and `pgoutput`
 - `pgoutput` supports both:
-  - default `logical_runtime_mode = "peek"` via `pg_logical_slot_peek_binary_changes()`
-  - optional bounded `logical_runtime_mode = "stream"` via low-level replication protocol
+  - default `logical_runtime_mode = "stream"` via low-level replication protocol
+  - optional `logical_runtime_mode = "peek"` via `pg_logical_slot_peek_binary_changes()`
 - bounded streaming now includes standby-status feedback using the last safe acknowledged LSN
 - in stream mode, post-delivery checkpoint advancement now updates the active replication session ack before close
 
@@ -108,7 +108,8 @@ Note:
 - when `output_plugin = "pgoutput"`, `inspect` shows publication state and tracked publication tables
 - `run --once` uses the configured `dnanchor` private key to sign `verifbill::submit` inside the agent
 - `run` without `--once` keeps the agent in daemon mode and, for PostgreSQL trigger sources, waits on `LISTEN/NOTIFY` before the fallback interval elapses
-- for PostgreSQL `pgoutput`, `logical_runtime_mode = "stream"` enables bounded replication-protocol reads instead of SQL slot peeking
+- for PostgreSQL `pgoutput`, bounded replication-protocol streaming is now the default runtime path
+- `logical_runtime_mode = "peek"` remains available as an explicit fallback
 - streaming feedback only reports already acknowledged LSNs, so it doesn't replace post-delivery checkpoint advancement
 - in stream mode, that post-delivery checkpoint advancement feeds the active session ack directly; SQL slot advance remains the fallback for non-stream paths
 - finalized receipts and proof chains are exported under `storage.proof_dir`

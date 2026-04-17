@@ -53,7 +53,7 @@
         "slot_name": "denotary_slot",
         "publication_name": "denotary_pub",
         "output_plugin": "test_decoding",
-        "logical_runtime_mode": "peek",
+        "logical_runtime_mode": "stream",
         "auto_create_slot": true,
         "auto_create_publication": true,
         "replica_identity_full": true,

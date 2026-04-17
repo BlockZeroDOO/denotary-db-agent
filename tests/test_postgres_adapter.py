@@ -488,6 +488,15 @@ class PostgresAdapterTest(unittest.TestCase):
         fetch_stream.assert_called_once()
         self.assertIsNone(adapter._active_replication_session)
 
+    def test_pgoutput_defaults_to_stream_runtime_mode(self) -> None:
+        config = self.make_config()
+        config.options["capture_mode"] = "logical"
+        config.options["output_plugin"] = "pgoutput"
+        config.options.pop("logical_runtime_mode", None)
+        adapter = PostgresAdapter(config)
+
+        self.assertEqual(adapter._logical_runtime_mode(), "stream")
+
     def test_after_checkpoint_advanced_updates_active_stream_session(self) -> None:
         config = self.make_config()
         config.options["capture_mode"] = "logical"
