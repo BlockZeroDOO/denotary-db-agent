@@ -55,7 +55,10 @@
         "output_plugin": "test_decoding",
         "auto_create_slot": true,
         "auto_create_publication": true,
-        "replica_identity_full": true
+        "replica_identity_full": true,
+        "logical_wait_poll_sec": 0.5,
+        "logical_warn_retained_wal_bytes": 268435456,
+        "logical_warn_flush_lag_bytes": 67108864
       }
     }
   ]

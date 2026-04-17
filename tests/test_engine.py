@@ -6,13 +6,14 @@ import tempfile
 import threading
 import unittest
 import urllib.parse
+from types import SimpleNamespace
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 
 from denotary_db_agent.config import load_config
-from denotary_db_agent.engine import AgentEngine
+from denotary_db_agent.engine import AgentEngine, SourceRuntime
 
 
 def free_port() -> int:
@@ -189,3 +190,37 @@ class EngineTest(unittest.TestCase):
         result = engine.run_once()
         self.assertEqual(result["processed"], 1)
         self.assertIsNotNone(engine.store.get_runtime_signature("pg-core-ledger"))
+
+    def test_health_reports_logical_runtime_warnings(self) -> None:
+        engine = AgentEngine(load_config(self.config_path))
+        source_config = engine.config.sources[0]
+        source_config.options["logical_warn_retained_wal_bytes"] = 100
+        source_config.options["logical_warn_flush_lag_bytes"] = 50
+
+        fake_adapter = SimpleNamespace(
+            inspect=lambda: {
+                "capture_mode": "logical",
+                "cdc": {
+                    "slot_exists": True,
+                    "publication_in_sync": False,
+                    "replica_identity_in_sync": False,
+                    "retained_wal_bytes": 128,
+                    "flush_lag_bytes": 64,
+                },
+            }
+        )
+
+        with unittest.mock.patch.object(
+            engine,
+            "runtimes",
+            return_value=[SourceRuntime(config=source_config, adapter=fake_adapter)],
+        ):
+            health = engine.health()
+
+        self.assertFalse(health["sources"][0]["ok"])
+        self.assertEqual(health["sources"][0]["capture_mode"], "logical")
+        self.assertIn("pgoutput publication tables are out of sync with tracked tables", health["sources"][0]["warnings"])
+        self.assertIn(
+            "tracked logical tables are out of sync with expected REPLICA IDENTITY mode",
+            health["sources"][0]["warnings"],
+        )

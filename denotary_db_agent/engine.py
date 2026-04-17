@@ -145,23 +145,60 @@ class AgentEngine:
                 services["audit"].update({"ok": True, "response": self.audit.health()})
             except Exception as exc:  # noqa: BLE001
                 services["audit"].update({"ok": False, "error": str(exc)})
+        source_entries = []
+        for runtime in self.runtimes():
+            source_entry: dict[str, object] = {
+                "source_id": runtime.config.id,
+                "adapter": runtime.config.adapter,
+                "paused": self._is_paused(runtime.config.id),
+                "runtime_signature_stored": self.store.get_runtime_signature(runtime.config.id) is not None,
+                "checkpoint": self._checkpoint_value(runtime.config.id),
+                "deliveries": len(self.store.list_deliveries(runtime.config.id)),
+                "proofs": len(self.store.list_proofs(runtime.config.id)),
+                "dlq": len(self.store.list_dlq(runtime.config.id)),
+            }
+            try:
+                inspect_details = runtime.adapter.inspect()
+                source_entry["capture_mode"] = inspect_details.get("capture_mode")
+                cdc = inspect_details.get("cdc")
+                warnings = self._build_source_health_warnings(runtime, cdc if isinstance(cdc, dict) else None)
+                if isinstance(cdc, dict):
+                    source_entry["cdc"] = cdc
+                source_entry["warnings"] = warnings
+                source_entry["ok"] = len(warnings) == 0
+            except Exception as exc:  # noqa: BLE001
+                source_entry["ok"] = False
+                source_entry["warnings"] = [str(exc)]
+            source_entries.append(source_entry)
         return {
             "agent_name": self.config.agent_name,
             "services": services,
-            "sources": [
-                {
-                    "source_id": runtime.config.id,
-                    "adapter": runtime.config.adapter,
-                    "paused": self._is_paused(runtime.config.id),
-                    "runtime_signature_stored": self.store.get_runtime_signature(runtime.config.id) is not None,
-                    "checkpoint": self._checkpoint_value(runtime.config.id),
-                    "deliveries": len(self.store.list_deliveries(runtime.config.id)),
-                    "proofs": len(self.store.list_proofs(runtime.config.id)),
-                    "dlq": len(self.store.list_dlq(runtime.config.id)),
-                }
-                for runtime in self.runtimes()
-            ],
+            "sources": source_entries,
         }
+
+    def _build_source_health_warnings(self, runtime: SourceRuntime, cdc: dict[str, object] | None) -> list[str]:
+        if cdc is None:
+            return []
+        warnings: list[str] = []
+        retained_warn_bytes = int(runtime.config.options.get("logical_warn_retained_wal_bytes", 268_435_456))
+        flush_warn_bytes = int(runtime.config.options.get("logical_warn_flush_lag_bytes", 67_108_864))
+        retained_wal_bytes = cdc.get("retained_wal_bytes")
+        flush_lag_bytes = cdc.get("flush_lag_bytes")
+        if cdc.get("slot_exists") is False:
+            warnings.append("logical slot is missing")
+        if cdc.get("publication_in_sync") is False:
+            warnings.append("pgoutput publication tables are out of sync with tracked tables")
+        if cdc.get("replica_identity_in_sync") is False:
+            warnings.append("tracked logical tables are out of sync with expected REPLICA IDENTITY mode")
+        if isinstance(retained_wal_bytes, int) and retained_wal_bytes > retained_warn_bytes:
+            warnings.append(
+                f"logical slot retained WAL is above threshold: {retained_wal_bytes} bytes > {retained_warn_bytes} bytes"
+            )
+        if isinstance(flush_lag_bytes, int) and flush_lag_bytes > flush_warn_bytes:
+            warnings.append(
+                f"logical slot flush lag is above threshold: {flush_lag_bytes} bytes > {flush_warn_bytes} bytes"
+            )
+        return warnings
 
     def bootstrap(self, source_id: str | None = None) -> dict:
         results = []

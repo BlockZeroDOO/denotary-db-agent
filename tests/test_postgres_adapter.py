@@ -390,8 +390,15 @@ class PostgresAdapterTest(unittest.TestCase):
                 "tracked_tables": ["public.invoices"],
                 "publication_tables": ["public.invoices"],
                 "publication_in_sync": True,
+                "pending_changes": False,
+                "replica_identity_expected": "f",
+                "replica_identity_by_table": {"public.invoices": "f"},
+                "replica_identity_in_sync": True,
                 "tracked_table_count": 1,
                 "wal_level": "logical",
+                "current_wal_lsn": "0/16B6A40",
+                "retained_wal_bytes": 0,
+                "flush_lag_bytes": 0,
                 "slot_exists": True,
                 "slot_active": False,
                 "restart_lsn": "",
@@ -406,3 +413,24 @@ class PostgresAdapterTest(unittest.TestCase):
         self.assertEqual(details["cdc"]["publication_name"], "denotary_pg_core_ledger_pub")
         self.assertEqual(details["cdc"]["publication_tables"], ["public.invoices"])
         self.assertTrue(details["cdc"]["publication_in_sync"])
+        self.assertFalse(details["cdc"]["pending_changes"])
+        self.assertTrue(details["cdc"]["replica_identity_in_sync"])
+        self.assertEqual(details["cdc"]["retained_wal_bytes"], 0)
+
+    def test_wait_for_changes_detects_logical_pending_changes(self) -> None:
+        config = self.make_config()
+        config.options["capture_mode"] = "logical"
+        config.options["logical_wait_poll_sec"] = 0.05
+        adapter = PostgresAdapter(config)
+
+        @contextmanager
+        def dummy_connect():
+            yield object()
+
+        with patch.object(adapter, "_connect", dummy_connect), patch.object(
+            adapter, "_logical_has_pending_changes", return_value=True
+        ) as has_pending:
+            changed = adapter.wait_for_changes(0.1)
+
+        self.assertTrue(changed)
+        has_pending.assert_called_once()

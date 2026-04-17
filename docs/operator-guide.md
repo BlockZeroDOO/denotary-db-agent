@@ -41,6 +41,9 @@ This keeps the PostgreSQL plugin running continuously and re-checking sources on
 
 For PostgreSQL sources in `capture_mode = "trigger"` the daemon also waits on database `LISTEN/NOTIFY`
 signals, so inserts/updates/deletes can wake the agent before the fallback interval expires.
+For PostgreSQL sources in `capture_mode = "logical"` the daemon checks the logical slot for
+pending changes before the fallback interval expires, so the loop can wake sooner when WAL data
+is already queued for delivery.
 
 ### Status
 
@@ -69,6 +72,7 @@ Returns:
 - paused/resumed state
 - best-effort health for configured chain / receipt / audit services
 - configured ingress / watcher endpoints
+- source-level warnings for logical slot drift and WAL lag thresholds when PostgreSQL logical mode is used
 
 ### Bootstrap
 
@@ -100,6 +104,11 @@ For PostgreSQL this returns:
 - logical slot status when `capture_mode = "logical"`
 - `pgoutput` publication state and publication tables when `output_plugin = "pgoutput"`
 - whether `pgoutput` publication tables are currently in sync with tracked tables
+- `replica_identity_expected` for tracked logical tables
+- `replica_identity_by_table` for tracked logical tables
+- whether tracked logical tables are currently in sync with the expected REPLICA IDENTITY mode
+- `pending_changes` for logical slots
+- `current_wal_lsn`, `retained_wal_bytes`, and `flush_lag_bytes` for logical slots
 - installed trigger count or logical/publication state, depending on mode
 
 ### Refresh
@@ -119,7 +128,8 @@ The agent also performs this refresh automatically when the stored runtime signa
 matches the live PostgreSQL table shape. `inspect` now reports the live `selected_columns`
 per tracked table, so operators can confirm what the current runtime will hash and send.
 For `pgoutput`, `refresh` also repairs publication drift when publication membership no longer
-matches the tracked table set.
+matches the tracked table set. When `replica_identity_full = true`, `refresh` also repairs
+REPLICA IDENTITY drift for tracked logical tables.
 
 ### Pause / Resume
 
@@ -183,6 +193,8 @@ The current PostgreSQL adapter is the first live implementation and works as:
 - in logical mode, support both `test_decoding` and `pgoutput`
 - in logical mode, advance the logical slot only after a successful delivery checkpoint
 - in logical mode, keep a transaction-safe cursor so multi-row transactions are replayed correctly even with a small `row_limit`
+- in logical mode, surface slot backlog and WAL lag in `inspect`
+- in logical mode, wake daemon loops when the logical slot already has pending changes
 - in `pgoutput` mode, manage the publication lifecycle inside the agent
 
 Expected source options:
@@ -198,6 +210,9 @@ Expected source options:
 - optional `auto_create_slot`, default `true`
 - optional `auto_create_publication`, default `true`
 - optional `replica_identity_full`, default `true`
+- optional `logical_wait_poll_sec`, default `0.5`
+- optional `logical_warn_retained_wal_bytes`, default `268435456`
+- optional `logical_warn_flush_lag_bytes`, default `67108864`
 
 Recommended first-run behavior:
 

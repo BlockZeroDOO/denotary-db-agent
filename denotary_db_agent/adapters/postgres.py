@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import re
 import struct
+import time
 from contextlib import contextmanager
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -78,8 +79,8 @@ class PostgresAdapter(BaseAdapter):
                 else (
                     (
                         "Logical decoding / WAL CDC is enabled through a logical replication slot and "
-                        "pgoutput publication setup. Runtime binary decoding is not yet implemented, "
-                        "so pgoutput is currently bootstrap/inspect ready only."
+                        "pgoutput publication setup. Runtime binary polling is implemented through "
+                        "pg_logical_slot_peek_binary_changes(); replication-protocol streaming is not enabled yet."
                     )
                     if logical_plugin == "pgoutput"
                     else "Logical decoding / WAL CDC is enabled through a logical replication slot and test_decoding output."
@@ -361,7 +362,21 @@ class PostgresAdapter(BaseAdapter):
 
     def wait_for_changes(self, timeout_sec: float) -> bool:
         if self._capture_mode() == "logical":
-            return super().wait_for_changes(timeout_sec)
+            deadline = time.monotonic() + max(timeout_sec, 0.0)
+            poll_interval = float(self.config.options.get("logical_wait_poll_sec", 0.5))
+            poll_interval = max(0.05, poll_interval)
+            while time.monotonic() < deadline:
+                try:
+                    with self._connect() as connection:
+                        if self._logical_has_pending_changes(connection):
+                            return True
+                except Exception:
+                    return False
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    break
+                time.sleep(min(poll_interval, remaining))
+            return False
         if self._capture_mode() != "trigger":
             return super().wait_for_changes(timeout_sec)
         try:
@@ -892,6 +907,27 @@ class PostgresAdapter(BaseAdapter):
         with connection.cursor() as cursor:
             return list(cursor.execute(query, params).fetchall())
 
+    def _logical_has_pending_changes(self, connection: Any) -> bool:
+        plugin = self._logical_output_plugin()
+        slot_name = self._logical_slot_name()
+        if plugin == "test_decoding":
+            query = "select exists(select 1 from pg_logical_slot_peek_changes(%s, null, 1)) as has_changes"
+            params: list[Any] = [slot_name]
+        elif plugin == "pgoutput":
+            options = ["proto_version", "1", "publication_names", self._logical_publication_name()]
+            option_placeholders = ", ".join(["%s"] * len(options))
+            query = (
+                "select exists("
+                f"select 1 from pg_logical_slot_peek_binary_changes(%s, null, 1, {option_placeholders})"
+                ") as has_changes"
+            )
+            params = [slot_name, *options]
+        else:
+            raise ValueError(f"unsupported PostgreSQL logical output plugin: {plugin}")
+        with connection.cursor() as cursor:
+            row = cursor.execute(query, params).fetchone()
+        return bool(row["has_changes"]) if row is not None else False
+
     def _parse_checkpoint(self, checkpoint: SourceCheckpoint | None) -> dict[str, dict[str, Any]]:
         if checkpoint is None or not checkpoint.token:
             return {}
@@ -1002,6 +1038,7 @@ class PostgresAdapter(BaseAdapter):
     def _inspect_logical_cdc_state(self, connection: Any, specs: list[PostgresTableSpec]) -> dict[str, Any]:
         publication_name = self._logical_publication_name()
         tracked_tables = [spec.key for spec in specs]
+        plugin = self._logical_output_plugin()
         with connection.cursor() as cursor:
             wal_level_row = cursor.execute("show wal_level").fetchone()
             slot_row = cursor.execute(
@@ -1035,18 +1072,76 @@ class PostgresAdapter(BaseAdapter):
                     f"{row['schemaname']}.{row['tablename']}"
                     for row in publication_table_rows
                 ]
+            current_wal_row = cursor.execute(
+                """
+                select
+                    pg_current_wal_lsn() as current_wal_lsn,
+                    case
+                        when %s::pg_lsn is not null then pg_wal_lsn_diff(pg_current_wal_lsn(), %s::pg_lsn)::bigint
+                        else null
+                    end as retained_wal_bytes,
+                    case
+                        when %s::pg_lsn is not null then pg_wal_lsn_diff(pg_current_wal_lsn(), %s::pg_lsn)::bigint
+                        else null
+                    end as flush_lag_bytes
+                """,
+                (
+                    str(slot_row["restart_lsn"]) if slot_row and slot_row["restart_lsn"] is not None else None,
+                    str(slot_row["restart_lsn"]) if slot_row and slot_row["restart_lsn"] is not None else None,
+                    str(slot_row["confirmed_flush_lsn"]) if slot_row and slot_row["confirmed_flush_lsn"] is not None else None,
+                    str(slot_row["confirmed_flush_lsn"]) if slot_row and slot_row["confirmed_flush_lsn"] is not None else None,
+                ),
+            ).fetchone()
+            replica_identity_rows = cursor.execute(
+                """
+                select n.nspname as schema_name, c.relname as table_name, c.relreplident as replica_identity
+                from pg_class c
+                join pg_namespace n on n.oid = c.relnamespace
+                where (n.nspname || '.' || c.relname) = any(%s)
+                """,
+                ([spec.key for spec in specs],),
+            ).fetchall()
         publication_in_sync = publication_tables == tracked_tables
+        pending_changes = self._logical_has_pending_changes(connection) if slot_row is not None else False
+        replica_identity_by_table = {
+            f"{row['schema_name']}.{row['table_name']}": str(row["replica_identity"])
+            for row in replica_identity_rows
+        }
+        replica_identity_expected = "f" if bool(self.config.options.get("replica_identity_full", True)) else "d"
+        replica_identity_in_sync = all(
+            replica_identity_by_table.get(spec.key, "") == replica_identity_expected
+            for spec in specs
+        )
         return {
             "mode": "logical",
             "slot_name": self._logical_slot_name(),
-            "plugin": self._logical_output_plugin(),
+            "plugin": plugin,
             "publication_name": publication_name,
             "publication_exists": publication_row is not None,
             "tracked_tables": tracked_tables,
             "publication_tables": publication_tables,
             "publication_in_sync": publication_in_sync,
+            "pending_changes": pending_changes,
+            "replica_identity_expected": replica_identity_expected,
+            "replica_identity_by_table": replica_identity_by_table,
+            "replica_identity_in_sync": replica_identity_in_sync,
             "tracked_table_count": len(specs),
             "wal_level": str(wal_level_row["wal_level"]),
+            "current_wal_lsn": (
+                str(current_wal_row["current_wal_lsn"])
+                if current_wal_row and current_wal_row["current_wal_lsn"] is not None
+                else ""
+            ),
+            "retained_wal_bytes": (
+                int(current_wal_row["retained_wal_bytes"])
+                if current_wal_row and current_wal_row["retained_wal_bytes"] is not None
+                else None
+            ),
+            "flush_lag_bytes": (
+                int(current_wal_row["flush_lag_bytes"])
+                if current_wal_row and current_wal_row["flush_lag_bytes"] is not None
+                else None
+            ),
             "slot_exists": slot_row is not None,
             "slot_active": bool(slot_row["active"]) if slot_row else False,
             "restart_lsn": str(slot_row["restart_lsn"]) if slot_row and slot_row["restart_lsn"] is not None else "",

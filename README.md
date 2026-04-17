@@ -89,11 +89,16 @@ Note:
 - `validate` performs live adapter validation for PostgreSQL and expects reachable deNotary services plus chain RPC when they are configured
 - `status` is safe to run without a live database
 - `health` shows local source state and best-effort health for configured chain/receipt/audit services
+- `health` now also surfaces logical slot warnings such as publication drift, REPLICA IDENTITY drift, and WAL lag thresholds
 - `bootstrap` installs or refreshes source-side runtime artifacts such as PostgreSQL trigger CDC objects, logical replication slot setup, and `pgoutput` publications
 - `inspect` shows tracked tables, selected columns, and live PostgreSQL CDC state for a source
 - for `pgoutput`, `inspect` also shows whether publication tables are in sync with tracked tables
+- for `pgoutput`, `inspect` also shows REPLICA IDENTITY state for tracked logical tables
+- for logical mode, `inspect` also shows slot backlog indicators such as pending changes and WAL lag bytes
 - `refresh` forces runtime artifact refresh and stores the new runtime signature
 - `refresh` can repair PostgreSQL publication drift when `pgoutput` publication tables no longer match tracked tables
+- `refresh` can also repair PostgreSQL REPLICA IDENTITY drift when `replica_identity_full = true`
+- daemon mode now uses logical slot activity checks before the fallback interval elapses
 - `pause` / `resume` let operators stop one source without changing the config file
 - `run_once` and daemon mode now auto-refresh PostgreSQL runtime artifacts when tracked table shape changes, including `ALTER TABLE` column drift
 - when `output_plugin = "pgoutput"`, `inspect` shows publication state and tracked publication tables
