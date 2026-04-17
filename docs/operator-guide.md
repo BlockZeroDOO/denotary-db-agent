@@ -116,6 +116,8 @@ For PostgreSQL this returns:
 - `stream_last_error`, `stream_last_error_kind`, and `stream_last_error_at`
 - `stream_error_history`
 - `stream_failure_streak`, `stream_backoff_active`, and `stream_backoff_until`
+- `stream_fallback_active`, `stream_fallback_remaining_sec`, `stream_fallback_until`, and `stream_fallback_reason`
+- `effective_runtime_mode` so operators can see when PostgreSQL is temporarily running in `peek` fallback
 - installed trigger count or logical/publication state, depending on mode
 
 ### Refresh
@@ -228,6 +230,8 @@ Expected source options:
 - optional `logical_stream_reconnect_base_delay_sec`, default `0.5`
 - optional `logical_stream_reconnect_max_delay_sec`, default `10.0`
 - optional `logical_stream_error_history_size`, default `5`
+- optional `logical_stream_fallback_failure_threshold`, default `3`
+- optional `logical_stream_fallback_sec`, default `30.0`
 - optional `logical_warn_retained_wal_bytes`, default `268435456`
 - optional `logical_warn_flush_lag_bytes`, default `67108864`
 

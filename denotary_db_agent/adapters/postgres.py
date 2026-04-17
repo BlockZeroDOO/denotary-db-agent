@@ -78,6 +78,9 @@ class PostgresAdapter(BaseAdapter):
         self._stream_backoff_until_monotonic = 0.0
         self._stream_backoff_until = ""
         self._stream_error_history: list[dict[str, str]] = []
+        self._stream_force_peek_until_monotonic = 0.0
+        self._stream_force_peek_until = ""
+        self._stream_force_peek_reason = ""
 
     def discover_capabilities(self) -> AdapterCapabilities:
         capture_mode = str(self.config.options.get("capture_mode", "watermark")).lower()
@@ -193,10 +196,11 @@ class PostgresAdapter(BaseAdapter):
 
     def start_stream(self, checkpoint: SourceCheckpoint | None) -> Iterable[ChangeEvent]:
         capture_mode = self._capture_mode()
+        effective_runtime_mode = self._effective_logical_runtime_mode()
         if (
             capture_mode == "logical"
             and self._logical_output_plugin() == "pgoutput"
-            and self._logical_runtime_mode() == "stream"
+            and effective_runtime_mode == "stream"
             and self._stream_backoff_remaining_sec() > 0
         ):
             return
@@ -246,7 +250,7 @@ class PostgresAdapter(BaseAdapter):
                 last_xid, last_event_index, _commit_lsn, _advance_lsn = self._parse_logical_checkpoint_state(checkpoint)
                 row_limit = int(self.config.options.get("row_limit", self.config.batch_size))
                 plugin = self._logical_output_plugin()
-                runtime_mode = self._logical_runtime_mode()
+                runtime_mode = effective_runtime_mode
                 if plugin == "pgoutput" and runtime_mode == "stream":
                     restart_lsn = self._parse_logical_checkpoint(checkpoint) or "0/0"
                     try:
@@ -451,6 +455,9 @@ class PostgresAdapter(BaseAdapter):
 
     def wait_for_changes(self, timeout_sec: float) -> bool:
         if self._capture_mode() == "logical":
+            if self._stream_force_peek_remaining_sec() > 0:
+                time.sleep(min(timeout_sec, self._stream_force_peek_remaining_sec()))
+                return False
             backoff_remaining = self._stream_backoff_remaining_sec()
             if backoff_remaining > 0:
                 time.sleep(min(timeout_sec, backoff_remaining))
@@ -1277,6 +1284,7 @@ class PostgresAdapter(BaseAdapter):
             "slot_name": self._logical_slot_name(),
             "plugin": plugin,
             "runtime_mode": self._logical_runtime_mode(),
+            "effective_runtime_mode": self._effective_logical_runtime_mode(),
             "publication_name": publication_name,
             "publication_exists": publication_row is not None,
             "tracked_tables": tracked_tables,
@@ -1332,6 +1340,10 @@ class PostgresAdapter(BaseAdapter):
             "stream_backoff_active": self._stream_backoff_remaining_sec() > 0,
             "stream_backoff_remaining_sec": round(self._stream_backoff_remaining_sec(), 3),
             "stream_backoff_until": self._stream_backoff_until,
+            "stream_fallback_active": self._stream_force_peek_remaining_sec() > 0,
+            "stream_fallback_remaining_sec": round(self._stream_force_peek_remaining_sec(), 3),
+            "stream_fallback_until": self._stream_force_peek_until,
+            "stream_fallback_reason": self._stream_force_peek_reason,
         }
 
     def _sort_key(self, spec: PostgresTableSpec, row: dict[str, Any]) -> tuple[Any, ...]:
@@ -1373,6 +1385,12 @@ class PostgresAdapter(BaseAdapter):
         if self._logical_output_plugin() == "pgoutput":
             return "stream"
         return "peek"
+
+    def _effective_logical_runtime_mode(self) -> str:
+        configured = self._logical_runtime_mode()
+        if configured == "stream" and self._stream_force_peek_remaining_sec() > 0:
+            return "peek"
+        return configured
 
     def _logical_publication_name(self) -> str:
         return str(self.config.options.get("publication_name", f"denotary_{self.config.id}_pub"))
@@ -1441,6 +1459,7 @@ class PostgresAdapter(BaseAdapter):
             self._stream_backoff_until = datetime.fromtimestamp(
                 time.time() + delay_sec, timezone.utc
             ).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+        self._maybe_activate_stream_fallback(reason)
         return reason
 
     def _clear_stream_runtime_failure(self) -> None:
@@ -1459,6 +1478,24 @@ class PostgresAdapter(BaseAdapter):
         if self._stream_backoff_until_monotonic <= 0:
             return 0.0
         return max(0.0, self._stream_backoff_until_monotonic - time.monotonic())
+
+    def _maybe_activate_stream_fallback(self, reason: str) -> None:
+        threshold = int(self.config.options.get("logical_stream_fallback_failure_threshold", 3))
+        fallback_sec = float(self.config.options.get("logical_stream_fallback_sec", 30.0))
+        if self._logical_output_plugin() != "pgoutput" or self._logical_runtime_mode() != "stream":
+            return
+        if self._stream_failure_streak < max(1, threshold):
+            return
+        self._stream_force_peek_until_monotonic = time.monotonic() + max(0.0, fallback_sec)
+        self._stream_force_peek_until = datetime.fromtimestamp(
+            time.time() + max(0.0, fallback_sec), timezone.utc
+        ).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+        self._stream_force_peek_reason = reason
+
+    def _stream_force_peek_remaining_sec(self) -> float:
+        if self._stream_force_peek_until_monotonic <= 0:
+            return 0.0
+        return max(0.0, self._stream_force_peek_until_monotonic - time.monotonic())
 
     def _append_stream_error_history(self, entry: dict[str, str]) -> None:
         max_entries = int(self.config.options.get("logical_stream_error_history_size", 5))

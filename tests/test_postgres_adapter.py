@@ -639,6 +639,8 @@ class PostgresAdapterTest(unittest.TestCase):
         config.options["output_plugin"] = "pgoutput"
         config.options["logical_runtime_mode"] = "stream"
         config.options["logical_stream_reconnect_base_delay_sec"] = 0.25
+        config.options["logical_stream_fallback_failure_threshold"] = 2
+        config.options["logical_stream_fallback_sec"] = 30.0
         adapter = PostgresAdapter(config)
         spec = PostgresTableSpec(
             schema_name="public",
@@ -681,6 +683,8 @@ class PostgresAdapterTest(unittest.TestCase):
         self.assertEqual(adapter._stream_error_history[-1]["kind"], "connection_lost")
         self.assertGreater(adapter._stream_backoff_remaining_sec(), 0.0)
         self.assertTrue(adapter._stream_backoff_until)
+        self.assertGreater(adapter._stream_force_peek_remaining_sec(), 0.0)
+        self.assertEqual(adapter._stream_force_peek_reason, "connection_lost")
 
     def test_stream_error_history_is_trimmed_to_configured_size(self) -> None:
         config = self.make_config()
@@ -696,6 +700,18 @@ class PostgresAdapterTest(unittest.TestCase):
         self.assertEqual(len(adapter._stream_error_history), 3)
         self.assertEqual(adapter._stream_error_history[0]["message"], "failure-2")
         self.assertEqual(adapter._stream_error_history[-1]["message"], "failure-4")
+
+    def test_effective_runtime_mode_falls_back_to_peek_when_stream_fallback_is_active(self) -> None:
+        config = self.make_config()
+        config.options["capture_mode"] = "logical"
+        config.options["output_plugin"] = "pgoutput"
+        config.options["logical_runtime_mode"] = "stream"
+        adapter = PostgresAdapter(config)
+        adapter._stream_force_peek_until_monotonic = time.monotonic() + 5.0
+        adapter._stream_force_peek_until = "2026-04-18T12:00:01Z"
+        adapter._stream_force_peek_reason = "connection_lost"
+
+        self.assertEqual(adapter._effective_logical_runtime_mode(), "peek")
 
     def test_stream_runtime_skips_fetch_during_backoff_window(self) -> None:
         config = self.make_config()
@@ -716,6 +732,53 @@ class PostgresAdapterTest(unittest.TestCase):
             events = list(adapter.start_stream(None))
 
         self.assertEqual(events, [])
+        ensure_session.assert_not_called()
+
+    def test_start_stream_uses_pgoutput_peek_when_stream_fallback_is_active(self) -> None:
+        config = self.make_config()
+        config.options["capture_mode"] = "logical"
+        config.options["output_plugin"] = "pgoutput"
+        config.options["logical_runtime_mode"] = "stream"
+        adapter = PostgresAdapter(config)
+        adapter._stream_force_peek_until_monotonic = time.monotonic() + 5.0
+        adapter._stream_force_peek_until = "2026-04-18T12:00:01Z"
+        adapter._stream_force_peek_reason = "connection_lost"
+        spec = PostgresTableSpec(
+            schema_name="public",
+            table_name="invoices",
+            watermark_column="updated_at",
+            commit_timestamp_column="updated_at",
+            primary_key_columns=["id"],
+            selected_columns=["id", "updated_at", "status"],
+        )
+
+        @contextmanager
+        def dummy_connect():
+            yield object()
+
+        with patch.object(adapter, "_connect", dummy_connect), patch.object(
+            adapter, "_load_table_specs", return_value=[spec]
+        ), patch.object(adapter, "_ensure_logical_cdc_setup"), patch.object(
+            adapter,
+            "_fetch_pgoutput_decoded_rows",
+            return_value=[
+                (
+                    "736",
+                    "0/16B6A28",
+                    "0/16B6A40",
+                    True,
+                    1,
+                    spec,
+                    "insert",
+                    None,
+                    {"id": 1, "status": "draft", "updated_at": "2026-04-17T12:00:01Z"},
+                )
+            ],
+        ) as fetch_peek, patch.object(adapter, "_ensure_replication_session") as ensure_session:
+            events = list(adapter.start_stream(None))
+
+        self.assertEqual(len(events), 1)
+        fetch_peek.assert_called_once()
         ensure_session.assert_not_called()
 
     def test_parse_replication_frame_xlogdata(self) -> None:

@@ -97,6 +97,7 @@ Note:
 - `health` now classifies each source as `healthy`, `degraded`, `critical`, or `error`
 - `inspect` / `health` now surface PostgreSQL stream runtime stats such as active session state, acknowledged LSN, reconnect counters, reconnect reasons, and last stream errors
 - `inspect` now also exposes a short ring buffer of recent PostgreSQL stream errors
+- after repeated stream failures, PostgreSQL `pgoutput` can temporarily fall back from `stream` to `peek`
 - `bootstrap` installs or refreshes source-side runtime artifacts such as PostgreSQL trigger CDC objects, logical replication slot setup, and `pgoutput` publications
 - `inspect` shows tracked tables, selected columns, and live PostgreSQL CDC state for a source
 - for `pgoutput`, `inspect` also shows whether publication tables are in sync with tracked tables
