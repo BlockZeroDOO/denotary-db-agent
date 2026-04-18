@@ -369,51 +369,14 @@ class AgentEngine:
                 entry["inspect_error"] = inspect_source["inspect_error"]
             if isinstance(cdc, dict):
                 runtime_summary = self._cdc_runtime_summary(cdc)
-                entry["cdc_contract"] = {
-                    "configured_capture_mode": cdc.get("configured_capture_mode"),
-                    "is_cdc_mode": cdc.get("is_cdc_mode"),
-                    "checkpoint_strategy": cdc.get("checkpoint_strategy"),
-                    "activity_model": cdc.get("activity_model"),
-                    "cdc_modes": cdc.get("cdc_modes", []),
-                }
+                entry["cdc_contract"] = self._build_cdc_contract_view(cdc)
                 entry["cdc_runtime"] = runtime_summary
-                if runtime_summary.get("transport") == "stream":
-                    entry["stream"] = {
-                        "configured_runtime_mode": runtime_summary.get("configured_runtime_mode"),
-                        "effective_runtime_mode": runtime_summary.get("effective_runtime_mode"),
-                        "session_active": runtime_summary.get("active"),
-                        "cursor": runtime_summary.get("cursor"),
-                        "connect_count": runtime_summary.get("connect_count"),
-                        "reconnect_count": runtime_summary.get("reconnect_count"),
-                        "last_connect_at": runtime_summary.get("last_connect_at"),
-                        "last_reconnect_at": runtime_summary.get("last_reconnect_at"),
-                        "last_reconnect_reason": runtime_summary.get("last_reconnect_reason"),
-                        "last_error": runtime_summary.get("last_error"),
-                        "last_error_kind": runtime_summary.get("last_error_kind"),
-                        "last_error_at": runtime_summary.get("last_error_at"),
-                        "error_history": runtime_summary.get("error_history", []),
-                        "failure_streak": runtime_summary.get("failure_streak"),
-                        "backoff_active": runtime_summary.get("backoff_active"),
-                        "backoff_remaining_sec": runtime_summary.get("backoff_remaining_sec"),
-                        "backoff_until": runtime_summary.get("backoff_until"),
-                        "fallback_active": runtime_summary.get("fallback_active"),
-                        "fallback_remaining_sec": runtime_summary.get("fallback_remaining_sec"),
-                        "fallback_until": runtime_summary.get("fallback_until"),
-                        "fallback_reason": runtime_summary.get("fallback_reason"),
-                        "probation_active": runtime_summary.get("probation_active"),
-                        "probation_remaining_sec": runtime_summary.get("probation_remaining_sec"),
-                        "probation_until": runtime_summary.get("probation_until"),
-                        "probation_reason": runtime_summary.get("probation_reason"),
-                    }
-                entry["logical_slot"] = {
-                    "slot_exists": cdc.get("slot_exists"),
-                    "slot_active": cdc.get("slot_active"),
-                    "restart_lsn": cdc.get("restart_lsn"),
-                    "confirmed_flush_lsn": cdc.get("confirmed_flush_lsn"),
-                    "pending_changes": cdc.get("pending_changes"),
-                    "retained_wal_bytes": cdc.get("retained_wal_bytes"),
-                    "flush_lag_bytes": cdc.get("flush_lag_bytes"),
-                }
+                stream_view = self._build_stream_runtime_view(runtime_summary)
+                if stream_view is not None:
+                    entry["stream"] = stream_view
+                logical_slot_view = self._build_logical_slot_view(cdc)
+                if logical_slot_view is not None:
+                    entry["logical_slot"] = logical_slot_view
             results.append(entry)
         return {"agent_name": self.config.agent_name, "sources": results}
 
@@ -440,9 +403,10 @@ class AgentEngine:
                 (item for item in diagnostics["sources"] if str(item.get("source_id")) == current_source_id),
                 {},
             )
-            stream = diagnostics_source.get("stream", {}) if isinstance(diagnostics_source, dict) else {}
+            runtime_summary = diagnostics_source.get("cdc_runtime", {}) if isinstance(diagnostics_source, dict) else {}
             logical_slot = diagnostics_source.get("logical_slot", {}) if isinstance(diagnostics_source, dict) else {}
             severity = str(health_source.get("severity", "unknown"))
+            cdc_metrics = self._build_cdc_metrics_view(runtime_summary, logical_slot)
 
             entry = {
                 "source_id": current_source_id,
@@ -455,18 +419,19 @@ class AgentEngine:
                 "delivery_count": int(health_source.get("deliveries", 0) or 0),
                 "proof_count": int(health_source.get("proofs", 0) or 0),
                 "dlq_count": int(health_source.get("dlq", 0) or 0),
-                    "warning_count": len(list(health_source.get("warnings", []))),
+                "warning_count": len(list(health_source.get("warnings", []))),
                 "logical_slot_pending_changes": bool(logical_slot.get("pending_changes", False)),
                 "logical_slot_retained_wal_bytes": int(logical_slot.get("retained_wal_bytes", 0) or 0),
                 "logical_slot_flush_lag_bytes": int(logical_slot.get("flush_lag_bytes", 0) or 0),
-                "stream_effective_runtime_mode": stream.get("effective_runtime_mode"),
-                "stream_session_active": bool(stream.get("session_active", False)),
-                "stream_reconnect_count": int(stream.get("reconnect_count", 0) or 0),
-                "stream_failure_streak": int(stream.get("failure_streak", 0) or 0),
-                "stream_backoff_active": bool(stream.get("backoff_active", False)),
-                "stream_fallback_active": bool(stream.get("fallback_active", False)),
-                "stream_probation_active": bool(stream.get("probation_active", False)),
+                "stream_effective_runtime_mode": runtime_summary.get("effective_runtime_mode"),
+                "stream_session_active": bool(runtime_summary.get("active", False)),
+                "stream_reconnect_count": int(runtime_summary.get("reconnect_count", 0) or 0),
+                "stream_failure_streak": int(runtime_summary.get("failure_streak", 0) or 0),
+                "stream_backoff_active": bool(runtime_summary.get("backoff_active", False)),
+                "stream_fallback_active": bool(runtime_summary.get("fallback_active", False)),
+                "stream_probation_active": bool(runtime_summary.get("probation_active", False)),
             }
+            entry.update(cdc_metrics)
             sources.append(entry)
 
             totals["source_count"] += 1
@@ -919,6 +884,83 @@ class AgentEngine:
                 "probation_reason": cdc.get("stream_probation_reason", ""),
             }
         return {}
+
+    def _build_cdc_contract_view(self, cdc: dict[str, object]) -> dict[str, object]:
+        return {
+            "configured_capture_mode": cdc.get("configured_capture_mode"),
+            "is_cdc_mode": cdc.get("is_cdc_mode"),
+            "checkpoint_strategy": cdc.get("checkpoint_strategy"),
+            "activity_model": cdc.get("activity_model"),
+            "cdc_modes": cdc.get("cdc_modes", []),
+        }
+
+    def _build_stream_runtime_view(self, runtime_summary: dict[str, object]) -> dict[str, object] | None:
+        if runtime_summary.get("transport") != "stream":
+            return None
+        return {
+            "configured_runtime_mode": runtime_summary.get("configured_runtime_mode"),
+            "effective_runtime_mode": runtime_summary.get("effective_runtime_mode"),
+            "session_active": runtime_summary.get("active"),
+            "cursor": runtime_summary.get("cursor"),
+            "connect_count": runtime_summary.get("connect_count"),
+            "reconnect_count": runtime_summary.get("reconnect_count"),
+            "last_connect_at": runtime_summary.get("last_connect_at"),
+            "last_reconnect_at": runtime_summary.get("last_reconnect_at"),
+            "last_reconnect_reason": runtime_summary.get("last_reconnect_reason"),
+            "last_error": runtime_summary.get("last_error"),
+            "last_error_kind": runtime_summary.get("last_error_kind"),
+            "last_error_at": runtime_summary.get("last_error_at"),
+            "error_history": runtime_summary.get("error_history", []),
+            "failure_streak": runtime_summary.get("failure_streak"),
+            "backoff_active": runtime_summary.get("backoff_active"),
+            "backoff_remaining_sec": runtime_summary.get("backoff_remaining_sec"),
+            "backoff_until": runtime_summary.get("backoff_until"),
+            "fallback_active": runtime_summary.get("fallback_active"),
+            "fallback_remaining_sec": runtime_summary.get("fallback_remaining_sec"),
+            "fallback_until": runtime_summary.get("fallback_until"),
+            "fallback_reason": runtime_summary.get("fallback_reason"),
+            "probation_active": runtime_summary.get("probation_active"),
+            "probation_remaining_sec": runtime_summary.get("probation_remaining_sec"),
+            "probation_until": runtime_summary.get("probation_until"),
+            "probation_reason": runtime_summary.get("probation_reason"),
+        }
+
+    def _build_logical_slot_view(self, cdc: dict[str, object]) -> dict[str, object] | None:
+        slot_keys = (
+            "slot_exists",
+            "slot_active",
+            "restart_lsn",
+            "confirmed_flush_lsn",
+            "pending_changes",
+            "retained_wal_bytes",
+            "flush_lag_bytes",
+        )
+        if not any(key in cdc for key in slot_keys):
+            return None
+        return {
+            "slot_exists": cdc.get("slot_exists"),
+            "slot_active": cdc.get("slot_active"),
+            "restart_lsn": cdc.get("restart_lsn"),
+            "confirmed_flush_lsn": cdc.get("confirmed_flush_lsn"),
+            "pending_changes": cdc.get("pending_changes"),
+            "retained_wal_bytes": cdc.get("retained_wal_bytes"),
+            "flush_lag_bytes": cdc.get("flush_lag_bytes"),
+        }
+
+    def _build_cdc_metrics_view(
+        self,
+        runtime_summary: dict[str, object],
+        logical_slot: dict[str, object],
+    ) -> dict[str, object]:
+        return {
+            "cdc_transport": runtime_summary.get("transport"),
+            "cdc_runtime_mode": runtime_summary.get("effective_runtime_mode"),
+            "cdc_notification_aware": bool(runtime_summary.get("notification_aware", False)),
+            "cdc_cursor": runtime_summary.get("cursor"),
+            "cdc_pending_changes": bool(logical_slot.get("pending_changes", False))
+            if logical_slot
+            else False,
+        }
 
     def _severity_rank(self, severity: str) -> int:
         return {"healthy": 0, "degraded": 1, "critical": 2, "error": 3}.get(severity, 3)

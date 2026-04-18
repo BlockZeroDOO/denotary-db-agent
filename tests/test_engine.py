@@ -796,6 +796,48 @@ class EngineTest(unittest.TestCase):
         self.assertEqual(source["stream_effective_runtime_mode"], "peek")
         self.assertEqual(source["stream_reconnect_count"], 2)
         self.assertTrue(source["stream_backoff_active"])
+        self.assertEqual(source["cdc_transport"], "stream")
+        self.assertEqual(source["cdc_runtime_mode"], "peek")
+
+    def test_metrics_reports_polling_cdc_runtime_contract(self) -> None:
+        engine = AgentEngine(load_config(self.config_path))
+        source_config = engine.config.sources[0]
+
+        fake_adapter = SimpleNamespace(
+            inspect=lambda: {
+                "source_id": source_config.id,
+                "adapter": source_config.adapter,
+                "capture_mode": "change_tracking",
+                "cdc": {
+                    "configured_capture_mode": "change_tracking",
+                    "is_cdc_mode": True,
+                    "checkpoint_strategy": "change_tracking_version",
+                    "activity_model": "polling",
+                    "cdc_modes": ["change_tracking"],
+                    "runtime": {
+                        "transport": "polling",
+                        "configured_runtime_mode": "change_tracking",
+                        "effective_runtime_mode": "change_tracking",
+                        "active": False,
+                        "notification_aware": False,
+                        "cursor": {"version": 42},
+                    },
+                },
+            }
+        )
+
+        with patch.object(
+            engine,
+            "runtimes",
+            return_value=[SourceRuntime(config=source_config, adapter=fake_adapter)],
+        ):
+            metrics = engine.metrics(source_config.id)
+
+        source = metrics["sources"][0]
+        self.assertEqual(source["cdc_transport"], "polling")
+        self.assertEqual(source["cdc_runtime_mode"], "change_tracking")
+        self.assertFalse(source["cdc_notification_aware"])
+        self.assertEqual(source["cdc_cursor"], {"version": 42})
 
     def test_diagnostics_and_doctor_surface_shared_cdc_contract(self) -> None:
         engine = AgentEngine(load_config(self.config_path))
