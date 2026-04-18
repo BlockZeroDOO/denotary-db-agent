@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-from collections.abc import Iterable
-
-from denotary_db_agent.adapters.base import AdapterCapabilities, BaseAdapter
-from denotary_db_agent.models import ChangeEvent, SourceCheckpoint
+from denotary_db_agent.adapters.base import AdapterCapabilities, ScaffoldCdcAdapter
 
 
-class MongoDbAdapter(BaseAdapter):
+class MongoDbAdapter(ScaffoldCdcAdapter):
     source_type = "mongodb"
+    required_connection_fields = ("uri",)
 
     def discover_capabilities(self) -> AdapterCapabilities:
         return AdapterCapabilities(
@@ -19,22 +17,5 @@ class MongoDbAdapter(BaseAdapter):
             notes="Expected CDC source is MongoDB change streams.",
         )
 
-    def validate_connection(self) -> None:
-        if not self.config.connection.get("uri"):
-            raise ValueError("mongodb connection is missing required field: uri")
-
-    def start_stream(self, checkpoint: SourceCheckpoint | None) -> Iterable[ChangeEvent]:
-        raise NotImplementedError("mongodb CDC streaming is not implemented in the scaffold yet")
-
-    def stop_stream(self) -> None:
-        return None
-
-    def read_snapshot(self, checkpoint: SourceCheckpoint | None = None) -> Iterable[ChangeEvent]:
-        return iter(())
-
-    def serialize_checkpoint(self, event: ChangeEvent) -> str:
-        return event.checkpoint_token or event.change_version
-
-    def resume_from_checkpoint(self, checkpoint: SourceCheckpoint | None) -> None:
-        return None
-
+    def _missing_connection_error(self, missing: list[str]) -> str:
+        return f"mongodb connection is missing required field: {', '.join(missing)}"

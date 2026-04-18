@@ -94,3 +94,31 @@ class BaseAdapter(ABC):
 
     def refresh_runtime(self) -> dict:
         return self.bootstrap()
+
+
+class ScaffoldCdcAdapter(BaseAdapter):
+    required_connection_fields: tuple[str, ...] = ()
+
+    def validate_connection(self) -> None:
+        missing = [name for name in self.required_connection_fields if not self.config.connection.get(name)]
+        if missing:
+            raise ValueError(self._missing_connection_error(missing))
+
+    def start_stream(self, checkpoint: SourceCheckpoint | None) -> Iterable[ChangeEvent]:
+        raise NotImplementedError(f"{self.source_type} CDC streaming is not implemented in the scaffold yet")
+
+    def stop_stream(self) -> None:
+        return None
+
+    def read_snapshot(self, checkpoint: SourceCheckpoint | None = None) -> Iterable[ChangeEvent]:
+        return iter(())
+
+    def serialize_checkpoint(self, event: ChangeEvent) -> str:
+        return event.checkpoint_token or event.change_version
+
+    def resume_from_checkpoint(self, checkpoint: SourceCheckpoint | None) -> None:
+        return None
+
+    def _missing_connection_error(self, missing: list[str]) -> str:
+        field_label = "field" if len(missing) == 1 else "fields"
+        return f"{self.source_type} connection is missing required {field_label}: {', '.join(missing)}"

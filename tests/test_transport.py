@@ -44,7 +44,14 @@ class MockChainHandler(BaseHTTPRequestHandler):
 
         if self.path == "/v1/chain/abi_json_to_bin":
             MockChainHandler.abi_calls += 1
-            self.send_error(HTTPStatus.NOT_FOUND)
+            self._send_json(
+                {
+                    "code": HTTPStatus.NOT_FOUND,
+                    "message": "Not Found",
+                    "error": {"what": "abi_json_to_bin is unavailable in this mock"},
+                },
+                status=HTTPStatus.NOT_FOUND,
+            )
             return
 
         if self.path == "/v1/chain/push_transaction":
@@ -61,9 +68,9 @@ class MockChainHandler(BaseHTTPRequestHandler):
 
         self.send_error(HTTPStatus.NOT_FOUND)
 
-    def _send_json(self, payload: dict[str, Any]) -> None:
+    def _send_json(self, payload: dict[str, Any], status: int = HTTPStatus.OK) -> None:
         encoded = json.dumps(payload).encode("utf-8")
-        self.send_response(HTTPStatus.OK)
+        self.send_response(status)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(encoded)))
         self.end_headers()

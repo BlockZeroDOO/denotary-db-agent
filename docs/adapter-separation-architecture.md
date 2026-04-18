@@ -141,3 +141,24 @@ The main architectural rule going forward:
 
 - new data sources should extend the **source layer**
 - not reimplement the **notarization pipeline**
+
+## Shared Adapter Contract Harness
+
+The shared harness for scaffold adapters now lives in:
+
+- `tests/test_adapter_contract.py`
+
+Its role is to keep non-PostgreSQL adapters aligned on the same minimal source-runtime
+contract before any database-specific CDC implementation lands.
+
+The harness verifies that every scaffold adapter:
+
+- advertises capabilities consistently
+- validates required connection fields
+- supports `bootstrap()` and `inspect()` as source-only operations
+- returns an empty snapshot safely in scaffold mode
+- serializes checkpoint progress consistently
+- raises a clear `NotImplementedError` for unimplemented CDC streaming
+
+That gives us one reusable baseline for MySQL, MariaDB, SQL Server, Oracle, MongoDB,
+and future adapters without coupling those tests to PostgreSQL behavior.
