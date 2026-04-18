@@ -83,56 +83,37 @@ class MongoDbAdapter(BaseAdapter):
 
     def bootstrap(self) -> dict:
         if self.config.options.get("dry_run_events"):
-            summary = super().bootstrap()
-            summary.update(
-                {
-                    "capture_mode": self._capture_mode(),
-                    "tracked_collections": [],
-                    "cdc": None,
-                }
+            self.validate_connection()
+            return self.build_bootstrap_result(
+                tracked_key="tracked_collections",
+                tracked_items=[],
+                cdc=None,
             )
-            return summary
         self.validate_connection()
         with self._connect() as client:
             specs = self._load_collection_specs(client)
             cdc = self._cdc_summary(client)
-        return {
-            "source_id": self.config.id,
-            "adapter": self.config.adapter,
-            "capture_mode": self._capture_mode(),
-            "tracked_collections": [self._spec_summary(spec) for spec in specs],
-            "cdc": cdc,
-        }
+        return self.build_bootstrap_result(
+            tracked_key="tracked_collections",
+            tracked_items=[self._spec_summary(spec) for spec in specs],
+            cdc=cdc,
+        )
 
     def inspect(self) -> dict:
         if self.config.options.get("dry_run_events"):
-            details = super().inspect()
-            details.update(
-                {
-                    "capture_mode": self._capture_mode(),
-                    "tracked_collections": [],
-                    "cdc": None,
-                }
+            return self.build_inspect_result(
+                tracked_key="tracked_collections",
+                tracked_items=[],
+                cdc=None,
             )
-            return details
-        capabilities = self.discover_capabilities()
         with self._connect() as client:
             specs = self._load_collection_specs(client)
             cdc = self._cdc_summary(client)
-        return {
-            "source_id": self.config.id,
-            "adapter": self.config.adapter,
-            "source_type": capabilities.source_type,
-            "capture_mode": self._capture_mode(),
-            "supports_cdc": capabilities.supports_cdc,
-            "supports_snapshot": capabilities.supports_snapshot,
-            "operations": list(capabilities.operations),
-            "capture_modes": list(capabilities.capture_modes),
-            "bootstrap_requirements": list(capabilities.bootstrap_requirements),
-            "tracked_collections": [self._spec_summary(spec) for spec in specs],
-            "cdc": cdc,
-            "notes": capabilities.notes,
-        }
+        return self.build_inspect_result(
+            tracked_key="tracked_collections",
+            tracked_items=[self._spec_summary(spec) for spec in specs],
+            cdc=cdc,
+        )
 
     def runtime_signature(self) -> str:
         if self.config.options.get("dry_run_events"):

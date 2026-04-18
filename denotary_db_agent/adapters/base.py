@@ -116,6 +116,45 @@ class BaseAdapter(ABC):
             summary.update(extra)
         return summary
 
+    def build_bootstrap_result(
+        self,
+        *,
+        tracked_key: str,
+        tracked_items: list[dict[str, object]],
+        cdc: dict[str, object] | None,
+        extra: dict[str, object] | None = None,
+    ) -> dict[str, object]:
+        summary: dict[str, object] = {
+            "source_id": self.config.id,
+            "adapter": self.config.adapter,
+            "capture_mode": self.capture_mode(),
+            tracked_key: tracked_items,
+            "cdc": cdc,
+        }
+        if extra:
+            summary.update(extra)
+        return summary
+
+    def build_inspect_result(
+        self,
+        *,
+        tracked_key: str,
+        tracked_items: list[dict[str, object]],
+        cdc: dict[str, object] | None,
+        extra: dict[str, object] | None = None,
+    ) -> dict[str, object]:
+        details = self._base_inspect_payload()
+        details.update(
+            {
+                "capture_mode": self.capture_mode(),
+                tracked_key: tracked_items,
+                "cdc": cdc,
+            }
+        )
+        if extra:
+            details.update(extra)
+        return details
+
     def bootstrap(self) -> dict:
         self.validate_connection()
         return {
@@ -124,7 +163,7 @@ class BaseAdapter(ABC):
             "bootstrap": "validated",
         }
 
-    def inspect(self) -> dict:
+    def _base_inspect_payload(self) -> dict[str, object]:
         capabilities = self.discover_capabilities()
         return {
             "source_id": self.config.id,
@@ -142,6 +181,9 @@ class BaseAdapter(ABC):
             "is_cdc_mode": self.is_cdc_mode(),
             "notes": capabilities.notes,
         }
+
+    def inspect(self) -> dict:
+        return self._base_inspect_payload()
 
     def runtime_signature(self) -> str:
         payload = {

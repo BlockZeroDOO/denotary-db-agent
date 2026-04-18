@@ -113,56 +113,37 @@ class MySqlAdapter(BaseAdapter):
 
     def bootstrap(self) -> dict:
         if self.config.options.get("dry_run_events"):
-            summary = super().bootstrap()
-            summary.update(
-                {
-                    "capture_mode": self._capture_mode(),
-                    "tracked_tables": [],
-                    "cdc": None,
-                }
+            self.validate_connection()
+            return self.build_bootstrap_result(
+                tracked_key="tracked_tables",
+                tracked_items=[],
+                cdc=None,
             )
-            return summary
         self.validate_connection()
         with self._connect() as connection:
             specs = self._load_table_specs(connection)
             cdc = self._cdc_summary(connection)
-        return {
-            "source_id": self.config.id,
-            "adapter": self.config.adapter,
-            "capture_mode": self._capture_mode(),
-            "tracked_tables": [self._spec_summary(spec) for spec in specs],
-            "cdc": cdc,
-        }
+        return self.build_bootstrap_result(
+            tracked_key="tracked_tables",
+            tracked_items=[self._spec_summary(spec) for spec in specs],
+            cdc=cdc,
+        )
 
     def inspect(self) -> dict:
         if self.config.options.get("dry_run_events"):
-            details = super().inspect()
-            details.update(
-                {
-                    "capture_mode": self._capture_mode(),
-                    "tracked_tables": [],
-                    "cdc": None,
-                }
+            return self.build_inspect_result(
+                tracked_key="tracked_tables",
+                tracked_items=[],
+                cdc=None,
             )
-            return details
-        capabilities = self.discover_capabilities()
         with self._connect() as connection:
             specs = self._load_table_specs(connection)
             cdc = self._cdc_summary(connection)
-        return {
-            "source_id": self.config.id,
-            "adapter": self.config.adapter,
-            "source_type": capabilities.source_type,
-            "capture_mode": self._capture_mode(),
-            "supports_cdc": capabilities.supports_cdc,
-            "supports_snapshot": capabilities.supports_snapshot,
-            "operations": list(capabilities.operations),
-            "capture_modes": list(capabilities.capture_modes),
-            "bootstrap_requirements": list(capabilities.bootstrap_requirements),
-            "tracked_tables": [self._spec_summary(spec) for spec in specs],
-            "cdc": cdc,
-            "notes": capabilities.notes,
-        }
+        return self.build_inspect_result(
+            tracked_key="tracked_tables",
+            tracked_items=[self._spec_summary(spec) for spec in specs],
+            cdc=cdc,
+        )
 
     def runtime_signature(self) -> str:
         if self.config.options.get("dry_run_events"):

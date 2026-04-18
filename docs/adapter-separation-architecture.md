@@ -199,6 +199,13 @@ database-specific fields first.
 - `iter_events(checkpoint)`
 - `should_wait_for_activity()`
 
+And it now also owns the common shape of source-facing bootstrap and inspect payloads:
+
+- `build_bootstrap_result(...)`
+- `build_inspect_result(...)`
+
 That keeps `AgentEngine` out of source-specific mode branching such as
 `trigger/logical/change_streams`, so future CDC-capable adapters can plug in by declaring
-capabilities instead of extending orchestrator conditionals.
+capabilities instead of extending orchestrator conditionals. It also keeps adapters focused
+on their tracked objects and CDC state instead of hand-assembling the same bootstrap/inspect
+JSON envelopes over and over again.

@@ -143,55 +143,37 @@ class PostgresAdapter(BaseAdapter):
 
     def bootstrap(self) -> dict:
         if self.config.options.get("dry_run_events"):
-            summary = super().bootstrap()
-            summary.update(
-                {
-                    "capture_mode": self._capture_mode(),
-                    "tracked_tables": [],
-                    "cdc": None,
-                }
+            self.validate_connection()
+            return self.build_bootstrap_result(
+                tracked_key="tracked_tables",
+                tracked_items=[],
+                cdc=None,
             )
-            return summary
         self.validate_connection()
         with self._connect() as connection:
             specs = self._load_table_specs(connection)
             cdc_state = self._inspect_cdc_state(connection, specs)
-        return {
-            "source_id": self.config.id,
-            "adapter": self.config.adapter,
-            "capture_mode": self._capture_mode(),
-            "tracked_tables": [self._spec_summary(spec) for spec in specs],
-            "cdc": cdc_state,
-        }
+        return self.build_bootstrap_result(
+            tracked_key="tracked_tables",
+            tracked_items=[self._spec_summary(spec) for spec in specs],
+            cdc=cdc_state,
+        )
 
     def inspect(self) -> dict:
         if self.config.options.get("dry_run_events"):
-            details = super().inspect()
-            details.update(
-                {
-                    "capture_mode": self._capture_mode(),
-                    "tracked_tables": [],
-                    "cdc": None,
-                }
+            return self.build_inspect_result(
+                tracked_key="tracked_tables",
+                tracked_items=[],
+                cdc=None,
             )
-            return details
-        capabilities = self.discover_capabilities()
         with self._connect() as connection:
             specs = self._load_table_specs(connection)
             cdc_state = self._inspect_cdc_state(connection, specs)
-        return {
-            "source_id": self.config.id,
-            "adapter": self.config.adapter,
-            "source_type": capabilities.source_type,
-            "capture_mode": self._capture_mode(),
-            "supports_cdc": capabilities.supports_cdc,
-            "supports_snapshot": capabilities.supports_snapshot,
-            "tracked_tables": [self._spec_summary(spec) for spec in specs],
-            "capture_modes": list(capabilities.capture_modes),
-            "bootstrap_requirements": list(capabilities.bootstrap_requirements),
-            "cdc": cdc_state,
-            "notes": capabilities.notes,
-        }
+        return self.build_inspect_result(
+            tracked_key="tracked_tables",
+            tracked_items=[self._spec_summary(spec) for spec in specs],
+            cdc=cdc_state,
+        )
 
     def runtime_signature(self) -> str:
         if self.config.options.get("dry_run_events"):
