@@ -215,7 +215,7 @@ class SqlServerAdapter(BaseAdapter):
         if pytds is None:
             raise RuntimeError("python-tds is required for live sqlserver adapter use")
         connection = pytds.connect(
-            server=str(self.config.connection["host"]),
+            dsn=str(self.config.connection["host"]),
             port=int(self.config.connection["port"]),
             database=str(self.config.connection["database"]),
             user=str(self.config.connection["username"]),

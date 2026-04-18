@@ -4,7 +4,7 @@ This document describes SQL Server-specific configuration.
 
 ## Current Status
 
-SQL Server now has a live-ready watermark/snapshot baseline adapter.
+SQL Server now has a live Docker-backed watermark/snapshot baseline adapter with local full-cycle proof export coverage.
 
 Declared target path:
 

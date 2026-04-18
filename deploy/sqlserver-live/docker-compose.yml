@@ -1,0 +1,20 @@
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: denotary-db-agent-sqlserver-live
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "StrongP@ssw0rd!"
+      MSSQL_PID: "Developer"
+    ports:
+      - "51433:1433"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "/opt/mssql-tools18/bin/sqlcmd -S 127.0.0.1 -U sa -P 'StrongP@ssw0rd!' -C -Q \"select 1\" > /dev/null || exit 1"
+        ]
+      start_period: 15s
+      interval: 3s
+      timeout: 3s
+      retries: 30
