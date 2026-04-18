@@ -193,22 +193,22 @@ COMMAND_KIND_OPTION_LAYOUTS = {
         {"name": "source"},
         {
             "name": "strict",
-            "predicate": lambda command_name, command: bool(COMMAND_BEHAVIORS[command_name].get("supports_strict")),
+            "predicate": lambda command_name, command: bool(command.get("behavior", {}).get("supports_strict")),
             "help": lambda command_name: f"Exit with status 1 when {command_name} reports critical or error severity",
         },
         {
             "name": "output",
-            "predicate": lambda command_name, command: bool(COMMAND_BEHAVIORS[command_name].get("supports_output_path")),
+            "predicate": lambda command_name, command: bool(command.get("behavior", {}).get("supports_output_path")),
             "help": lambda command_name: f"Write {command_name} JSON to this file",
         },
         {
             "name": "save_snapshot",
-            "predicate": lambda command_name, command: bool(COMMAND_BEHAVIORS[command_name].get("supports_snapshot_export")),
+            "predicate": lambda command_name, command: bool(command.get("behavior", {}).get("supports_snapshot_export")),
             "help": lambda command_name: f"Save {command_name} snapshot to a timestamped JSON file under the local runtime directory",
         },
         {
             "name": "snapshot_retention",
-            "predicate": lambda command_name, command: bool(COMMAND_BEHAVIORS[command_name].get("supports_snapshot_export")),
+            "predicate": lambda command_name, command: bool(command.get("behavior", {}).get("supports_snapshot_export")),
             "help": lambda command_name: f"When saving {command_name} snapshots, keep only the newest N matching files (default: 20)",
         },
     ),
@@ -239,19 +239,16 @@ def build_resolved_command_spec(command_name: str, command: dict) -> dict:
     resolved = dict(COMMAND_KIND_COMMAND_DEFAULTS["default"])
     resolved.update(COMMAND_KIND_COMMAND_DEFAULTS.get(command["kind"], {}))
     resolved.update(command)
-    resolved["behavior"] = dict(resolved.get("behavior", {}))
-    return resolved
-
-
-def build_command_behavior(command_name: str, command: dict) -> dict:
     behavior = dict(COMMAND_KIND_BEHAVIOR_DEFAULTS["default"])
-    behavior.update(COMMAND_KIND_BEHAVIOR_DEFAULTS.get(command["kind"], {}))
-    behavior.update(command.get("behavior", {}))
-    if command["kind"] == "evidence":
+    behavior.update(COMMAND_KIND_BEHAVIOR_DEFAULTS.get(resolved["kind"], {}))
+    behavior.update(resolved.get("behavior", {}))
+    if resolved["kind"] == "evidence":
         behavior.setdefault("supports_snapshot_export", True)
         behavior.setdefault("supports_output_path", True)
         behavior.setdefault("snapshot_prefix", command_name)
-    return behavior
+    resolved["behavior"] = behavior
+    return resolved
+
 
 def select_commands(*, kind: str | None = None, exclude_kind: str | None = None) -> dict[str, dict]:
     selected: dict[str, dict] = {}
@@ -278,10 +275,6 @@ def build_engine_dispatch_commands() -> dict[str, dict]:
     }
 
 
-def build_command_behaviors() -> dict[str, dict]:
-    return map_commands(RESOLVED_COMMAND_SPECS, build_command_behavior)
-
-
 def build_kind_registry(*, kind: str, mapper=None) -> dict[str, dict]:
     selected = select_commands(kind=kind)
     if mapper is None:
@@ -294,7 +287,6 @@ EVIDENCE_COMMANDS = build_kind_registry(kind="evidence")
 JSON_ENGINE_COMMANDS = build_kind_registry(kind="json_engine")
 SOURCE_ACTION_COMMANDS = build_kind_registry(kind="source_action")
 ENGINE_DISPATCH_COMMANDS = build_engine_dispatch_commands()
-COMMAND_BEHAVIORS = build_command_behaviors()
 
 
 def add_option(parser, name: str, **overrides: object) -> None:
@@ -374,7 +366,7 @@ def run_evidence_command(
     manifest_retention: int,
 ) -> dict:
     command = RESOLVED_COMMAND_SPECS[command_name]
-    behavior = COMMAND_BEHAVIORS[command_name]
+    behavior = command["behavior"]
     payload = getattr(engine, command["engine_method"])(args.source)
     maybe_export_snapshot(
         payload,
@@ -391,7 +383,7 @@ def run_evidence_command(
 
 
 def emit_command_output(command_name: str, payload: dict, *, flush: bool = False) -> int:
-    behavior = COMMAND_BEHAVIORS[command_name]
+    behavior = RESOLVED_COMMAND_SPECS[command_name]["behavior"]
     if behavior.get("output_mode") == "json":
         print(json.dumps(payload, indent=2), flush=flush)
         return 0
@@ -404,7 +396,7 @@ def emit_command_result(result: dict) -> int:
 
 
 def evaluate_command_exit_policy(command_name: str, args, payload: dict) -> int:
-    strict_on_severity = COMMAND_BEHAVIORS[command_name].get("strict_on_severity")
+    strict_on_severity = RESOLVED_COMMAND_SPECS[command_name]["behavior"].get("strict_on_severity")
     if strict_on_severity and getattr(args, "strict", False):
         if payload.get("overall", {}).get("severity") in strict_on_severity:
             return 1

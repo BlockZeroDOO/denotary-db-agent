@@ -7,7 +7,7 @@ from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
-from denotary_db_agent.cli import COMMAND_BEHAVIORS, COMMAND_KIND_BEHAVIOR_DEFAULTS, COMMAND_KIND_COMMAND_DEFAULTS, COMMAND_KIND_HANDLERS, COMMAND_KIND_OPTION_LAYOUTS, COMMAND_KIND_PARSER_BUILDERS, COMMAND_KIND_SPECS, COMMAND_SPECS, EVIDENCE_COMMANDS, ENGINE_DISPATCH_COMMANDS, JSON_ENGINE_COMMANDS, OPTION_SPECS, RESOLVED_COMMAND_SPECS, SOURCE_ACTION_COMMANDS, build_command_result, build_engine_dispatch_commands, build_kind_component_map, build_kind_registry, build_parser, command_uses_engine, emit_command_result, evaluate_command_exit_policy, execute_command, main, maybe_export_snapshot, select_commands
+from denotary_db_agent.cli import COMMAND_KIND_BEHAVIOR_DEFAULTS, COMMAND_KIND_COMMAND_DEFAULTS, COMMAND_KIND_HANDLERS, COMMAND_KIND_OPTION_LAYOUTS, COMMAND_KIND_PARSER_BUILDERS, COMMAND_KIND_SPECS, COMMAND_SPECS, EVIDENCE_COMMANDS, ENGINE_DISPATCH_COMMANDS, JSON_ENGINE_COMMANDS, OPTION_SPECS, RESOLVED_COMMAND_SPECS, SOURCE_ACTION_COMMANDS, build_command_result, build_engine_dispatch_commands, build_kind_component_map, build_kind_registry, build_parser, command_uses_engine, emit_command_result, evaluate_command_exit_policy, execute_command, main, maybe_export_snapshot, select_commands
 from denotary_db_agent.diagnostics_snapshots import (
     artifact_kind,
     build_snapshot_metadata,
@@ -47,13 +47,13 @@ class CliTest(unittest.TestCase):
         self.assertEqual(COMMAND_KIND_BEHAVIOR_DEFAULTS["default"]["output_mode"], "json")
         self.assertTrue(COMMAND_KIND_BEHAVIOR_DEFAULTS["evidence"]["supports_snapshot_export"])
         self.assertFalse(COMMAND_KIND_COMMAND_DEFAULTS["json_engine"]["source_arg"])
-        self.assertTrue(COMMAND_BEHAVIORS["doctor"]["supports_snapshot_export"])
-        self.assertTrue(COMMAND_BEHAVIORS["doctor"]["supports_output_path"])
-        self.assertTrue(COMMAND_BEHAVIORS["doctor"]["supports_strict"])
-        self.assertEqual(COMMAND_BEHAVIORS["doctor"]["strict_on_severity"], {"critical", "error"})
-        self.assertEqual(COMMAND_BEHAVIORS["report"]["snapshot_prefix"], "report")
-        self.assertEqual(COMMAND_BEHAVIORS["metrics"]["output_mode"], "json")
-        self.assertTrue(COMMAND_BEHAVIORS["diagnostics"]["supports_output_path"])
+        self.assertTrue(RESOLVED_COMMAND_SPECS["doctor"]["behavior"]["supports_snapshot_export"])
+        self.assertTrue(RESOLVED_COMMAND_SPECS["doctor"]["behavior"]["supports_output_path"])
+        self.assertTrue(RESOLVED_COMMAND_SPECS["doctor"]["behavior"]["supports_strict"])
+        self.assertEqual(RESOLVED_COMMAND_SPECS["doctor"]["behavior"]["strict_on_severity"], {"critical", "error"})
+        self.assertEqual(RESOLVED_COMMAND_SPECS["report"]["behavior"]["snapshot_prefix"], "report")
+        self.assertEqual(RESOLVED_COMMAND_SPECS["metrics"]["behavior"]["output_mode"], "json")
+        self.assertTrue(RESOLVED_COMMAND_SPECS["diagnostics"]["behavior"]["supports_output_path"])
 
     def test_evaluate_command_exit_policy_uses_behavior_contract(self) -> None:
         args = type("Args", (), {"strict": True})()
