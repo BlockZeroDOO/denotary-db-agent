@@ -1,0 +1,15 @@
+services:
+  mongodb:
+    image: mongo:7.0
+    container_name: denotary-db-agent-mongodb-live
+    command:
+      - --bind_ip_all
+    ports:
+      - "27018:27017"
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet --eval \"db.adminCommand({ ping: 1 }).ok\" | grep 1"]
+      interval: 3s
+      timeout: 5s
+      retries: 30
+    volumes:
+      - ./init.js:/docker-entrypoint-initdb.d/01-init.js:ro
