@@ -7,7 +7,7 @@ from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
-from denotary_db_agent.cli import COMMAND_GROUPS, COMMAND_GROUP_ALIASES, COMMAND_GROUP_BUILDERS, COMMAND_GROUP_SPECS, COMMAND_KIND_BEHAVIOR_DEFAULTS, COMMAND_KIND_COMMAND_DEFAULTS, COMMAND_KIND_HANDLERS, COMMAND_KIND_OPTION_LAYOUTS, COMMAND_KIND_PARSER_BUILDERS, COMMAND_KIND_SPECS, COMMAND_SPECS, EVIDENCE_COMMANDS, ENGINE_DISPATCH_COMMANDS, JSON_ENGINE_COMMANDS, OPTION_SPECS, RESOLVED_COMMAND_SPECS, SOURCE_ACTION_COMMANDS, build_command_group, build_command_group_aliases, build_command_group_builders, build_command_groups, build_command_result, build_engine_dispatch_commands, build_kind_component_map, build_kind_registry, build_parser, command_uses_engine, emit_command_result, evaluate_command_exit_policy, execute_command, get_command_alias, get_command_behavior, get_command_group, get_command_kind_spec, get_command_spec, main, maybe_export_snapshot, select_commands
+from denotary_db_agent.cli import COMMAND_ALIAS_SPECS, COMMAND_GROUPS, COMMAND_GROUP_ALIASES, COMMAND_GROUP_BUILDERS, COMMAND_GROUP_SPECS, COMMAND_KIND_BEHAVIOR_DEFAULTS, COMMAND_KIND_COMMAND_DEFAULTS, COMMAND_KIND_HANDLERS, COMMAND_KIND_OPTION_LAYOUTS, COMMAND_KIND_PARSER_BUILDERS, COMMAND_KIND_SPECS, COMMAND_SPECS, EVIDENCE_COMMANDS, ENGINE_DISPATCH_COMMANDS, JSON_ENGINE_COMMANDS, OPTION_SPECS, RESOLVED_COMMAND_SPECS, SOURCE_ACTION_COMMANDS, build_command_alias, build_command_group, build_command_group_aliases, build_command_group_builders, build_command_groups, build_command_result, build_engine_dispatch_commands, build_kind_component_map, build_kind_registry, build_parser, command_uses_engine, emit_command_result, evaluate_command_exit_policy, execute_command, get_command_alias, get_command_behavior, get_command_group, get_command_kind_spec, get_command_spec, main, maybe_export_snapshot, select_commands
 from denotary_db_agent.diagnostics_snapshots import (
     artifact_kind,
     build_snapshot_metadata,
@@ -44,9 +44,11 @@ class CliTest(unittest.TestCase):
         self.assertEqual(build_kind_registry(kind="evidence"), EVIDENCE_COMMANDS)
         self.assertIn("evidence", COMMAND_GROUP_SPECS)
         self.assertIn("evidence", COMMAND_GROUP_BUILDERS)
+        self.assertIn("EVIDENCE_COMMANDS", COMMAND_ALIAS_SPECS)
         self.assertEqual(set(build_command_group_builders()), set(COMMAND_GROUP_SPECS))
         self.assertEqual(build_command_group("evidence"), EVIDENCE_COMMANDS)
         self.assertEqual(build_command_groups()["evidence"], EVIDENCE_COMMANDS)
+        self.assertEqual(build_command_alias("EVIDENCE_COMMANDS"), EVIDENCE_COMMANDS)
         self.assertEqual(build_command_group_aliases()["EVIDENCE_COMMANDS"], EVIDENCE_COMMANDS)
         self.assertEqual(COMMAND_GROUP_ALIASES["EVIDENCE_COMMANDS"], EVIDENCE_COMMANDS)
         self.assertEqual(get_command_alias("EVIDENCE_COMMANDS"), EVIDENCE_COMMANDS)
@@ -115,6 +117,7 @@ class CliTest(unittest.TestCase):
         self.assertEqual(ENGINE_DISPATCH_COMMANDS["run"]["kind"], "run")
         self.assertEqual(ENGINE_DISPATCH_COMMANDS["checkpoint"]["kind"], "checkpoint")
         self.assertEqual(ENGINE_DISPATCH_COMMANDS["proof"]["kind"], "proof")
+        self.assertEqual(build_command_alias("ENGINE_DISPATCH_COMMANDS"), ENGINE_DISPATCH_COMMANDS)
         self.assertEqual(COMMAND_GROUP_ALIASES["ENGINE_DISPATCH_COMMANDS"], ENGINE_DISPATCH_COMMANDS)
         self.assertEqual(get_command_alias("ENGINE_DISPATCH_COMMANDS"), ENGINE_DISPATCH_COMMANDS)
         self.assertEqual(COMMAND_GROUPS["engine_dispatch"], ENGINE_DISPATCH_COMMANDS)

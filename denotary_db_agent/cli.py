@@ -326,13 +326,26 @@ def build_command_groups() -> dict[str, dict[str, dict]]:
     }
 
 
+COMMAND_ALIAS_SPECS = {
+    "EVIDENCE_COMMANDS": {"group": "evidence"},
+    "JSON_ENGINE_COMMANDS": {"group": "json_engine"},
+    "SOURCE_ACTION_COMMANDS": {"group": "source_action"},
+    "ENGINE_DISPATCH_COMMANDS": {"group": "engine_dispatch"},
+}
+
+
+def build_command_alias(alias_name: str) -> dict[str, dict]:
+    try:
+        alias = COMMAND_ALIAS_SPECS[alias_name]
+    except KeyError as exc:
+        raise KeyError(f"unknown command alias: {alias_name}") from exc
+    return build_command_group(alias["group"])
+
+
 def build_command_group_aliases() -> dict[str, dict[str, dict]]:
-    groups = build_command_groups()
     return {
-        "EVIDENCE_COMMANDS": groups["evidence"],
-        "JSON_ENGINE_COMMANDS": groups["json_engine"],
-        "SOURCE_ACTION_COMMANDS": groups["source_action"],
-        "ENGINE_DISPATCH_COMMANDS": groups["engine_dispatch"],
+        alias_name: build_command_alias(alias_name)
+        for alias_name in COMMAND_ALIAS_SPECS
     }
 
 
@@ -358,10 +371,7 @@ def get_command_group(group_name: str) -> dict[str, dict]:
 
 
 def get_command_alias(alias_name: str) -> dict[str, dict]:
-    try:
-        return COMMAND_GROUP_ALIASES[alias_name]
-    except KeyError as exc:
-        raise KeyError(f"unknown command alias: {alias_name}") from exc
+    return build_command_alias(alias_name)
 
 
 def add_option(parser, name: str, **overrides: object) -> None:
