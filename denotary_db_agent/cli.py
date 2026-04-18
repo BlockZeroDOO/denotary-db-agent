@@ -27,6 +27,32 @@ def attach_snapshot_metadata(
     return payload
 
 
+def maybe_export_snapshot(
+    payload: dict,
+    *,
+    state_db: str,
+    source_id: str | None,
+    prefix: str,
+    output_path: str | None,
+    save_snapshot: bool,
+    retention: int,
+    manifest_retention: int,
+    exporter,
+) -> dict:
+    if not output_path and not save_snapshot:
+        return payload
+    snapshot_path, removed = exporter(
+        payload,
+        state_db=state_db,
+        source_id=source_id,
+        prefix=prefix,
+        output_path=output_path if output_path else None,
+        retention=retention,
+        manifest_retention=manifest_retention,
+    )
+    return attach_snapshot_metadata(payload, snapshot_path=snapshot_path, removed=removed, state_db=state_db)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="denotary-db-agent")
     parser.add_argument("--config", required=True, help="Path to agent config JSON")
@@ -169,27 +195,17 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "doctor":
         report = engine.doctor(args.source)
-        if args.output:
-            snapshot_path, removed = export_named_snapshot(
-                report,
-                state_db=config.storage.state_db,
-                source_id=args.source,
-                prefix="doctor",
-                output_path=args.output,
-                retention=args.snapshot_retention,
-                manifest_retention=manifest_retention,
-            )
-            attach_snapshot_metadata(report, snapshot_path=snapshot_path, removed=removed, state_db=config.storage.state_db)
-        elif args.save_snapshot:
-            snapshot_path, removed = export_named_snapshot(
-                report,
-                state_db=config.storage.state_db,
-                source_id=args.source,
-                prefix="doctor",
-                retention=args.snapshot_retention,
-                manifest_retention=manifest_retention,
-            )
-            attach_snapshot_metadata(report, snapshot_path=snapshot_path, removed=removed, state_db=config.storage.state_db)
+        maybe_export_snapshot(
+            report,
+            state_db=config.storage.state_db,
+            source_id=args.source,
+            prefix="doctor",
+            output_path=args.output,
+            save_snapshot=args.save_snapshot,
+            retention=args.snapshot_retention,
+            manifest_retention=manifest_retention,
+            exporter=export_named_snapshot,
+        )
         print(json.dumps(report, indent=2))
         if args.strict and report.get("overall", {}).get("severity") in {"critical", "error"}:
             return 1
@@ -199,50 +215,39 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "report":
         report = engine.report(args.source)
-        if args.output:
-            snapshot_path, removed = export_named_snapshot(
-                report,
-                state_db=config.storage.state_db,
-                source_id=args.source,
-                prefix="report",
-                output_path=args.output,
-                retention=args.snapshot_retention,
-                manifest_retention=manifest_retention,
-            )
-            attach_snapshot_metadata(report, snapshot_path=snapshot_path, removed=removed, state_db=config.storage.state_db)
-        elif args.save_snapshot:
-            snapshot_path, removed = export_named_snapshot(
-                report,
-                state_db=config.storage.state_db,
-                source_id=args.source,
-                prefix="report",
-                retention=args.snapshot_retention,
-                manifest_retention=manifest_retention,
-            )
-            attach_snapshot_metadata(report, snapshot_path=snapshot_path, removed=removed, state_db=config.storage.state_db)
+        maybe_export_snapshot(
+            report,
+            state_db=config.storage.state_db,
+            source_id=args.source,
+            prefix="report",
+            output_path=args.output,
+            save_snapshot=args.save_snapshot,
+            retention=args.snapshot_retention,
+            manifest_retention=manifest_retention,
+            exporter=export_named_snapshot,
+        )
         print(json.dumps(report, indent=2))
         return 0
     if args.command == "diagnostics":
         diagnostics = engine.diagnostics(args.source)
-        if args.output:
-            snapshot_path, removed = export_diagnostics_snapshot(
-                diagnostics,
-                state_db=config.storage.state_db,
-                source_id=args.source,
-                output_path=args.output,
-                retention=args.snapshot_retention,
-                manifest_retention=manifest_retention,
-            )
-            attach_snapshot_metadata(diagnostics, snapshot_path=snapshot_path, removed=removed, state_db=config.storage.state_db)
-        elif args.save_snapshot:
-            snapshot_path, removed = export_diagnostics_snapshot(
-                diagnostics,
-                state_db=config.storage.state_db,
-                source_id=args.source,
-                retention=args.snapshot_retention,
-                manifest_retention=manifest_retention,
-            )
-            attach_snapshot_metadata(diagnostics, snapshot_path=snapshot_path, removed=removed, state_db=config.storage.state_db)
+        maybe_export_snapshot(
+            diagnostics,
+            state_db=config.storage.state_db,
+            source_id=args.source,
+            prefix="diagnostics",
+            output_path=args.output,
+            save_snapshot=args.save_snapshot,
+            retention=args.snapshot_retention,
+            manifest_retention=manifest_retention,
+            exporter=lambda payload, **kwargs: export_diagnostics_snapshot(
+                payload,
+                state_db=kwargs["state_db"],
+                source_id=kwargs["source_id"],
+                output_path=kwargs.get("output_path"),
+                retention=kwargs["retention"],
+                manifest_retention=kwargs["manifest_retention"],
+            ),
+        )
         print(json.dumps(diagnostics, indent=2))
         return 0
     if args.command == "bootstrap":

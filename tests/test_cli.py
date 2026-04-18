@@ -7,7 +7,7 @@ from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
-from denotary_db_agent.cli import attach_snapshot_metadata, main
+from denotary_db_agent.cli import attach_snapshot_metadata, main, maybe_export_snapshot
 from denotary_db_agent.diagnostics_snapshots import (
     default_diagnostics_snapshot_path,
     prune_diagnostics_snapshots,
@@ -16,6 +16,30 @@ from denotary_db_agent.diagnostics_snapshots import (
 
 
 class CliTest(unittest.TestCase):
+    def test_maybe_export_snapshot_returns_payload_when_export_not_requested(self) -> None:
+        payload = {"agent_name": "denotary-db-agent"}
+        exporter_calls = {"count": 0}
+
+        def fake_exporter(*args, **kwargs):
+            exporter_calls["count"] += 1
+            return Path("snapshot.json"), []
+
+        result = maybe_export_snapshot(
+            payload,
+            state_db="C:/runtime/state.sqlite3",
+            source_id="pg-core-ledger",
+            prefix="report",
+            output_path=None,
+            save_snapshot=False,
+            retention=20,
+            manifest_retention=200,
+            exporter=fake_exporter,
+        )
+
+        self.assertIs(result, payload)
+        self.assertEqual(exporter_calls["count"], 0)
+        self.assertNotIn("snapshot_path", result)
+
     def test_attach_snapshot_metadata_populates_standard_fields(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             payload = {"agent_name": "denotary-db-agent"}
