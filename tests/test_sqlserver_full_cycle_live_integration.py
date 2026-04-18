@@ -426,6 +426,8 @@ class SqlServerFullCycleLiveIntegrationTest(unittest.TestCase):
         audit_port: int,
         chain_port: int,
         batch_enabled: bool = False,
+        capture_mode: str = "watermark",
+        backfill_mode: str = "full",
     ) -> None:
         config = {
             "agent_name": "sqlserver-full-cycle-live-test",
@@ -465,11 +467,11 @@ class SqlServerFullCycleLiveIntegrationTest(unittest.TestCase):
                         "password": "StrongP@ssw0rd!",
                         "database": "ledger",
                     },
-                    "backfill_mode": "full",
+                    "backfill_mode": backfill_mode,
                     "batch_enabled": batch_enabled,
                     "batch_size": 10,
                     "options": {
-                        "capture_mode": "watermark",
+                        "capture_mode": capture_mode,
                         "watermark_column": "updated_at",
                         "commit_timestamp_column": "updated_at",
                         "row_limit": 100,
@@ -561,6 +563,41 @@ class SqlServerFullCycleLiveIntegrationTest(unittest.TestCase):
         self.assertEqual(proof_payload["request_id"], "sqlserver-batch-request-1")
         self.assertEqual(proof_payload["mode"], "batch")
         self.assertEqual(len(proof_payload["members"]), 2)
+
+    def test_live_sqlserver_change_tracking_full_cycle_exports_proof_bundle(self) -> None:
+        self._write_config(
+            ingress_port=self.servers[0].server_address[1],
+            watcher_port=self.servers[1].server_address[1],
+            receipt_port=self.servers[2].server_address[1],
+            audit_port=self.servers[3].server_address[1],
+            chain_port=self.servers[4].server_address[1],
+            capture_mode="change_tracking",
+            backfill_mode="none",
+        )
+        engine = AgentEngine(load_config(self.config_path))
+
+        baseline_result = engine.run_once()
+        self.assertEqual(baseline_result["processed"], 0)
+        self.assertEqual(baseline_result["failed"], 0)
+
+        self._seed_single_row()
+        result = engine.run_once()
+
+        self.assertEqual(result["processed"], 1)
+        self.assertEqual(result["failed"], 0)
+        deliveries = engine.store.list_deliveries("sqlserver-core-ledger")
+        self.assertEqual(len(deliveries), 1)
+        self.assertEqual(deliveries[0]["status"], "finalized_exported")
+
+        proofs = engine.store.list_proofs("sqlserver-core-ledger")
+        self.assertEqual(len(proofs), 1)
+        export_path = proofs[0]["export_path"]
+        self.assertTrue(export_path)
+        self.assertTrue(Path(str(export_path)).exists())
+
+        proof_payload = json.loads(Path(str(export_path)).read_text(encoding="utf-8"))
+        self.assertEqual(proof_payload["request_id"], "sqlserver-request-1")
+        self.assertEqual(proof_payload["receipt"]["tx_id"], "c" * 64)
 
 
 if __name__ == "__main__":

@@ -8,7 +8,7 @@ from decimal import Decimal
 from typing import Any, Iterator
 
 from denotary_db_agent.adapters.base import AdapterCapabilities, BaseAdapter
-from denotary_db_agent.models import ChangeEvent, SourceCheckpoint
+from denotary_db_agent.models import ChangeEvent, SourceCheckpoint, utc_now
 
 try:
     import pytds
@@ -30,25 +30,53 @@ class SqlServerTableSpec:
         return f"{self.schema_name}.{self.table_name}"
 
 
+@dataclass
+class SqlServerChangeTrackingCheckpoint:
+    version: int
+    table_key: str | None = None
+    pk: list[Any] | None = None
+
+    @property
+    def token(self) -> str:
+        payload: dict[str, Any] = {
+            "mode": "change_tracking",
+            "version": self.version,
+        }
+        if self.table_key:
+            payload["table_key"] = self.table_key
+        if self.pk is not None:
+            payload["pk"] = list(self.pk)
+        return json.dumps(payload, sort_keys=True)
+
+
 class SqlServerAdapter(BaseAdapter):
     source_type = "sqlserver"
     minimum_version = "2019"
     adapter_notes = (
-        "Live baseline implementation uses SQL Server watermark-based snapshot polling. "
-        "SQL Server CDC or Change Tracking remains the next SQL Server-specific step."
+        "SQL Server supports both watermark-based snapshot polling and a native Change Tracking CDC baseline. "
+        "Full SQL Server CDC capture remains the next SQL Server-specific step."
     )
 
+    def __init__(self, config):
+        super().__init__(config)
+        self._change_tracking_baseline_version: int | None = None
+
     def discover_capabilities(self) -> AdapterCapabilities:
+        capture_mode = self._capture_mode()
         return AdapterCapabilities(
             source_type=self.source_type,
             minimum_version=self.minimum_version,
-            supports_cdc=False,
+            supports_cdc=True,
             supports_snapshot=True,
-            operations=("snapshot",),
-            capture_modes=("watermark",),
-            cdc_modes=(),
+            operations=("snapshot",) if capture_mode == "watermark" else ("insert", "update", "delete"),
+            capture_modes=("watermark", "change_tracking"),
+            cdc_modes=("change_tracking",),
             default_capture_mode="watermark",
-            bootstrap_requirements=("tracked tables visible", "watermark columns configured"),
+            bootstrap_requirements=(
+                ("tracked tables visible", "watermark columns configured")
+                if capture_mode == "watermark"
+                else ("tracked tables visible", "database change tracking enabled", "tracked tables change tracking enabled")
+            ),
             notes=self.adapter_notes,
         )
 
@@ -66,6 +94,8 @@ class SqlServerAdapter(BaseAdapter):
                 cursor.execute("select @@version as version")
                 cursor.fetchone()
             self._load_table_specs(connection)
+            if self._capture_mode() == "change_tracking":
+                self._validate_change_tracking_prerequisites(connection)
 
     def bootstrap(self) -> dict:
         if self.config.options.get("dry_run_events"):
@@ -81,12 +111,13 @@ class SqlServerAdapter(BaseAdapter):
         self.validate_connection()
         with self._connect() as connection:
             specs = self._load_table_specs(connection)
+            cdc = self._cdc_summary(connection)
         return {
             "source_id": self.config.id,
             "adapter": self.config.adapter,
             "capture_mode": self._capture_mode(),
             "tracked_tables": [self._spec_summary(spec) for spec in specs],
-            "cdc": None,
+            "cdc": cdc,
         }
 
     def inspect(self) -> dict:
@@ -103,6 +134,7 @@ class SqlServerAdapter(BaseAdapter):
         capabilities = self.discover_capabilities()
         with self._connect() as connection:
             specs = self._load_table_specs(connection)
+            cdc = self._cdc_summary(connection)
         return {
             "source_id": self.config.id,
             "adapter": self.config.adapter,
@@ -112,9 +144,10 @@ class SqlServerAdapter(BaseAdapter):
             "supports_snapshot": capabilities.supports_snapshot,
             "operations": list(capabilities.operations),
             "capture_modes": list(capabilities.capture_modes),
+            "cdc_modes": list(capabilities.cdc_modes),
             "bootstrap_requirements": list(capabilities.bootstrap_requirements),
             "tracked_tables": [self._spec_summary(spec) for spec in specs],
-            "cdc": None,
+            "cdc": cdc,
             "notes": capabilities.notes,
         }
 
@@ -136,7 +169,62 @@ class SqlServerAdapter(BaseAdapter):
         return self.bootstrap()
 
     def start_stream(self, checkpoint: SourceCheckpoint | None):
-        raise NotImplementedError("sqlserver CDC streaming is not implemented yet; use watermark snapshot mode")
+        if self._capture_mode() != "change_tracking":
+            raise NotImplementedError(
+                f"{self.source_type} CDC streaming is only available when capture_mode is set to change_tracking"
+            )
+        if self.config.options.get("dry_run_events"):
+            return iter(())
+
+        with self._connect() as connection:
+            specs = self._load_table_specs(connection)
+            current_version = self._current_change_tracking_version(connection)
+            self._validate_change_tracking_prerequisites(connection, current_version=current_version)
+            checkpoint_state = self._parse_change_tracking_checkpoint(checkpoint)
+            if checkpoint_state is None:
+                baseline_version = self._change_tracking_baseline_version
+                if baseline_version is None:
+                    if self.config.backfill_mode == "none":
+                        baseline_version = current_version
+                        self._change_tracking_baseline_version = baseline_version
+                        return iter(())
+                    baseline_version = 0
+                checkpoint_state = SqlServerChangeTrackingCheckpoint(version=baseline_version)
+            candidates = self._fetch_change_tracking_rows(connection, specs, checkpoint_state)
+            if not candidates:
+                self._change_tracking_baseline_version = checkpoint_state.version
+                return iter(())
+
+        row_limit = int(self.config.options.get("row_limit", self.config.batch_size))
+        limited = candidates[: row_limit if row_limit > 0 else len(candidates)]
+        pending: list[ChangeEvent] = []
+        for index, item in enumerate(limited):
+            next_item = limited[index + 1] if index + 1 < len(limited) else None
+            has_more_same_version = next_item is not None and int(next_item["change_version"]) == int(item["change_version"])
+            checkpoint_token = SqlServerChangeTrackingCheckpoint(
+                version=int(item["change_version"]),
+                table_key=str(item["table_key"]) if has_more_same_version else None,
+                pk=list(item["pk_marker"]) if has_more_same_version else None,
+            ).token
+            pending.append(
+                ChangeEvent(
+                    source_id=self.config.id,
+                    source_type=self.source_type,
+                    source_instance=self.config.source_instance,
+                    database_name=self.config.database_name,
+                    schema_or_namespace=item["spec"].schema_name,
+                    table_or_collection=item["spec"].table_name,
+                    operation=item["operation"],
+                    primary_key=item["primary_key"],
+                    change_version=f"{item['table_key']}:{item['change_version']}:{self._pk_marker(item['primary_key'], item['spec'].primary_key_columns)}",
+                    commit_timestamp=item["commit_timestamp"],
+                    before=item["before"],
+                    after=item["after"],
+                    metadata=item["metadata"],
+                    checkpoint_token=checkpoint_token,
+                )
+            )
+        return iter(pending)
 
     def stop_stream(self) -> None:
         return None
@@ -234,6 +322,21 @@ class SqlServerAdapter(BaseAdapter):
     def _capture_mode(self) -> str:
         return self.capture_mode()
 
+    def _cdc_summary(self, connection: Any) -> dict[str, Any] | None:
+        if self._capture_mode() != "change_tracking":
+            return None
+        current_version = self._current_change_tracking_version(connection)
+        tracked_tables: list[dict[str, Any]] = []
+        database_enabled = self._is_change_tracking_enabled(connection)
+        for spec in self._load_table_specs(connection):
+            tracked_tables.append(self._change_tracking_table_status(connection, spec))
+        return {
+            "capture_mode": "change_tracking",
+            "database_enabled": database_enabled,
+            "current_version": current_version,
+            "tracked_tables": tracked_tables,
+        }
+
     def _row_get(self, row: dict[str, Any], key: str) -> Any:
         if key in row:
             return row[key]
@@ -244,6 +347,13 @@ class SqlServerAdapter(BaseAdapter):
         if key.lower() in lower_map:
             return lower_map[key.lower()]
         raise KeyError(key)
+
+    def _row_has(self, row: dict[str, Any], key: str) -> bool:
+        try:
+            self._row_get(row, key)
+            return True
+        except KeyError:
+            return False
 
     def _load_table_specs(self, connection: Any) -> list[SqlServerTableSpec]:
         include = self.config.include or {"dbo": []}
@@ -312,6 +422,62 @@ class SqlServerAdapter(BaseAdapter):
                     )
         return specs
 
+    def _is_change_tracking_enabled(self, connection: Any) -> bool:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                select case when exists (
+                    select 1 from sys.change_tracking_databases where database_id = db_id()
+                ) then 1 else 0 end as enabled
+                """
+            )
+            row = cursor.fetchone() or {}
+        return bool(self._row_get(row, "enabled"))
+
+    def _current_change_tracking_version(self, connection: Any) -> int:
+        with connection.cursor() as cursor:
+            cursor.execute("select change_tracking_current_version() as current_version")
+            row = cursor.fetchone() or {}
+        raw = self._row_get(row, "current_version")
+        return int(raw or 0)
+
+    def _change_tracking_table_status(self, connection: Any, spec: SqlServerTableSpec) -> dict[str, Any]:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                select
+                    ctt.begin_version as begin_version,
+                    ctt.min_valid_version as min_valid_version,
+                    ctt.cleanup_version as cleanup_version,
+                    ctt.is_track_columns_updated_on as is_track_columns_updated_on
+                from sys.change_tracking_tables ctt
+                join sys.tables t on ctt.object_id = t.object_id
+                join sys.schemas s on t.schema_id = s.schema_id
+                where s.name = %s and t.name = %s
+                """,
+                (spec.schema_name, spec.table_name),
+            )
+            row = cursor.fetchone() or {}
+        enabled = bool(row)
+        return {
+            "table_key": spec.key,
+            "enabled": enabled,
+            "begin_version": int(self._row_get(row, "begin_version") or 0) if enabled else None,
+            "min_valid_version": int(self._row_get(row, "min_valid_version") or 0) if enabled else None,
+            "cleanup_version": int(self._row_get(row, "cleanup_version") or 0) if enabled else None,
+            "track_columns_updated": bool(self._row_get(row, "is_track_columns_updated_on")) if enabled else None,
+        }
+
+    def _validate_change_tracking_prerequisites(self, connection: Any, current_version: int | None = None) -> None:
+        if not self._is_change_tracking_enabled(connection):
+            raise ValueError(f"{self.source_type} database change tracking must be enabled for capture_mode=change_tracking")
+        for spec in self._load_table_specs(connection):
+            status = self._change_tracking_table_status(connection, spec)
+            if not status["enabled"]:
+                raise ValueError(f"{self.source_type} table {spec.key} must have change tracking enabled")
+            if current_version is not None and int(status["min_valid_version"] or 0) > current_version:
+                raise ValueError(f"{self.source_type} change tracking min_valid_version for {spec.key} is ahead of current version")
+
     def _fetch_rows(
         self,
         connection: Any,
@@ -348,6 +514,98 @@ class SqlServerAdapter(BaseAdapter):
             cursor.execute(sql, tuple(params))
             return list(cursor.fetchall())
 
+    def _fetch_change_tracking_rows(
+        self,
+        connection: Any,
+        specs: list[SqlServerTableSpec],
+        checkpoint: SqlServerChangeTrackingCheckpoint,
+    ) -> list[dict[str, Any]]:
+        candidates: list[dict[str, Any]] = []
+        base_version = checkpoint.version
+        if checkpoint.table_key and base_version > 0:
+            base_version -= 1
+        poll_timestamp = utc_now().replace(microsecond=0).isoformat().replace("+00:00", "Z")
+        for spec in specs:
+            table_status = self._change_tracking_table_status(connection, spec)
+            min_valid_version = int(table_status["min_valid_version"] or 0)
+            if checkpoint.version and min_valid_version and checkpoint.version < min_valid_version:
+                raise ValueError(
+                    f"{self.source_type} checkpoint version {checkpoint.version} is older than min valid change tracking version "
+                    f"{min_valid_version} for {spec.key}; reset checkpoint or re-bootstrap the source"
+                )
+            rows = self._fetch_change_tracking_table_rows(connection, spec, base_version)
+            for row in rows:
+                change_version = int(self._row_get(row, "sys_change_version"))
+                pk_marker = [self._coerce_pk_value(self._row_get(row, column)) for column in spec.primary_key_columns]
+                if checkpoint.table_key and change_version == checkpoint.version:
+                    if spec.key < checkpoint.table_key:
+                        continue
+                    if spec.key == checkpoint.table_key and checkpoint.pk is not None and pk_marker <= list(checkpoint.pk):
+                        continue
+                operation = self._map_change_tracking_operation(str(self._row_get(row, "sys_change_operation")))
+                primary_key = {
+                    column: self._normalize_value(self._row_get(row, column))
+                    for column in spec.primary_key_columns
+                }
+                after_row = None
+                commit_timestamp = poll_timestamp
+                if operation != "delete":
+                    after_row = {
+                        column: self._normalize_value(self._row_get(row, column))
+                        for column in spec.selected_columns
+                    }
+                    commit_raw = self._row_get(row, spec.commit_timestamp_column) if self._row_has(row, spec.commit_timestamp_column) else None
+                    if commit_raw is not None:
+                        commit_timestamp = self._normalize_timestamp(commit_raw)
+                candidates.append(
+                    {
+                        "spec": spec,
+                        "table_key": spec.key,
+                        "change_version": change_version,
+                        "operation": operation,
+                        "primary_key": primary_key,
+                        "pk_marker": pk_marker,
+                        "before": None,
+                        "after": after_row,
+                        "commit_timestamp": commit_timestamp,
+                        "metadata": {
+                            "capture_mode": "change_tracking",
+                            "change_tracking_version": change_version,
+                            "change_tracking_operation": str(self._row_get(row, "sys_change_operation")),
+                            "change_tracking_columns": self._normalize_value(self._row_get(row, "sys_change_columns")) if self._row_has(row, "sys_change_columns") else None,
+                            "primary_key_columns": spec.primary_key_columns,
+                        },
+                    }
+                )
+        candidates.sort(key=lambda item: (int(item["change_version"]), str(item["table_key"]), *list(item["pk_marker"])))
+        return candidates
+
+    def _fetch_change_tracking_table_rows(self, connection: Any, spec: SqlServerTableSpec, version: int) -> list[dict[str, Any]]:
+        ct_pk_columns = ", ".join(f"CT.{self._quote_identifier(column)} as {self._quote_identifier(column)}" for column in spec.primary_key_columns)
+        row_columns = ", ".join(
+            f"T.{self._quote_identifier(column)} as {self._quote_identifier(column)}"
+            for column in spec.selected_columns
+        )
+        join_predicate = " and ".join(
+            f"T.{self._quote_identifier(column)} = CT.{self._quote_identifier(column)}"
+            for column in spec.primary_key_columns
+        )
+        sql = f"""
+            select
+                CT.SYS_CHANGE_VERSION as sys_change_version,
+                CT.SYS_CHANGE_OPERATION as sys_change_operation,
+                CT.SYS_CHANGE_COLUMNS as sys_change_columns,
+                {ct_pk_columns},
+                {row_columns}
+            from CHANGETABLE(CHANGES {self._qualified_table(spec.schema_name, spec.table_name)}, %s) as CT
+            left join {self._qualified_table(spec.schema_name, spec.table_name)} as T
+              on {join_predicate}
+            order by CT.SYS_CHANGE_VERSION, {", ".join(f"CT.{self._quote_identifier(column)}" for column in spec.primary_key_columns)}
+        """
+        with connection.cursor() as cursor:
+            cursor.execute(sql, (version,))
+            return list(cursor.fetchall())
+
     def _parse_checkpoint(self, checkpoint: SourceCheckpoint | None) -> dict[str, dict[str, Any]]:
         if checkpoint is None or not checkpoint.token:
             return {}
@@ -355,6 +613,32 @@ class SqlServerAdapter(BaseAdapter):
         if not isinstance(payload, dict):
             raise ValueError(f"{self.source_type} checkpoint token must be a JSON object")
         return payload
+
+    def _parse_change_tracking_checkpoint(
+        self,
+        checkpoint: SourceCheckpoint | None,
+    ) -> SqlServerChangeTrackingCheckpoint | None:
+        if checkpoint is None or not checkpoint.token:
+            return None
+        payload = json.loads(checkpoint.token)
+        if not isinstance(payload, dict):
+            raise ValueError(f"{self.source_type} change tracking checkpoint token must be a JSON object")
+        if payload.get("mode") != "change_tracking":
+            return None
+        table_key = payload.get("table_key")
+        pk = payload.get("pk")
+        return SqlServerChangeTrackingCheckpoint(
+            version=int(payload.get("version", 0)),
+            table_key=str(table_key) if table_key else None,
+            pk=list(pk) if isinstance(pk, list) else None,
+        )
+
+    def _map_change_tracking_operation(self, value: str) -> str:
+        mapping = {"I": "insert", "U": "update", "D": "delete"}
+        operation = mapping.get(value.upper())
+        if operation is None:
+            raise ValueError(f"{self.source_type} returned unsupported change tracking operation {value!r}")
+        return operation
 
     def _sort_key(self, spec: SqlServerTableSpec, row: dict[str, Any]) -> tuple[Any, ...]:
         return (

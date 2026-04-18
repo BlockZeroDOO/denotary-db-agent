@@ -4,7 +4,7 @@ This document describes MySQL-specific `connection` and `options` fields.
 
 ## Current Status
 
-MySQL currently supports a live watermark/snapshot baseline and a shared row-based binlog CDC baseline.
+MySQL currently supports both a live watermark/snapshot baseline and a live row-based binlog CDC baseline.
 
 Implemented now:
 
@@ -12,12 +12,13 @@ Implemented now:
 - tracked table introspection
 - watermark-based snapshot polling
 - row-based binlog CDC baseline
+- live Docker-backed binlog validation
 - deterministic checkpoint resume
 - bootstrap / inspect / runtime signature
 
 Still next:
 
-- live Docker-backed binlog validation
+- higher-volume MySQL-specific binlog soak and recovery passes
 
 ## `connection`
 

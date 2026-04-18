@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import unittest
 from unittest.mock import patch
 
@@ -74,15 +75,16 @@ class SqlServerAdapterTest(unittest.TestCase):
 
         self.assertEqual(capabilities.source_type, "sqlserver")
         self.assertEqual(capabilities.minimum_version, "2019")
-        self.assertFalse(capabilities.supports_cdc)
+        self.assertTrue(capabilities.supports_cdc)
         self.assertTrue(capabilities.supports_snapshot)
         self.assertEqual(capabilities.operations, ("snapshot",))
-        self.assertEqual(capabilities.capture_modes, ("watermark",))
+        self.assertEqual(capabilities.capture_modes, ("watermark", "change_tracking"))
+        self.assertEqual(capabilities.cdc_modes, ("change_tracking",))
         self.assertEqual(
             capabilities.bootstrap_requirements,
             ("tracked tables visible", "watermark columns configured"),
         )
-        self.assertIn("watermark-based snapshot polling", capabilities.notes)
+        self.assertIn("Change Tracking CDC baseline", capabilities.notes)
 
     def test_validate_connection_rejects_missing_fields(self) -> None:
         config = SourceConfig(
@@ -187,7 +189,7 @@ class SqlServerAdapterTest(unittest.TestCase):
             connect.return_value.__exit__.return_value = False
             inspect = adapter.inspect()
 
-        self.assertEqual(inspect["capture_modes"], ["watermark"])
+        self.assertEqual(inspect["capture_modes"], ["watermark", "change_tracking"])
         self.assertEqual(inspect["bootstrap_requirements"], ["tracked tables visible", "watermark columns configured"])
         self.assertEqual(inspect["tracked_tables"][0]["primary_key_columns"], ["id"])
 
@@ -288,5 +290,168 @@ class SqlServerAdapterTest(unittest.TestCase):
 
     def test_start_stream_raises_until_cdc_is_added(self) -> None:
         adapter = SqlServerAdapter(self.config)
-        with self.assertRaisesRegex(NotImplementedError, "sqlserver CDC streaming is not implemented yet"):
+        with self.assertRaisesRegex(
+            NotImplementedError,
+            "sqlserver CDC streaming is only available when capture_mode is set to change_tracking",
+        ):
             list(adapter.start_stream(None))
+
+    def test_change_tracking_bootstrap_and_inspect_report_cdc_status(self) -> None:
+        config = SourceConfig(
+            **{
+                **self.config.__dict__,
+                "options": {
+                    **self.config.options,
+                    "capture_mode": "change_tracking",
+                },
+            }
+        )
+        adapter = SqlServerAdapter(config)
+        spec = adapter._spec_summary(
+            adapter_spec := type(
+                "Spec",
+                (),
+                {
+                    "schema_name": "dbo",
+                    "table_name": "invoices",
+                    "watermark_column": "updated_at",
+                    "commit_timestamp_column": "updated_at",
+                    "primary_key_columns": ["id"],
+                    "selected_columns": ["id", "status", "updated_at"],
+                },
+            )()
+        )
+        cdc_summary = {
+            "capture_mode": "change_tracking",
+            "database_enabled": True,
+            "current_version": 42,
+            "tracked_tables": [
+                {
+                    "table_key": "dbo.invoices",
+                    "enabled": True,
+                    "begin_version": 1,
+                    "min_valid_version": 1,
+                    "cleanup_version": 0,
+                    "track_columns_updated": True,
+                }
+            ],
+        }
+
+        with patch.object(adapter, "validate_connection"), patch.object(adapter, "_connect") as connect, patch.object(
+            adapter, "_load_table_specs", return_value=[adapter_spec]
+        ), patch.object(adapter, "_cdc_summary", return_value=cdc_summary):
+            connect.return_value.__enter__.return_value = FakeConnection([[{"version": "Microsoft SQL Server 2022"}]])
+            connect.return_value.__exit__.return_value = False
+            bootstrap = adapter.bootstrap()
+            inspect = adapter.inspect()
+
+        self.assertEqual(bootstrap["capture_mode"], "change_tracking")
+        self.assertEqual(bootstrap["cdc"]["current_version"], 42)
+        self.assertEqual(bootstrap["tracked_tables"][0]["table_name"], spec["table_name"])
+        self.assertEqual(inspect["capture_modes"], ["watermark", "change_tracking"])
+        self.assertEqual(inspect["cdc_modes"], ["change_tracking"])
+        self.assertTrue(inspect["supports_cdc"])
+
+    def test_change_tracking_stream_emits_changes_and_checkpoint_cursor(self) -> None:
+        config = SourceConfig(
+            **{
+                **self.config.__dict__,
+                "backfill_mode": "none",
+                "options": {
+                    **self.config.options,
+                    "capture_mode": "change_tracking",
+                    "row_limit": 2,
+                },
+            }
+        )
+        adapter = SqlServerAdapter(config)
+        spec = type(
+            "Spec",
+            (),
+            {
+                "schema_name": "dbo",
+                "table_name": "invoices",
+                "key": "dbo.invoices",
+                "primary_key_columns": ["id"],
+                "selected_columns": ["id", "status", "updated_at"],
+                "commit_timestamp_column": "updated_at",
+            },
+        )()
+        changes = [
+            {
+                "spec": spec,
+                "table_key": "dbo.invoices",
+                "change_version": 101,
+                "operation": "insert",
+                "primary_key": {"id": 1},
+                "pk_marker": [1],
+                "before": None,
+                "after": {"id": 1, "status": "draft", "updated_at": "2026-04-18T10:00:01Z"},
+                "commit_timestamp": "2026-04-18T10:00:01Z",
+                "metadata": {"capture_mode": "change_tracking"},
+            },
+            {
+                "spec": spec,
+                "table_key": "dbo.invoices",
+                "change_version": 101,
+                "operation": "update",
+                "primary_key": {"id": 2},
+                "pk_marker": [2],
+                "before": None,
+                "after": {"id": 2, "status": "issued", "updated_at": "2026-04-18T10:00:02Z"},
+                "commit_timestamp": "2026-04-18T10:00:02Z",
+                "metadata": {"capture_mode": "change_tracking"},
+            },
+            {
+                "spec": spec,
+                "table_key": "dbo.invoices",
+                "change_version": 102,
+                "operation": "delete",
+                "primary_key": {"id": 3},
+                "pk_marker": [3],
+                "before": None,
+                "after": None,
+                "commit_timestamp": "2026-04-18T10:00:03Z",
+                "metadata": {"capture_mode": "change_tracking"},
+            },
+        ]
+
+        with patch.object(adapter, "_connect") as connect, patch.object(adapter, "_load_table_specs", return_value=[spec]), patch.object(
+            adapter, "_current_change_tracking_version", return_value=120
+        ), patch.object(adapter, "_validate_change_tracking_prerequisites"), patch.object(
+            adapter, "_fetch_change_tracking_rows", return_value=changes
+        ):
+            connect.return_value.__enter__.return_value = object()
+            connect.return_value.__exit__.return_value = False
+            initial = list(adapter.start_stream(None))
+            first_pass = list(adapter.start_stream(None))
+
+        self.assertEqual(initial, [])
+        self.assertEqual([event.operation for event in first_pass], ["insert", "update"])
+        first_checkpoint = json.loads(first_pass[-1].checkpoint_token)
+        self.assertEqual(first_checkpoint["mode"], "change_tracking")
+        self.assertEqual(first_checkpoint["version"], 101)
+        self.assertNotIn("table_key", first_checkpoint)
+        self.assertNotIn("pk", first_checkpoint)
+
+        with patch.object(adapter, "_connect") as connect, patch.object(adapter, "_load_table_specs", return_value=[spec]), patch.object(
+            adapter, "_current_change_tracking_version", return_value=120
+        ), patch.object(adapter, "_validate_change_tracking_prerequisites"), patch.object(
+            adapter, "_fetch_change_tracking_rows", return_value=changes[2:]
+        ):
+            connect.return_value.__enter__.return_value = object()
+            connect.return_value.__exit__.return_value = False
+            resumed = list(
+                adapter.start_stream(
+                    SourceCheckpoint(
+                        source_id=config.id,
+                        token=first_pass[-1].checkpoint_token,
+                        updated_at="2026-04-18T10:00:02Z",
+                    )
+                )
+            )
+
+        self.assertEqual(len(resumed), 1)
+        self.assertEqual(resumed[0].operation, "delete")
+        resumed_checkpoint = json.loads(resumed[0].checkpoint_token)
+        self.assertEqual(resumed_checkpoint, {"mode": "change_tracking", "version": 102})

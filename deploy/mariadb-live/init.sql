@@ -11,3 +11,6 @@ create table if not exists payments (
     amount decimal(18,2) not null,
     updated_at datetime not null
 );
+
+grant replication slave, replication client on *.* to 'denotary'@'%';
+flush privileges;

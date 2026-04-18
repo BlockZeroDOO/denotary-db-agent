@@ -467,3 +467,70 @@ class MySqlAdapterTest(unittest.TestCase):
         self.assertEqual(events[1].operation, "update")
         self.assertEqual(events[1].after["status"], "archived")
         self.assertIn('"mode": "binlog"', events[0].checkpoint_token)
+
+    def test_start_stream_maps_unknown_binlog_columns_using_table_spec_order(self) -> None:
+        self.config.options["capture_mode"] = "binlog"
+        adapter = MySqlAdapter(self.config)
+        spec_rows = [
+            {
+                "column_name": "id",
+                "data_type": "bigint",
+                "ordinal_position": 1,
+                "is_primary_key": 1,
+            },
+            {
+                "column_name": "status",
+                "data_type": "varchar",
+                "ordinal_position": 2,
+                "is_primary_key": 0,
+            },
+            {
+                "column_name": "updated_at",
+                "data_type": "datetime",
+                "ordinal_position": 3,
+                "is_primary_key": 0,
+            },
+        ]
+        connection = FakeConnection(
+            [
+                spec_rows,
+                [{"Variable_name": "log_bin", "Value": "ON"}],
+                [{"Variable_name": "binlog_format", "Value": "ROW"}],
+                [{"Variable_name": "binlog_row_image", "Value": "FULL"}],
+            ]
+        )
+        raw_events = [
+            FakeWriteRowsEvent(
+                "ledger",
+                "invoices",
+                [
+                    {
+                        "values": {
+                            "UNKNOWN_COL0": 7,
+                            "UNKNOWN_COL1": "issued",
+                            "UNKNOWN_COL2": "2026-04-18T10:00:00Z",
+                        }
+                    }
+                ],
+                log_pos=220,
+            )
+        ]
+
+        with patch("denotary_db_agent.adapters.mysql.pymysql", object()), patch(
+            "denotary_db_agent.adapters.mysql.BinLogStreamReader",
+            object(),
+        ), patch("denotary_db_agent.adapters.mysql.WriteRowsEvent", FakeWriteRowsEvent), patch(
+            "denotary_db_agent.adapters.mysql.UpdateRowsEvent",
+            FakeUpdateRowsEvent,
+        ), patch("denotary_db_agent.adapters.mysql.DeleteRowsEvent", FakeDeleteRowsEvent), patch.object(
+            adapter,
+            "_connect",
+        ) as connect, patch.object(adapter, "_ensure_binlog_stream", return_value=iter(raw_events)):
+            connect.return_value.__enter__.return_value = connection
+            connect.return_value.__exit__.return_value = False
+            adapter._binlog_stream = type("FakeStream", (), {"log_file": "mysql-bin.000001", "log_pos": 220})()
+            events = list(adapter.start_stream(None))
+
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].primary_key, {"id": 7})
+        self.assertEqual(events[0].after["status"], "issued")

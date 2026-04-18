@@ -4,13 +4,17 @@ This document describes MariaDB-specific configuration.
 
 ## Current Status
 
-MariaDB now has a live watermark/snapshot baseline and a shared binlog CDC baseline.
+MariaDB now has both a live watermark/snapshot baseline and a live shared binlog CDC baseline.
 
 Declared target path:
 
 - watermark-based snapshot polling baseline
 - shared binlog CDC baseline
-- live MariaDB-specific binlog validation next
+- live MariaDB-specific binlog validation
+
+Still next:
+
+- MariaDB-specific soak and recovery passes on the shared binlog path
 
 ## `connection`
 

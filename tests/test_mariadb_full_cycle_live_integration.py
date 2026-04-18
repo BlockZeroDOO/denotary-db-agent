@@ -406,6 +406,17 @@ class MariaDbFullCycleLiveIntegrationTest(unittest.TestCase):
             autocommit=True,
         )
 
+    def _connect_admin(self):
+        return pymysql.connect(
+            host="127.0.0.1",
+            port=MARIADB_PORT,
+            user="root",
+            password="rootpw",
+            database="ledger",
+            cursorclass=pymysql.cursors.DictCursor,
+            autocommit=True,
+        )
+
     def _truncate_tables(self) -> None:
         connection = self._connect()
         try:
@@ -414,6 +425,25 @@ class MariaDbFullCycleLiveIntegrationTest(unittest.TestCase):
                 cursor.execute("delete from invoices")
         finally:
             connection.close()
+
+    def _current_binlog_start(self) -> tuple[str, int]:
+        connection = self._connect_admin()
+        try:
+            with connection.cursor() as cursor:
+                row = None
+                for statement in ("show binary log status", "show master status"):
+                    try:
+                        cursor.execute(statement)
+                        row = cursor.fetchone()
+                        if row:
+                            break
+                    except Exception:
+                        continue
+        finally:
+            connection.close()
+        if not row:
+            raise RuntimeError("mariadb did not return SHOW MASTER STATUS output")
+        return str(row["File"]), int(row["Position"])
 
     def _write_config(
         self,
@@ -424,6 +454,9 @@ class MariaDbFullCycleLiveIntegrationTest(unittest.TestCase):
         audit_port: int,
         chain_port: int,
         batch_enabled: bool = False,
+        capture_mode: str = "watermark",
+        binlog_start_file: str = "",
+        binlog_start_pos: int = 4,
     ) -> None:
         config = {
             "agent_name": "mariadb-full-cycle-live-test",
@@ -467,10 +500,13 @@ class MariaDbFullCycleLiveIntegrationTest(unittest.TestCase):
                     "batch_enabled": batch_enabled,
                     "batch_size": 10,
                     "options": {
-                        "capture_mode": "watermark",
+                        "capture_mode": capture_mode,
                         "watermark_column": "updated_at",
                         "commit_timestamp_column": "updated_at",
                         "row_limit": 100,
+                        "binlog_server_id": 14131,
+                        "binlog_start_file": binlog_start_file,
+                        "binlog_start_pos": binlog_start_pos,
                     },
                 }
             ],
@@ -528,6 +564,42 @@ class MariaDbFullCycleLiveIntegrationTest(unittest.TestCase):
         self.assertEqual(proof_payload["request_id"], "mariadb-request-1")
         self.assertEqual(proof_payload["receipt"]["tx_id"], "c" * 64)
         self.assertEqual(proof_payload["audit_chain"]["record"]["status"], "finalized")
+
+    def test_live_mariadb_binlog_full_cycle_exports_proof_bundle(self) -> None:
+        start_file, start_pos = self._current_binlog_start()
+        self._write_config(
+            ingress_port=self.servers[0].server_address[1],
+            watcher_port=self.servers[1].server_address[1],
+            receipt_port=self.servers[2].server_address[1],
+            audit_port=self.servers[3].server_address[1],
+            chain_port=self.servers[4].server_address[1],
+            capture_mode="binlog",
+            binlog_start_file=start_file,
+            binlog_start_pos=start_pos,
+        )
+        self._seed_single_row()
+        engine = AgentEngine(load_config(self.config_path))
+
+        result = engine.run_once()
+
+        self.assertEqual(result["processed"], 1)
+        self.assertEqual(result["failed"], 0)
+        deliveries = engine.store.list_deliveries("mariadb-core-ledger")
+        self.assertEqual(len(deliveries), 1)
+        self.assertEqual(deliveries[0]["status"], "finalized_exported")
+        checkpoint = engine.checkpoint_summary()[0]
+        checkpoint_state = json.loads(checkpoint["token"])
+        self.assertEqual(checkpoint_state["mode"], "binlog")
+
+        proofs = engine.store.list_proofs("mariadb-core-ledger")
+        self.assertEqual(len(proofs), 1)
+        export_path = proofs[0]["export_path"]
+        self.assertTrue(export_path)
+        self.assertTrue(Path(str(export_path)).exists())
+
+        proof_payload = json.loads(Path(str(export_path)).read_text(encoding="utf-8"))
+        self.assertEqual(proof_payload["request_id"], "mariadb-request-1")
+        self.assertEqual(proof_payload["receipt"]["mode"], "single")
 
     def test_live_mariadb_batch_full_cycle_exports_batch_bundle(self) -> None:
         self._write_config(

@@ -496,7 +496,7 @@ class MySqlAdapter(BaseAdapter):
             "blocking": bool(self.config.options.get("binlog_blocking", False)),
             "only_events": [WriteRowsEvent, UpdateRowsEvent, DeleteRowsEvent],
             "only_schemas": list(self.config.include.keys()) if self.config.include else [self.config.database_name],
-            "resume_stream": checkpoint is not None,
+            "resume_stream": checkpoint is not None or bool(requested_identity[0]) or requested_identity[1] > 4,
         }
         if requested_identity[0]:
             stream_kwargs["log_file"] = requested_identity[0]
@@ -513,15 +513,20 @@ class MySqlAdapter(BaseAdapter):
         if spec is None:
             return []
         packet = getattr(raw_event, "packet", None)
-        next_log_pos = int(getattr(packet, "log_pos", 0) or 0)
+        stream_log_pos = int(getattr(self._binlog_stream, "log_pos", 0) or 0)
+        packet_log_pos = int(getattr(packet, "log_pos", 0) or 0)
+        next_log_pos = int(packet_log_pos or stream_log_pos or 0)
         event_size = int(getattr(packet, "event_size", 0) or 0)
-        event_log_pos = max(4, next_log_pos - event_size) if next_log_pos and event_size else next_log_pos
+        if packet_log_pos and event_size:
+            event_log_pos = max(4, packet_log_pos - event_size)
+        else:
+            event_log_pos = next_log_pos if next_log_pos else max(4, stream_log_pos)
         log_file = str(getattr(self._binlog_stream, "log_file", "")) or str(self.config.options.get("binlog_start_file", ""))
         event_timestamp = self._normalize_binlog_timestamp(getattr(raw_event, "timestamp", 0))
         decoded: list[dict[str, Any]] = []
         for row in list(getattr(raw_event, "rows", []) or []):
             if WriteRowsEvent is not None and isinstance(raw_event, WriteRowsEvent):
-                after_row = self._normalize_row_payload(row.get("values") or {})
+                after_row = self._normalize_row_payload(spec, row.get("values") or {})
                 decoded.append(
                     {
                         "spec": spec,
@@ -534,8 +539,8 @@ class MySqlAdapter(BaseAdapter):
                     }
                 )
             elif UpdateRowsEvent is not None and isinstance(raw_event, UpdateRowsEvent):
-                before_row = self._normalize_row_payload(row.get("before_values") or {})
-                after_row = self._normalize_row_payload(row.get("after_values") or {})
+                before_row = self._normalize_row_payload(spec, row.get("before_values") or {})
+                after_row = self._normalize_row_payload(spec, row.get("after_values") or {})
                 decoded.append(
                     {
                         "spec": spec,
@@ -548,7 +553,7 @@ class MySqlAdapter(BaseAdapter):
                     }
                 )
             elif DeleteRowsEvent is not None and isinstance(raw_event, DeleteRowsEvent):
-                before_row = self._normalize_row_payload(row.get("values") or {})
+                before_row = self._normalize_row_payload(spec, row.get("values") or {})
                 decoded.append(
                     {
                         "spec": spec,
@@ -621,10 +626,17 @@ class MySqlAdapter(BaseAdapter):
             return timestamp.isoformat().replace("+00:00", "Z")
         return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
-    def _normalize_row_payload(self, row: dict[str, Any]) -> dict[str, Any]:
+    def _normalize_row_payload(self, spec: MySqlTableSpec, row: dict[str, Any]) -> dict[str, Any]:
+        normalized_row = row
+        if row and all(str(column).startswith("UNKNOWN_COL") for column in row):
+            normalized_row = {
+                spec.selected_columns[index]: value
+                for index, value in enumerate(row.values())
+                if index < len(spec.selected_columns)
+            }
         return {
             str(column): self._normalize_value(value)
-            for column, value in row.items()
+            for column, value in normalized_row.items()
         }
 
     def _sort_key(self, spec: MySqlTableSpec, row: dict[str, Any]) -> tuple[Any, ...]:

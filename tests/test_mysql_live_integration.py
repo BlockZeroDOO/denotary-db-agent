@@ -178,6 +178,17 @@ class MySqlLiveIntegrationTest(unittest.TestCase):
             autocommit=True,
         )
 
+    def _connect_admin(self):
+        return pymysql.connect(
+            host="127.0.0.1",
+            port=MYSQL_PORT,
+            user="root",
+            password="rootpw",
+            database="ledger",
+            cursorclass=pymysql.cursors.DictCursor,
+            autocommit=True,
+        )
+
     def _truncate_tables(self) -> None:
         connection = self._connect()
         try:
@@ -187,7 +198,33 @@ class MySqlLiveIntegrationTest(unittest.TestCase):
         finally:
             connection.close()
 
-    def _write_config(self, backfill_mode: str = "full", row_limit: int = 100) -> None:
+    def _current_binlog_start(self) -> tuple[str, int]:
+        connection = self._connect_admin()
+        try:
+            with connection.cursor() as cursor:
+                row = None
+                for statement in ("show binary log status", "show master status"):
+                    try:
+                        cursor.execute(statement)
+                        row = cursor.fetchone()
+                        if row:
+                            break
+                    except Exception:
+                        continue
+        finally:
+            connection.close()
+        if not row:
+            raise RuntimeError("mysql did not return SHOW MASTER STATUS output")
+        return str(row["File"]), int(row["Position"])
+
+    def _write_config(
+        self,
+        backfill_mode: str = "full",
+        row_limit: int = 100,
+        capture_mode: str = "watermark",
+        binlog_start_file: str = "",
+        binlog_start_pos: int = 4,
+    ) -> None:
         config = {
             "agent_name": "live-mysql-test",
             "log_level": "INFO",
@@ -220,10 +257,13 @@ class MySqlLiveIntegrationTest(unittest.TestCase):
                     "backfill_mode": backfill_mode,
                     "batch_size": 100,
                     "options": {
-                        "capture_mode": "watermark",
+                        "capture_mode": capture_mode,
                         "watermark_column": "updated_at",
                         "commit_timestamp_column": "updated_at",
                         "row_limit": row_limit,
+                        "binlog_server_id": 14101,
+                        "binlog_start_file": binlog_start_file,
+                        "binlog_start_pos": binlog_start_pos,
                     },
                 }
             ],
@@ -386,3 +426,57 @@ class MySqlLiveIntegrationTest(unittest.TestCase):
         self.assertEqual(len(proofs), 0)
         deliveries = engine.store.list_deliveries("mysql-core-ledger")
         self.assertEqual(len(deliveries), 1)
+
+    def test_live_mysql_binlog_cdc_captures_insert_update_delete(self) -> None:
+        start_file, start_pos = self._current_binlog_start()
+        self._write_config(
+            backfill_mode="none",
+            capture_mode="binlog",
+            row_limit=10,
+            binlog_start_file=start_file,
+            binlog_start_pos=start_pos,
+        )
+        engine = AgentEngine(load_config(self.config_path))
+
+        bootstrap = engine.bootstrap("mysql-core-ledger")
+        self.assertEqual(bootstrap["sources"][0]["capture_mode"], "binlog")
+        self.assertTrue(bootstrap["sources"][0]["cdc"]["log_bin"])
+        self.assertEqual(bootstrap["sources"][0]["cdc"]["binlog_format"], "ROW")
+
+        connection = self._connect()
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    insert into invoices (id, status, amount, updated_at)
+                    values (4001, 'draft', 125.00, '2026-04-18 12:00:01')
+                    """
+                )
+                cursor.execute(
+                    """
+                    update invoices
+                    set status = 'issued', updated_at = '2026-04-18 12:00:02'
+                    where id = 4001
+                    """
+                )
+                cursor.execute("delete from invoices where id = 4001")
+        finally:
+            connection.close()
+
+        first_result = engine.run_once()
+        self.assertEqual(first_result["processed"], 3)
+        self.assertEqual(first_result["failed"], 0)
+        self.assertEqual(len(MockWatcherHandler.registrations), 3)
+
+        checkpoint_token = engine.checkpoint_summary()[0]["token"]
+        checkpoint_state = json.loads(checkpoint_token)
+        self.assertEqual(checkpoint_state["mode"], "binlog")
+        self.assertEqual(checkpoint_state["log_file"], start_file)
+        self.assertGreaterEqual(int(checkpoint_state["log_pos"]), start_pos)
+
+        deliveries = engine.store.list_deliveries("mysql-core-ledger")
+        self.assertEqual(len(deliveries), 3)
+
+        second_result = engine.run_once()
+        self.assertEqual(second_result["processed"], 0)
+        self.assertEqual(second_result["failed"], 0)

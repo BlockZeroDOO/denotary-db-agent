@@ -187,7 +187,17 @@ class SqlServerLiveIntegrationTest(unittest.TestCase):
         finally:
             connection.close()
 
-    def _write_config(self, backfill_mode: str = "full", row_limit: int = 100) -> None:
+    def _current_change_tracking_version(self) -> int:
+        connection = self._connect()
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute("select change_tracking_current_version() as current_version")
+                row = cursor.fetchone() or {}
+        finally:
+            connection.close()
+        return int(row["current_version"] or 0)
+
+    def _write_config(self, backfill_mode: str = "full", row_limit: int = 100, capture_mode: str = "watermark") -> None:
         config = {
             "agent_name": "live-sqlserver-test",
             "log_level": "INFO",
@@ -220,7 +230,7 @@ class SqlServerLiveIntegrationTest(unittest.TestCase):
                     "backfill_mode": backfill_mode,
                     "batch_size": 100,
                     "options": {
-                        "capture_mode": "watermark",
+                        "capture_mode": capture_mode,
                         "watermark_column": "updated_at",
                         "commit_timestamp_column": "updated_at",
                         "row_limit": row_limit,
@@ -309,7 +319,7 @@ class SqlServerLiveIntegrationTest(unittest.TestCase):
         validation = engine.validate()
         self.assertEqual(validation[0]["source_type"], "sqlserver")
         self.assertEqual(validation[0]["supports_snapshot"], "true")
-        self.assertEqual(validation[0]["capture_modes"], ["watermark"])
+        self.assertEqual(validation[0]["capture_modes"], ["watermark", "change_tracking"])
 
         bootstrap = engine.bootstrap("sqlserver-core-ledger")
         self.assertEqual(bootstrap["sources"][0]["capture_mode"], "watermark")
@@ -365,6 +375,75 @@ class SqlServerLiveIntegrationTest(unittest.TestCase):
         result = engine.run_once()
         self.assertEqual(result["processed"], 0)
         self.assertEqual(result["failed"], 0)
+
+    def test_live_sqlserver_change_tracking_captures_insert_update_delete(self) -> None:
+        self._write_config(backfill_mode="none", row_limit=10, capture_mode="change_tracking")
+        start_version = self._current_change_tracking_version()
+        engine = AgentEngine(load_config(self.config_path))
+
+        bootstrap = engine.bootstrap("sqlserver-core-ledger")
+        self.assertEqual(bootstrap["sources"][0]["capture_mode"], "change_tracking")
+        self.assertTrue(bootstrap["sources"][0]["cdc"]["database_enabled"])
+
+        first_empty = engine.run_once()
+        self.assertEqual(first_empty["processed"], 0)
+        self.assertEqual(first_empty["failed"], 0)
+
+        connection = self._connect()
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    insert into dbo.invoices (id, status, amount, updated_at)
+                    values (4001, N'draft', 125.00, '2026-04-18T12:00:01')
+                    """
+                )
+        finally:
+            connection.close()
+
+        insert_result = engine.run_once()
+        self.assertEqual(insert_result["processed"], 1)
+        self.assertEqual(insert_result["failed"], 0)
+
+        connection = self._connect()
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    update dbo.invoices
+                    set status = N'issued', updated_at = '2026-04-18T12:00:02'
+                    where id = 4001
+                    """
+                )
+        finally:
+            connection.close()
+
+        update_result = engine.run_once()
+        self.assertEqual(update_result["processed"], 1)
+        self.assertEqual(update_result["failed"], 0)
+
+        connection = self._connect()
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute("delete from dbo.invoices where id = 4001")
+        finally:
+            connection.close()
+
+        delete_result = engine.run_once()
+        self.assertEqual(delete_result["processed"], 1)
+        self.assertEqual(delete_result["failed"], 0)
+        self.assertEqual(len(MockWatcherHandler.registrations), 3)
+
+        checkpoint_state = json.loads(engine.checkpoint_summary()[0]["token"])
+        self.assertEqual(checkpoint_state["mode"], "change_tracking")
+        self.assertGreaterEqual(int(checkpoint_state["version"]), start_version)
+
+        deliveries = engine.store.list_deliveries("sqlserver-core-ledger")
+        self.assertEqual(len(deliveries), 3)
+
+        idle_result = engine.run_once()
+        self.assertEqual(idle_result["processed"], 0)
+        self.assertEqual(idle_result["failed"], 0)
 
 
 if __name__ == "__main__":

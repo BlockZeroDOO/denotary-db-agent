@@ -47,7 +47,7 @@ class AdapterRegistryContractTest(unittest.TestCase):
             "postgresql": {"default_capture_mode": "watermark", "cdc_modes": ("trigger", "logical")},
             "mysql": {"default_capture_mode": "watermark", "cdc_modes": ("binlog",)},
             "mariadb": {"default_capture_mode": "watermark", "cdc_modes": ("binlog",)},
-            "sqlserver": {"default_capture_mode": "watermark", "cdc_modes": ()},
+            "sqlserver": {"default_capture_mode": "watermark", "cdc_modes": ("change_tracking",)},
             "oracle": {"default_capture_mode": "watermark", "cdc_modes": ()},
             "mongodb": {"default_capture_mode": "watermark", "cdc_modes": ("change_streams",)},
         }

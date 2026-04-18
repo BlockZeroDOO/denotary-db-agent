@@ -312,11 +312,11 @@ denotary-db-agent --config examples/agent.example.json checkpoint --source pg-co
 ## Current Adapter Targets
 
 - PostgreSQL: watermark polling, trigger CDC, and logical decoding
-- MySQL: row-based binlog plan
-- MariaDB: MariaDB binlog profile
-- SQL Server: CDC / Change Tracking plan
+- MySQL: watermark polling and row-based binlog
+- MariaDB: watermark polling and shared MariaDB binlog
+- SQL Server: watermark polling and native Change Tracking
 - Oracle: redo / LogMiner plan
-- MongoDB: change streams plan
+- MongoDB: watermark polling and change streams
 
 ## PostgreSQL Baseline
 
