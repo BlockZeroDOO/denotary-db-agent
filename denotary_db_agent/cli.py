@@ -353,8 +353,19 @@ def build_compatibility_alias_snapshot() -> dict[str, dict[str, dict]]:
     return build_command_group_aliases()
 
 
+LEGACY_EXPORT_SPECS = {
+    "EVIDENCE_COMMANDS": {"alias": "EVIDENCE_COMMANDS"},
+    "JSON_ENGINE_COMMANDS": {"alias": "JSON_ENGINE_COMMANDS"},
+    "SOURCE_ACTION_COMMANDS": {"alias": "SOURCE_ACTION_COMMANDS"},
+    "ENGINE_DISPATCH_COMMANDS": {"alias": "ENGINE_DISPATCH_COMMANDS"},
+}
+
+
 def build_legacy_exports() -> dict[str, dict[str, dict]]:
-    return build_compatibility_alias_snapshot()
+    return {
+        export_name: build_command_alias(export["alias"])
+        for export_name, export in LEGACY_EXPORT_SPECS.items()
+    }
 
 
 COMMAND_GROUP_BUILDERS = build_command_group_builders()
