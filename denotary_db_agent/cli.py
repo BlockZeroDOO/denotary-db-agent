@@ -13,46 +13,110 @@ from denotary_db_agent.diagnostics_snapshots import (
 from denotary_db_agent.engine import AgentEngine
 
 
-EVIDENCE_COMMANDS = {
+COMMAND_SPECS = {
+    "validate": {
+        "kind": "json_engine",
+        "engine_method": "validate",
+        "wrap_key": "sources",
+        "help": "Validate config and adapter connectivity",
+    },
+    "status": {
+        "kind": "json_engine",
+        "engine_method": "status",
+        "help": "Show source status",
+    },
+    "health": {
+        "kind": "json_engine",
+        "engine_method": "health",
+        "help": "Show service and source health",
+    },
+    "metrics": {
+        "kind": "json_engine",
+        "engine_method": "metrics",
+        "source_arg": True,
+        "help": "Show compact export-friendly metrics",
+    },
+    "bootstrap": {
+        "kind": "json_engine",
+        "engine_method": "bootstrap",
+        "source_arg": True,
+        "help": "Install or refresh source-side runtime artifacts",
+    },
+    "inspect": {
+        "kind": "json_engine",
+        "engine_method": "inspect",
+        "source_arg": True,
+        "help": "Inspect source configuration and live runtime state",
+    },
+    "refresh": {
+        "kind": "json_engine",
+        "engine_method": "refresh_source",
+        "source_arg": True,
+        "help": "Refresh source runtime artifacts and store runtime signature",
+    },
+    "pause": {
+        "kind": "source_action",
+        "engine_method": "pause_source",
+        "action": "paused",
+        "help": "Pause a source without editing config",
+        "source_required": True,
+    },
+    "resume": {
+        "kind": "source_action",
+        "engine_method": "resume_source",
+        "action": "resumed",
+        "help": "Resume a paused source",
+        "source_required": True,
+    },
+    "replay": {
+        "kind": "source_action",
+        "engine_method": "reset_checkpoint",
+        "action": "checkpoint_reset",
+        "help": "Reset checkpoint for a source",
+        "source_required": True,
+    },
     "doctor": {
+        "kind": "evidence",
         "engine_method": "doctor",
         "strict_on_severity": {"critical", "error"},
         "help": "Run a live preflight report for deploy readiness",
         "supports_strict": True,
     },
     "report": {
+        "kind": "evidence",
         "engine_method": "report",
         "help": "Export a compact rollout evidence bundle",
     },
     "diagnostics": {
+        "kind": "evidence",
         "engine_method": "diagnostics",
         "help": "Show compact stream/runtime diagnostics",
     },
+    "run": {
+        "kind": "run",
+        "help": "Run the agent",
+    },
+    "checkpoint": {
+        "kind": "checkpoint",
+        "help": "List or reset checkpoints",
+    },
+    "proof": {
+        "kind": "proof",
+        "help": "Show stored proof bundle metadata",
+    },
+    "artifacts": {
+        "kind": "artifacts",
+        "help": "Show saved evidence artifacts from the local manifest",
+    },
 }
 
-JSON_ENGINE_COMMANDS = {
-    "validate": {"engine_method": "validate", "wrap_key": "sources", "help": "Validate config and adapter connectivity"},
-    "status": {"engine_method": "status", "help": "Show source status"},
-    "health": {"engine_method": "health", "help": "Show service and source health"},
-    "metrics": {"engine_method": "metrics", "source_arg": True, "help": "Show compact export-friendly metrics"},
-    "bootstrap": {"engine_method": "bootstrap", "source_arg": True, "help": "Install or refresh source-side runtime artifacts"},
-    "inspect": {"engine_method": "inspect", "source_arg": True, "help": "Inspect source configuration and live runtime state"},
-    "refresh": {"engine_method": "refresh_source", "source_arg": True, "help": "Refresh source runtime artifacts and store runtime signature"},
-}
-
-SOURCE_ACTION_COMMANDS = {
-    "pause": {"engine_method": "pause_source", "action": "paused", "help": "Pause a source without editing config"},
-    "resume": {"engine_method": "resume_source", "action": "resumed", "help": "Resume a paused source"},
-    "replay": {"engine_method": "reset_checkpoint", "action": "checkpoint_reset", "help": "Reset checkpoint for a source"},
-}
-
+EVIDENCE_COMMANDS = {name: command for name, command in COMMAND_SPECS.items() if command["kind"] == "evidence"}
+JSON_ENGINE_COMMANDS = {name: command for name, command in COMMAND_SPECS.items() if command["kind"] == "json_engine"}
+SOURCE_ACTION_COMMANDS = {name: command for name, command in COMMAND_SPECS.items() if command["kind"] == "source_action"}
 ENGINE_DISPATCH_COMMANDS = {
-    **{name: {"handler": "run_json_engine_command"} for name in JSON_ENGINE_COMMANDS},
-    **{name: {"handler": "run_evidence_command"} for name in EVIDENCE_COMMANDS},
-    **{name: {"handler": "run_source_action_command"} for name in SOURCE_ACTION_COMMANDS},
-    "run": {"handler": "run_run_command"},
-    "checkpoint": {"handler": "run_checkpoint_command"},
-    "proof": {"handler": "run_proof_command"},
+    name: {"kind": command["kind"]}
+    for name, command in COMMAND_SPECS.items()
+    if command["kind"] != "artifacts"
 }
 
 
@@ -91,7 +155,40 @@ def add_json_engine_parser(subparsers, command_name: str, command: dict) -> None
 
 def add_source_action_parser(subparsers, command_name: str, command: dict) -> None:
     parser = subparsers.add_parser(command_name, help=command["help"])
-    add_source_option(parser, required=True)
+    add_source_option(parser, required=bool(command.get("source_required")))
+
+
+def add_run_parser(subparsers, command_name: str, command: dict) -> None:
+    parser = subparsers.add_parser(command_name, help=command["help"])
+    parser.add_argument("--once", action="store_true", help="Run one snapshot/backfill pass and exit")
+    parser.add_argument("--interval-sec", type=float, default=5.0, help="Polling interval for continuous run mode")
+
+
+def add_checkpoint_parser(subparsers, command_name: str, command: dict) -> None:
+    parser = subparsers.add_parser(command_name, help=command["help"])
+    add_source_option(parser)
+    parser.add_argument("--reset", action="store_true", help="Reset the source checkpoint")
+
+
+def add_proof_parser(subparsers, command_name: str, command: dict) -> None:
+    parser = subparsers.add_parser(command_name, help=command["help"])
+    parser.add_argument("--request-id", required=True, help="Request id")
+
+
+def add_artifacts_parser(subparsers, command_name: str, command: dict) -> None:
+    parser = subparsers.add_parser(command_name, help=command["help"])
+    add_source_option(parser)
+    parser.add_argument("--kind", choices=["diagnostics", "doctor", "report"], help="Artifact kind")
+    parser.add_argument(
+        "--latest",
+        type=int,
+        help="Return only the newest N artifacts after filters are applied",
+    )
+    parser.add_argument(
+        "--prune-missing",
+        action="store_true",
+        help="Remove manifest entries whose snapshot files no longer exist",
+    )
 
 
 def maybe_export_snapshot(
@@ -128,7 +225,7 @@ def run_evidence_command(
     state_db: str,
     manifest_retention: int,
 ) -> int:
-    command = EVIDENCE_COMMANDS[command_name]
+    command = COMMAND_SPECS[command_name]
     payload = getattr(engine, command["engine_method"])(args.source)
     maybe_export_snapshot(
         payload,
@@ -154,7 +251,7 @@ def print_json(payload: dict) -> int:
 
 
 def run_json_engine_command(engine: AgentEngine, args, *, command_name: str, **_: object) -> int:
-    command = JSON_ENGINE_COMMANDS[command_name]
+    command = COMMAND_SPECS[command_name]
     method = getattr(engine, command["engine_method"])
     payload = method(args.source) if command.get("source_arg") else method()
     if "wrap_key" in command:
@@ -163,7 +260,7 @@ def run_json_engine_command(engine: AgentEngine, args, *, command_name: str, **_
 
 
 def run_source_action_command(engine: AgentEngine, args, *, command_name: str, **_: object) -> int:
-    command = SOURCE_ACTION_COMMANDS[command_name]
+    command = COMMAND_SPECS[command_name]
     getattr(engine, command["engine_method"])(args.source)
     return print_json({"ok": True, "source": args.source, "action": command["action"]})
 
@@ -225,8 +322,16 @@ def dispatch_engine_command(
     state_db: str,
     manifest_retention: int,
 ) -> int:
-    command = ENGINE_DISPATCH_COMMANDS[args.command]
-    handler = globals()[command["handler"]]
+    command = COMMAND_SPECS[args.command]
+    handler_name = {
+        "json_engine": "run_json_engine_command",
+        "evidence": "run_evidence_command",
+        "source_action": "run_source_action_command",
+        "run": "run_run_command",
+        "checkpoint": "run_checkpoint_command",
+        "proof": "run_proof_command",
+    }[command["kind"]]
+    handler = globals()[handler_name]
     return handler(
         engine,
         args,
@@ -236,41 +341,38 @@ def dispatch_engine_command(
     )
 
 
+def add_command_parser(subparsers, command_name: str, command: dict) -> None:
+    kind = command["kind"]
+    if kind == "json_engine":
+        add_json_engine_parser(subparsers, command_name, command)
+        return
+    if kind == "evidence":
+        add_evidence_parser(subparsers, command_name, command)
+        return
+    if kind == "source_action":
+        add_source_action_parser(subparsers, command_name, command)
+        return
+    if kind == "run":
+        add_run_parser(subparsers, command_name, command)
+        return
+    if kind == "checkpoint":
+        add_checkpoint_parser(subparsers, command_name, command)
+        return
+    if kind == "proof":
+        add_proof_parser(subparsers, command_name, command)
+        return
+    if kind == "artifacts":
+        add_artifacts_parser(subparsers, command_name, command)
+        return
+    raise ValueError(f"unsupported command kind: {kind}")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="denotary-db-agent")
     parser.add_argument("--config", required=True, help="Path to agent config JSON")
     subparsers = parser.add_subparsers(dest="command", required=True)
-
-    run_parser = subparsers.add_parser("run", help="Run the agent")
-    run_parser.add_argument("--once", action="store_true", help="Run one snapshot/backfill pass and exit")
-    run_parser.add_argument("--interval-sec", type=float, default=5.0, help="Polling interval for continuous run mode")
-
-    for command_name, command in JSON_ENGINE_COMMANDS.items():
-        add_json_engine_parser(subparsers, command_name, command)
-    artifacts_parser = subparsers.add_parser("artifacts", help="Show saved evidence artifacts from the local manifest")
-    add_source_option(artifacts_parser)
-    artifacts_parser.add_argument("--kind", choices=["diagnostics", "doctor", "report"], help="Artifact kind")
-    artifacts_parser.add_argument(
-        "--latest",
-        type=int,
-        help="Return only the newest N artifacts after filters are applied",
-    )
-    artifacts_parser.add_argument(
-        "--prune-missing",
-        action="store_true",
-        help="Remove manifest entries whose snapshot files no longer exist",
-    )
-    for command_name, command in EVIDENCE_COMMANDS.items():
-        add_evidence_parser(subparsers, command_name, command)
-    for command_name, command in SOURCE_ACTION_COMMANDS.items():
-        add_source_action_parser(subparsers, command_name, command)
-
-    checkpoint_parser = subparsers.add_parser("checkpoint", help="List or reset checkpoints")
-    add_source_option(checkpoint_parser)
-    checkpoint_parser.add_argument("--reset", action="store_true", help="Reset the source checkpoint")
-
-    proof_parser = subparsers.add_parser("proof", help="Show stored proof bundle metadata")
-    proof_parser.add_argument("--request-id", required=True, help="Request id")
+    for command_name, command in COMMAND_SPECS.items():
+        add_command_parser(subparsers, command_name, command)
     return parser
 
 def main(argv: list[str] | None = None) -> int:
@@ -278,10 +380,10 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     config = load_config(args.config)
     manifest_retention = int(getattr(config.storage, "evidence_manifest_retention", 200))
-    if args.command == "artifacts":
+    if COMMAND_SPECS[args.command]["kind"] == "artifacts":
         return run_artifacts_command(args, state_db=config.storage.state_db)
     engine = AgentEngine(config)
-    if args.command in ENGINE_DISPATCH_COMMANDS:
+    if COMMAND_SPECS[args.command]["kind"] != "artifacts":
         return dispatch_engine_command(
             engine,
             args,

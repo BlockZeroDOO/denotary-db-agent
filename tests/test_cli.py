@@ -48,9 +48,9 @@ class CliTest(unittest.TestCase):
         self.assertEqual(SOURCE_ACTION_COMMANDS["pause"]["engine_method"], "pause_source")
         self.assertEqual(SOURCE_ACTION_COMMANDS["replay"]["engine_method"], "reset_checkpoint")
         self.assertEqual(SOURCE_ACTION_COMMANDS["resume"]["help"], "Resume a paused source")
-        self.assertEqual(ENGINE_DISPATCH_COMMANDS["run"]["handler"], "run_run_command")
-        self.assertEqual(ENGINE_DISPATCH_COMMANDS["checkpoint"]["handler"], "run_checkpoint_command")
-        self.assertEqual(ENGINE_DISPATCH_COMMANDS["proof"]["handler"], "run_proof_command")
+        self.assertEqual(ENGINE_DISPATCH_COMMANDS["run"]["kind"], "run")
+        self.assertEqual(ENGINE_DISPATCH_COMMANDS["checkpoint"]["kind"], "checkpoint")
+        self.assertEqual(ENGINE_DISPATCH_COMMANDS["proof"]["kind"], "proof")
 
     def test_evidence_parser_specs_are_built_from_registry(self) -> None:
         parser = build_parser()
