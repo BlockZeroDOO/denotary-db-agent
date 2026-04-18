@@ -17,12 +17,13 @@ from denotary_db_agent.diagnostics_snapshots import export_diagnostics_snapshot
 from denotary_db_agent.models import DeliveryAttempt, ProofArtifact, event_debug_dict, utc_now
 from denotary_db_agent.transport import (
     AuditClient,
-    ChainClient,
     IngressClient,
     ReceiptClient,
     WatcherClient,
+    build_chain_client,
     export_batch_proof_bundle,
     export_proof_bundle,
+    resolve_private_key,
 )
 
 
@@ -53,16 +54,7 @@ class AgentEngine:
         )
         self.receipt = ReceiptClient(config.denotary.receipt_url) if config.denotary.receipt_url else None
         self.audit = AuditClient(config.denotary.audit_url) if config.denotary.audit_url else None
-        self.chain = (
-            ChainClient(
-                config.denotary.chain_rpc_url,
-                config.denotary.submitter,
-                config.denotary.submitter_permission,
-                config.denotary.submitter_private_key,
-            )
-            if config.denotary.chain_rpc_url and config.denotary.submitter_private_key
-            else None
-        )
+        self.chain = build_chain_client(config.denotary)
         self.retry_policy = RetryPolicy()
         self._runtime_cache: dict[str, SourceRuntime] = {}
         self._last_diagnostics_snapshot_monotonic: float | None = None
@@ -597,12 +589,60 @@ class AgentEngine:
         warnings: list[str] = []
         errors: list[str] = []
         permission = self.config.denotary.submitter_permission
-        private_key_present = bool(self.config.denotary.submitter_private_key)
+        backend = self.config.denotary.broadcast_backend
+        key_info = resolve_private_key(self.config.denotary)
+        effective_backend = backend
+        if backend == "auto":
+            effective_backend = "private_key_env" if key_info["private_key"] else "private_key"
+        private_key_present = bool(key_info["private_key"])
+        wallet_command = list(self.config.denotary.wallet_command or [])
+        wallet_command_effective = wallet_command or ["cleos"]
         chain_ready = bool(self.config.denotary.chain_rpc_url)
         if permission in {"owner", "active"}:
             warnings.append(f"submitter_permission is {permission}; a dedicated hot permission such as dnanchor is recommended")
-        if not private_key_present:
-            errors.append("submitter_private_key is not configured")
+        wallet_probe: dict[str, object] | None = None
+        signer_material_ready = False
+        if effective_backend == "private_key":
+            if not bool(self.config.denotary.submitter_private_key.strip()):
+                errors.append("submitter_private_key is not configured")
+            else:
+                signer_material_ready = True
+        elif effective_backend == "private_key_env":
+            env_var = str(key_info.get("env_var") or "")
+            env_file = str(key_info.get("env_file") or "")
+            if env_file and not bool(key_info.get("env_file_exists")):
+                errors.append(f"env_file does not exist: {env_file}")
+            if not private_key_present:
+                if env_file:
+                    errors.append(f"private key env var {env_var} was not found in env_file or process environment")
+                else:
+                    errors.append(f"private key env var {env_var} was not found in process environment")
+            else:
+                signer_material_ready = True
+                if env_file:
+                    warnings.append("hot key is loaded from env_file; keep file permissions restricted to the service user")
+                else:
+                    warnings.append("hot key is loaded from process environment; prefer an env_file or secret mount with restricted access")
+        elif effective_backend == "cleos_wallet":
+            if self.chain is None:
+                errors.append("wallet-backed broadcaster is not configured")
+            else:
+                warnings.append("wallet-backed broadcaster depends on an unlocked cleos wallet on the local host")
+                if hasattr(self.chain, "probe_wallet"):
+                    try:
+                        wallet_probe = self.chain.probe_wallet()
+                    except Exception as exc:  # noqa: BLE001
+                        wallet_probe = {"ok": False, "error": str(exc), "command": wallet_command_effective}
+                    if not wallet_probe.get("ok", False):
+                        errors.append(f"wallet command probe failed: {wallet_probe.get('error')}")
+                    elif not wallet_probe.get("has_unlocked_wallet", False):
+                        errors.append("no unlocked cleos wallet is available for wallet-backed broadcasting")
+                    else:
+                        signer_material_ready = True
+                else:
+                    signer_material_ready = True
+        else:
+            errors.append(f"unsupported broadcast backend: {effective_backend}")
         if not chain_ready:
             errors.append("chain_rpc_url is not configured")
 
@@ -637,16 +677,24 @@ class AgentEngine:
             "severity": severity,
             "submitter": self.config.denotary.submitter,
             "permission": permission,
+            "broadcast_backend": backend,
+            "effective_broadcast_backend": effective_backend,
             "billing_account": self.config.denotary.billing_account,
             "schema_id": self.config.denotary.schema_id,
             "policy_id": self.config.denotary.policy_id,
             "private_key_present": private_key_present,
+            "private_key_source": key_info.get("source") or None,
+            "private_key_env": key_info.get("env_var") or None,
+            "env_file": key_info.get("env_file") or None,
+            "env_file_exists": bool(key_info.get("env_file_exists")),
+            "wallet_command": wallet_command_effective,
+            "wallet_probe": wallet_probe,
             "chain_rpc_configured": chain_ready,
             "uses_recommended_hot_permission": permission not in {"owner", "active"},
             "account_exists": account_exists,
             "permission_exists": permission_exists,
             "billing_account_exists": billing_account_exists,
-            "broadcast_ready": chain_ready and private_key_present and (self.chain is None or (account_exists and permission_exists)),
+            "broadcast_ready": chain_ready and signer_material_ready and (self.chain is None or (account_exists and permission_exists)),
             "account_error": account_error or None,
             "warnings": warnings,
             "errors": errors,

@@ -80,6 +80,7 @@ denotary-db-agent run --config examples/agent.example.json --interval-sec 5
 See:
 
 - [examples/agent.example.json](examples/agent.example.json)
+- [examples/agent.secrets.env.example](examples/agent.secrets.env.example)
 - [docs/config-reference.md](docs/config-reference.md)
 - [docs/architecture.md](docs/architecture.md)
 - [docs/operator-guide.md](docs/operator-guide.md)
@@ -165,7 +166,10 @@ Note:
 - `pause` / `resume` let operators stop one source without changing the config file
 - `run_once` and daemon mode now auto-refresh PostgreSQL runtime artifacts when tracked table shape changes, including `ALTER TABLE` column drift
 - when `output_plugin = "pgoutput"`, `inspect` shows publication state and tracked publication tables
-- `run --once` uses the configured `dnanchor` private key to sign `verifbill::submit` inside the agent
+- `run --once` can sign `verifbill::submit` inside the agent with:
+  - `broadcast_backend = "private_key_env"` and a hot key loaded from `env_file`
+  - `broadcast_backend = "private_key"` for inline/debug-only WIF in config
+  - `broadcast_backend = "cleos_wallet"` only as a temporary manual fallback
 - `run` without `--once` keeps the agent in daemon mode and, for PostgreSQL trigger sources, waits on `LISTEN/NOTIFY` before the fallback interval elapses
 - for PostgreSQL `pgoutput`, bounded replication-protocol streaming is now the default runtime path
 - `logical_runtime_mode = "peek"` remains available as an explicit fallback

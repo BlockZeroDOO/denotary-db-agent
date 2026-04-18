@@ -4,11 +4,13 @@ import json
 import socket
 import threading
 import unittest
+from types import SimpleNamespace
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
+from unittest.mock import patch
 
-from denotary_db_agent.transport import ChainClient
+from denotary_db_agent.transport import ChainClient, CleosWalletChainClient, build_chain_client, resolve_private_key
 
 
 def free_port() -> int:
@@ -105,6 +107,122 @@ class ChainClientLocalPackingTest(unittest.TestCase):
         pushed = MockChainHandler.push_payloads[0]
         self.assertEqual(len(pushed["signatures"]), 1)
         self.assertTrue(pushed["packed_trx"])
+
+    def test_cleos_wallet_chain_client_pushes_submit_action(self) -> None:
+        client = CleosWalletChainClient(
+            rpc_url="https://history.denotary.io",
+            submitter="dbagentstest",
+            permission="dnanchor",
+            command=["wsl", "cleos"],
+        )
+
+        with patch("subprocess.run") as run:
+            run.return_value = SimpleNamespace(
+                returncode=0,
+                stdout=json.dumps(
+                    {
+                        "transaction_id": "d" * 64,
+                        "processed": {"block_num": 123},
+                    }
+                ),
+                stderr="",
+            )
+            result = client.push_prepared_action(
+                {
+                    "contract": "verifbill",
+                    "action": "submit",
+                    "data": {
+                        "payer": "dbagentstest",
+                        "submitter": "dbagentstest",
+                        "schema_id": 1,
+                        "policy_id": 1,
+                        "object_hash": "1" * 64,
+                        "external_ref": "2" * 64,
+                    },
+                }
+            )
+
+        self.assertEqual(result.tx_id, "d" * 64)
+        self.assertEqual(result.block_num, 123)
+        command = run.call_args.args[0]
+        self.assertEqual(command[:7], ["wsl", "cleos", "-u", "https://history.denotary.io", "push", "action", "verifbill"])
+        self.assertIn("dbagentstest@dnanchor", command)
+        self.assertIn("-j", command)
+
+    def test_cleos_wallet_probe_reports_unlocked_wallets(self) -> None:
+        client = CleosWalletChainClient(
+            rpc_url="https://history.denotary.io",
+            submitter="dbagentstest",
+            permission="dnanchor",
+            command=["wsl", "cleos"],
+        )
+
+        with patch("subprocess.run") as run:
+            run.return_value = SimpleNamespace(
+                returncode=0,
+                stdout='Wallets:\n[\n  "dbagentstest *",\n  "denotary"\n]\n',
+                stderr="",
+            )
+            status = client.probe_wallet()
+
+        self.assertTrue(status["ok"])
+        self.assertTrue(status["has_unlocked_wallet"])
+        self.assertEqual(status["unlocked_wallet_count"], 1)
+
+    def test_build_chain_client_uses_explicit_cleos_wallet_backend(self) -> None:
+        config = SimpleNamespace(
+            chain_rpc_url="https://history.denotary.io",
+            submitter="dbagentstest",
+            submitter_permission="dnanchor",
+            submitter_private_key="",
+            broadcast_backend="cleos_wallet",
+            wallet_command=["wsl", "cleos"],
+        )
+
+        client = build_chain_client(config)
+
+        self.assertIsInstance(client, CleosWalletChainClient)
+
+    def test_resolve_private_key_reads_from_env_file(self) -> None:
+        with self.subTest("env file"):
+            with patch.dict("os.environ", {}, clear=True):
+                import tempfile
+                from pathlib import Path
+
+                with tempfile.TemporaryDirectory() as temp_dir:
+                    env_file = Path(temp_dir) / "agent.env"
+                    env_file.write_text("DENOTARY_SUBMITTER_PRIVATE_KEY=test-wif\n", encoding="utf-8")
+                    info = resolve_private_key(
+                        SimpleNamespace(
+                            submitter_private_key="",
+                            submitter_private_key_env="DENOTARY_SUBMITTER_PRIVATE_KEY",
+                            env_file=str(env_file),
+                        )
+                    )
+
+        self.assertEqual(info["private_key"], "test-wif")
+        self.assertEqual(info["source"], "env")
+        self.assertTrue(info["env_file_exists"])
+        self.assertTrue(info["env_value_present"])
+
+    def test_build_chain_client_uses_private_key_env_backend(self) -> None:
+        with patch.dict("os.environ", {"DENOTARY_SUBMITTER_PRIVATE_KEY": "test-wif"}, clear=True):
+            config = SimpleNamespace(
+                chain_rpc_url="https://history.denotary.io",
+                submitter="dbagentstest",
+                submitter_permission="dnanchor",
+                submitter_private_key="",
+                submitter_private_key_env="DENOTARY_SUBMITTER_PRIVATE_KEY",
+                env_file="",
+                broadcast_backend="private_key_env",
+                wallet_command=[],
+            )
+
+            with patch.object(ChainClient, "__init__", return_value=None) as init:
+                client = build_chain_client(config)
+
+        self.assertIsInstance(client, ChainClient)
+        init.assert_called_once_with("https://history.denotary.io", "dbagentstest", "dnanchor", "test-wif")
 
     def test_push_prepared_action_falls_back_to_local_submitroot_packing(self) -> None:
         prepared_action = {

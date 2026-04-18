@@ -37,6 +37,10 @@ class DenotaryConfig:
     audit_url: str = ""
     chain_rpc_url: str = ""
     submitter_private_key: str = ""
+    submitter_private_key_env: str = "DENOTARY_SUBMITTER_PRIVATE_KEY"
+    env_file: str = ""
+    broadcast_backend: str = "auto"
+    wallet_command: list[str] = field(default_factory=list)
     billing_account: str = "verifbill"
     wait_for_finality: bool = False
     finality_timeout_sec: int = 120
@@ -99,8 +103,18 @@ def _require_positive_int(mapping: dict[str, Any], field_name: str, default: int
     return value
 
 
+def _optional_string_list(mapping: dict[str, Any], field_name: str) -> list[str]:
+    value = mapping.get(field_name)
+    if value is None:
+        return []
+    if not isinstance(value, list) or not all(isinstance(item, str) and item.strip() for item in value):
+        raise ValueError(f"{field_name} must be an array of non-empty strings")
+    return [item.strip() for item in value]
+
+
 def load_config(path: str | Path) -> AgentConfig:
-    raw = json.loads(Path(path).read_text(encoding="utf-8"))
+    config_path = Path(path)
+    raw = json.loads(config_path.read_text(encoding="utf-8"))
     if not isinstance(raw, dict):
         raise ValueError("config root must be an object")
 
@@ -124,6 +138,10 @@ def load_config(path: str | Path) -> AgentConfig:
         submitter=_require_non_empty_string(denotary_raw, "submitter"),
         submitter_permission=str(denotary_raw.get("submitter_permission", "dnanchor")),
         submitter_private_key=str(denotary_raw.get("submitter_private_key", "")),
+        submitter_private_key_env=str(denotary_raw.get("submitter_private_key_env", "DENOTARY_SUBMITTER_PRIVATE_KEY")),
+        env_file=str((config_path.parent / str(denotary_raw.get("env_file", ""))).resolve()) if denotary_raw.get("env_file") else "",
+        broadcast_backend=str(denotary_raw.get("broadcast_backend", "auto")),
+        wallet_command=_optional_string_list(denotary_raw, "wallet_command"),
         schema_id=_require_int(denotary_raw, "schema_id"),
         policy_id=_require_int(denotary_raw, "policy_id"),
         billing_account=str(denotary_raw.get("billing_account", "verifbill")),
@@ -131,6 +149,8 @@ def load_config(path: str | Path) -> AgentConfig:
         finality_timeout_sec=int(denotary_raw.get("finality_timeout_sec", 120)),
         finality_poll_interval_sec=float(denotary_raw.get("finality_poll_interval_sec", 2.0)),
     )
+    if denotary.broadcast_backend not in {"auto", "private_key", "private_key_env", "cleos_wallet"}:
+        raise ValueError("broadcast_backend must be one of: auto, private_key, private_key_env, cleos_wallet")
     storage = StorageConfig(
         state_db=_require_non_empty_string(storage_raw, "state_db"),
         proof_dir=str(storage_raw.get("proof_dir", "runtime/proofs")),

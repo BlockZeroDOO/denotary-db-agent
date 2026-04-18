@@ -5,6 +5,7 @@ This document is the canonical reference for `denotary-db-agent` configuration.
 Use it together with:
 
 - [examples/agent.example.json](../examples/agent.example.json)
+- [examples/agent.secrets.env.example](../examples/agent.secrets.env.example)
 - [docs/operator-guide.md](operator-guide.md)
 - [README.md](../README.md)
 
@@ -75,7 +76,11 @@ Example:
   "chain_rpc_url": "https://history.denotary.io",
   "submitter": "enterpriseac1",
   "submitter_permission": "dnanchor",
-  "submitter_private_key": "REPLACE_WITH_DNANCHOR_WIF",
+  "broadcast_backend": "private_key_env",
+  "submitter_private_key_env": "DENOTARY_SUBMITTER_PRIVATE_KEY",
+  "env_file": "./examples/agent.secrets.env",
+  "wallet_command": ["cleos"],
+  "submitter_private_key": "",
   "schema_id": 1,
   "policy_id": 1,
   "billing_account": "verifbill",
@@ -145,15 +150,70 @@ Example:
   - do not use `owner`
   - avoid using `active` on the agent host
 
+### `broadcast_backend`
+
+- Type: `string`
+- Required: no
+- Default: `"auto"`
+- Allowed values:
+  - `"auto"`
+  - `"private_key"`
+  - `"private_key_env"`
+  - `"cleos_wallet"`
+- Purpose: choose how the agent signs and broadcasts `verifbill` actions
+- Behavior:
+  - `"auto"` prefers env-backed hot key material when available, otherwise falls back to inline `submitter_private_key`
+  - `"private_key"` signs inside the agent with inline `submitter_private_key`
+  - `"private_key_env"` signs inside the agent with a hot key loaded from process environment or `env_file`
+  - `"cleos_wallet"` shells out to `cleos` and uses an already unlocked local wallet
+
+### `submitter_private_key_env`
+
+- Type: `string`
+- Required: no
+- Default: `"DENOTARY_SUBMITTER_PRIVATE_KEY"`
+- Purpose: environment variable name that carries the hot WIF for `submitter@submitter_permission`
+- Used when:
+  - `broadcast_backend = "private_key_env"`
+  - or `broadcast_backend = "auto"` and no inline key is configured
+
+### `env_file`
+
+- Type: `string`
+- Required: no
+- Default: `""`
+- Purpose: optional path to a dotenv-style file loaded by the agent before resolving `submitter_private_key_env`
+- Behavior:
+  - relative paths are resolved relative to the JSON config file
+  - process environment wins over missing env file values only because both feed the same resolver; either source is acceptable
+- Recommendation:
+  - store this file outside source control
+  - keep permissions restricted to the service user
+  - use it as the default production path for the hot key
+
+### `wallet_command`
+
+- Type: `string[]`
+- Required: no
+- Default: `[]`
+- Purpose: override how the agent invokes `cleos` in wallet-backed mode
+- Examples:
+  - `["cleos"]`
+  - `["wsl", "cleos"]`
+- Used only when:
+  - `broadcast_backend = "cleos_wallet"`
+
 ### `submitter_private_key`
 
 - Type: `string`
-- Required: no in schema, but required for actual built-in signing
+- Required: no in schema
 - Default: `""`
-- Purpose: WIF private key for `submitter@submitter_permission`
+- Purpose: WIF private key for `submitter@submitter_permission` when `broadcast_backend = "private_key"`
 - Recommendation:
   - store outside source control
-  - inject at deploy time
+  - use only for local debug or temporary bootstrap
+  - prefer `private_key_env` + `env_file` for production
+  - leave empty when `broadcast_backend = "private_key_env"` or `"cleos_wallet"`
 
 ### `schema_id`
 
@@ -728,4 +788,5 @@ For a first real deployment:
 - Keep `owner` offline.
 - Do not place `active` on the DB Agent host.
 - Use a dedicated hot permission such as `dnanchor`.
-- Store `submitter_private_key` outside source control.
+- Prefer `private_key_env` with a restricted `env_file` for the hot key.
+- Keep any inline `submitter_private_key` out of source control and reserve it for debug/bootstrap only.

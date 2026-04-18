@@ -391,12 +391,19 @@ Recommended config:
 
 - `submitter`: enterprise payer account
 - `submitter_permission`: `dnanchor`
+- `broadcast_backend`:
+  - `private_key_env` for hot-key signing from process environment or `env_file`
+  - `private_key` only for debug/bootstrap WIF in config
+  - `cleos_wallet` only as a temporary host-wallet fallback
+- `submitter_private_key_env`: e.g. `DENOTARY_SUBMITTER_PRIVATE_KEY`
+- `env_file`: dotenv-style secret file readable only by the service user
 
 Recommended security model:
 
 - no `owner` key on the DB Agent host
 - no `active` key on the DB Agent host
 - no `eosio.token::transfer` permission on the hot broadcaster key
+- no long-lived dependency on unlocked `cleos wallet` for daemon mode
 
 Helper scripts that print `updateauth` / `linkauth` commands:
 

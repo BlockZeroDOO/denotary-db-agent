@@ -116,7 +116,8 @@ docker compose -f deploy/docker-compose.example.yml logs -f
 
 ## Production Notes
 
-- keep `submitter_private_key` out of git
+- prefer `broadcast_backend = "private_key_env"` with a restricted `env_file`
+- keep any inline `submitter_private_key` out of git and reserve it for debug/bootstrap only
 - prefer `submitter_permission = "dnanchor"`
 - set `proof_retention`, `delivery_retention`, and `dlq_retention`
 - enable `diagnostics_snapshot_interval_sec` if you want autonomous operator snapshots
@@ -125,7 +126,7 @@ docker compose -f deploy/docker-compose.example.yml logs -f
 - start from the platform-specific config packs and then replace:
   - watcher token
   - PostgreSQL password
-  - `submitter_private_key`
+  - `env_file` / `submitter_private_key_env`
   - live `schema_id` / `policy_id`
 
 ## Suggested First Operator Checklist

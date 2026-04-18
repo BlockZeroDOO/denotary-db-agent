@@ -624,3 +624,55 @@ class EngineTest(unittest.TestCase):
         self.assertEqual(report["signer"]["severity"], "degraded")
         self.assertTrue(report["signer"]["broadcast_ready"])
         self.assertIn("submitter_permission is owner; a dedicated hot permission such as dnanchor is recommended", report["warnings"])
+
+    def test_doctor_accepts_cleos_wallet_backend_when_wallet_is_unlocked(self) -> None:
+        config = json.loads(self.config_path.read_text(encoding="utf-8"))
+        config["denotary"]["chain_rpc_url"] = "https://history.denotary.io"
+        config["denotary"]["broadcast_backend"] = "cleos_wallet"
+        config["denotary"]["wallet_command"] = ["wsl", "cleos"]
+        self.config_path.write_text(json.dumps(config), encoding="utf-8")
+
+        engine = AgentEngine(load_config(self.config_path))
+        engine.chain = SimpleNamespace(
+            health=lambda: {"server_version_string": "v1", "chain_id": "abc"},
+            get_account=lambda account: {"account_name": account, "permissions": [{"perm_name": "dnanchor"}]},
+            probe_wallet=lambda: {
+                "ok": True,
+                "command": ["wsl", "cleos"],
+                "unlocked_wallet_count": 1,
+                "has_unlocked_wallet": True,
+                "raw": 'Wallets: ["dbagentstest *"]',
+            },
+        )
+
+        report = engine.doctor("pg-core-ledger")
+
+        self.assertEqual(report["signer"]["severity"], "degraded")
+        self.assertEqual(report["signer"]["broadcast_backend"], "cleos_wallet")
+        self.assertTrue(report["signer"]["broadcast_ready"])
+        self.assertTrue(report["signer"]["wallet_probe"]["has_unlocked_wallet"])
+        self.assertIn("wallet-backed broadcaster depends on an unlocked cleos wallet on the local host", report["warnings"])
+
+    def test_doctor_accepts_env_file_hot_key_backend(self) -> None:
+        env_path = Path(self.temp_dir.name) / "agent.env"
+        env_path.write_text("DENOTARY_SUBMITTER_PRIVATE_KEY=test-wif\n", encoding="utf-8")
+        config = json.loads(self.config_path.read_text(encoding="utf-8"))
+        config["denotary"]["chain_rpc_url"] = "https://history.denotary.io"
+        config["denotary"]["broadcast_backend"] = "private_key_env"
+        config["denotary"]["env_file"] = "agent.env"
+        self.config_path.write_text(json.dumps(config), encoding="utf-8")
+
+        engine = AgentEngine(load_config(self.config_path))
+        engine.chain = SimpleNamespace(
+            health=lambda: {"server_version_string": "v1", "chain_id": "abc"},
+            get_account=lambda account: {"account_name": account, "permissions": [{"perm_name": "dnanchor"}]},
+        )
+
+        report = engine.doctor("pg-core-ledger")
+
+        self.assertEqual(report["signer"]["severity"], "degraded")
+        self.assertEqual(report["signer"]["effective_broadcast_backend"], "private_key_env")
+        self.assertEqual(report["signer"]["private_key_source"], "env")
+        self.assertTrue(report["signer"]["env_file_exists"])
+        self.assertTrue(report["signer"]["broadcast_ready"])
+        self.assertIn("hot key is loaded from env_file", " ".join(report["warnings"]))

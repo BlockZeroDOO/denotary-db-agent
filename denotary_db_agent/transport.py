@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import os
+import subprocess
 import time
 import urllib.error
 import urllib.request
@@ -14,6 +16,63 @@ from eosapi.packer import Name, Uint32, Uint64
 from eosapi.transaction import Action, Authorization, Transaction
 
 from denotary_db_agent.models import CanonicalEnvelope
+
+
+def _parse_env_file(path: str) -> dict[str, str]:
+    values: dict[str, str] = {}
+    env_path = Path(path)
+    if not path or not env_path.exists():
+        return values
+    for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip()
+        if not key:
+            continue
+        if value and value[0] == value[-1] and value[0] in {'"', "'"}:
+            value = value[1:-1]
+        values[key] = value
+    return values
+
+
+def resolve_private_key(config: Any) -> dict[str, Any]:
+    inline_key = str(getattr(config, "submitter_private_key", "") or "").strip()
+    env_var_name = str(getattr(config, "submitter_private_key_env", "") or "DENOTARY_SUBMITTER_PRIVATE_KEY").strip()
+    env_file_path = str(getattr(config, "env_file", "") or "").strip()
+    env_file_values = _parse_env_file(env_file_path) if env_file_path else {}
+    env_value = ""
+    if env_var_name:
+        env_value = str(os.environ.get(env_var_name, "") or env_file_values.get(env_var_name, "") or "").strip()
+
+    if inline_key:
+        return {
+            "private_key": inline_key,
+            "source": "inline",
+            "env_var": env_var_name,
+            "env_file": env_file_path,
+            "env_file_exists": bool(env_file_path and Path(env_file_path).exists()),
+            "env_value_present": bool(env_value),
+        }
+    if env_value:
+        return {
+            "private_key": env_value,
+            "source": "env",
+            "env_var": env_var_name,
+            "env_file": env_file_path,
+            "env_file_exists": bool(env_file_path and Path(env_file_path).exists()),
+            "env_value_present": True,
+        }
+    return {
+        "private_key": "",
+        "source": "",
+        "env_var": env_var_name,
+        "env_file": env_file_path,
+        "env_file_exists": bool(env_file_path and Path(env_file_path).exists()),
+        "env_value_present": False,
+    }
 
 
 def _request_json(
@@ -237,6 +296,136 @@ class ChainClient:
         if len(packed) != 32:
             raise RuntimeError(f"{field} must be a 32-byte checksum256 hex string")
         return packed
+
+
+class CleosWalletChainClient:
+    def __init__(self, rpc_url: str, submitter: str, permission: str, command: list[str] | None = None):
+        self.rpc_url = rpc_url.rstrip("/")
+        self.submitter = submitter
+        self.permission = permission
+        self.command = list(command or ["cleos"])
+        if not self.command:
+            raise RuntimeError("wallet command must not be empty")
+
+    def health(self) -> dict[str, Any]:
+        _, body = _request_json(f"{self.rpc_url}/v1/chain/get_info", method="POST", payload={}, expected_status=200)
+        return body
+
+    def get_account(self, account: str) -> dict[str, Any]:
+        _, body = _request_json(
+            f"{self.rpc_url}/v1/chain/get_account",
+            method="POST",
+            payload={"account_name": account},
+            expected_status=200,
+        )
+        return body
+
+    def probe_wallet(self) -> dict[str, Any]:
+        result = subprocess.run(
+            [*self.command, "wallet", "list"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        stdout = result.stdout or ""
+        stderr = result.stderr or ""
+        if result.returncode != 0:
+            return {
+                "ok": False,
+                "error": stderr.strip() or stdout.strip() or f"wallet command exited with {result.returncode}",
+                "command": self.command,
+            }
+        unlocked = [line.strip() for line in stdout.splitlines() if "*" in line]
+        return {
+            "ok": True,
+            "command": self.command,
+            "unlocked_wallet_count": len(unlocked),
+            "has_unlocked_wallet": bool(unlocked),
+            "raw": stdout.strip(),
+        }
+
+    def push_prepared_action(self, prepared_action: dict[str, Any]) -> BroadcastResult:
+        contract = str(prepared_action.get("contract") or prepared_action.get("account") or "")
+        action = str(prepared_action.get("action") or prepared_action.get("name") or "")
+        data = prepared_action.get("data")
+        if not contract or not action or not isinstance(data, dict):
+            raise RuntimeError(f"prepared_action is incomplete: {prepared_action}")
+
+        ordered_args = self._ordered_action_args(action, data)
+        command = [
+            *self.command,
+            "-u",
+            self.rpc_url,
+            "push",
+            "action",
+            contract,
+            action,
+            json.dumps(ordered_args, separators=(",", ":")),
+            "-p",
+            f"{self.submitter}@{self.permission}",
+            "-j",
+        ]
+        result = subprocess.run(command, capture_output=True, text=True, check=False)
+        if result.returncode != 0:
+            raise RuntimeError(result.stderr.strip() or result.stdout.strip() or f"wallet broadcast failed with exit code {result.returncode}")
+        try:
+            payload = json.loads(result.stdout)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(f"wallet broadcast returned non-JSON output: {result.stdout}") from exc
+        tx_id = str(payload.get("transaction_id") or "").lower()
+        block_num = int(payload.get("processed", {}).get("block_num") or 0)
+        if len(tx_id) != 64 or block_num <= 0:
+            raise RuntimeError(f"unexpected wallet push output: {payload}")
+        return BroadcastResult(tx_id=tx_id, block_num=block_num, raw=payload)
+
+    def _ordered_action_args(self, action: str, data: dict[str, Any]) -> list[Any]:
+        if action == "submit":
+            return [
+                data["payer"],
+                data["submitter"],
+                int(data["schema_id"]),
+                int(data["policy_id"]),
+                data["object_hash"],
+                data["external_ref"],
+            ]
+        if action == "submitroot":
+            return [
+                data["payer"],
+                data["submitter"],
+                int(data["schema_id"]),
+                int(data["policy_id"]),
+                data["root_hash"],
+                int(data["leaf_count"]),
+                data["manifest_hash"],
+                data["external_ref"],
+            ]
+        raise RuntimeError(f"wallet broadcast is not supported for action {action}")
+
+
+def build_chain_client(config: Any) -> ChainClient | CleosWalletChainClient | None:
+    rpc_url = str(getattr(config, "chain_rpc_url", "") or "")
+    submitter = str(getattr(config, "submitter", "") or "")
+    permission = str(getattr(config, "submitter_permission", "") or "")
+    backend = str(getattr(config, "broadcast_backend", "auto") or "auto")
+    wallet_command = list(getattr(config, "wallet_command", []) or [])
+    key_info = resolve_private_key(config)
+    private_key = str(key_info["private_key"] or "")
+
+    if not rpc_url or not submitter or not permission:
+        return None
+    if backend == "auto":
+        backend = "private_key_env" if private_key else "private_key"
+    if backend == "private_key":
+        if not private_key:
+            return None
+        return ChainClient(rpc_url, submitter, permission, private_key)
+    if backend == "private_key_env":
+        if not private_key:
+            return None
+        return ChainClient(rpc_url, submitter, permission, private_key)
+    if backend == "cleos_wallet":
+        return CleosWalletChainClient(rpc_url, submitter, permission, wallet_command or ["cleos"])
+    return None
 
 
 class WatcherClient:
