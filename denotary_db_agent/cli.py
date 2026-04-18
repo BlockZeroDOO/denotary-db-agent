@@ -283,10 +283,30 @@ def build_kind_registry(*, kind: str, mapper=None) -> dict[str, dict]:
 
 
 RESOLVED_COMMAND_SPECS = map_commands(COMMAND_SPECS, build_resolved_command_spec)
-EVIDENCE_COMMANDS = build_kind_registry(kind="evidence")
-JSON_ENGINE_COMMANDS = build_kind_registry(kind="json_engine")
-SOURCE_ACTION_COMMANDS = build_kind_registry(kind="source_action")
-ENGINE_DISPATCH_COMMANDS = build_engine_dispatch_commands()
+
+
+def build_command_groups() -> dict[str, dict[str, dict]]:
+    return {
+        "evidence": build_kind_registry(kind="evidence"),
+        "json_engine": build_kind_registry(kind="json_engine"),
+        "source_action": build_kind_registry(kind="source_action"),
+        "engine_dispatch": build_engine_dispatch_commands(),
+    }
+
+
+COMMAND_GROUPS = build_command_groups()
+EVIDENCE_COMMANDS = COMMAND_GROUPS["evidence"]
+JSON_ENGINE_COMMANDS = COMMAND_GROUPS["json_engine"]
+SOURCE_ACTION_COMMANDS = COMMAND_GROUPS["source_action"]
+ENGINE_DISPATCH_COMMANDS = COMMAND_GROUPS["engine_dispatch"]
+
+
+def get_command_spec(command_name: str) -> dict:
+    return RESOLVED_COMMAND_SPECS[command_name]
+
+
+def get_command_behavior(command_name: str) -> dict:
+    return get_command_spec(command_name)["behavior"]
 
 
 def add_option(parser, name: str, **overrides: object) -> None:
@@ -365,8 +385,8 @@ def run_evidence_command(
     state_db: str,
     manifest_retention: int,
 ) -> dict:
-    command = RESOLVED_COMMAND_SPECS[command_name]
-    behavior = command["behavior"]
+    command = get_command_spec(command_name)
+    behavior = get_command_behavior(command_name)
     payload = getattr(engine, command["engine_method"])(args.source)
     maybe_export_snapshot(
         payload,
@@ -383,7 +403,7 @@ def run_evidence_command(
 
 
 def emit_command_output(command_name: str, payload: dict, *, flush: bool = False) -> int:
-    behavior = RESOLVED_COMMAND_SPECS[command_name]["behavior"]
+    behavior = get_command_behavior(command_name)
     if behavior.get("output_mode") == "json":
         print(json.dumps(payload, indent=2), flush=flush)
         return 0
@@ -396,7 +416,7 @@ def emit_command_result(result: dict) -> int:
 
 
 def evaluate_command_exit_policy(command_name: str, args, payload: dict) -> int:
-    strict_on_severity = RESOLVED_COMMAND_SPECS[command_name]["behavior"].get("strict_on_severity")
+    strict_on_severity = get_command_behavior(command_name).get("strict_on_severity")
     if strict_on_severity and getattr(args, "strict", False):
         if payload.get("overall", {}).get("severity") in strict_on_severity:
             return 1
@@ -404,7 +424,7 @@ def evaluate_command_exit_policy(command_name: str, args, payload: dict) -> int:
 
 
 def run_json_engine_command(engine: AgentEngine, args, *, command_name: str, **_: object) -> dict:
-    command = RESOLVED_COMMAND_SPECS[command_name]
+    command = get_command_spec(command_name)
     method = getattr(engine, command["engine_method"])
     payload = method(args.source) if command.get("source_arg") else method()
     if "wrap_key" in command:
@@ -413,7 +433,7 @@ def run_json_engine_command(engine: AgentEngine, args, *, command_name: str, **_
 
 
 def run_source_action_command(engine: AgentEngine, args, *, command_name: str, **_: object) -> dict:
-    command = RESOLVED_COMMAND_SPECS[command_name]
+    command = get_command_spec(command_name)
     getattr(engine, command["engine_method"])(args.source)
     return build_command_result(command_name, {"ok": True, "source": args.source, "action": command["action"]})
 
@@ -529,6 +549,10 @@ COMMAND_KIND_PARSER_BUILDERS = build_kind_component_map("parser_builder")
 COMMAND_KIND_HANDLERS = build_kind_component_map("handler", include_engineless=False)
 
 
+def get_command_kind_spec(command_name: str) -> dict:
+    return COMMAND_KIND_SPECS[get_command_spec(command_name)["kind"]]
+
+
 def dispatch_engine_command(
     engine: AgentEngine,
     args,
@@ -536,8 +560,7 @@ def dispatch_engine_command(
     state_db: str,
     manifest_retention: int,
 ) -> dict:
-    command = RESOLVED_COMMAND_SPECS[args.command]
-    handler = COMMAND_KIND_SPECS[command["kind"]]["handler"]
+    handler = get_command_kind_spec(args.command)["handler"]
     return handler(
         engine,
         args,
@@ -548,7 +571,7 @@ def dispatch_engine_command(
 
 
 def command_uses_engine(command_name: str) -> bool:
-    return bool(COMMAND_KIND_SPECS[RESOLVED_COMMAND_SPECS[command_name]["kind"]]["uses_engine"])
+    return bool(get_command_kind_spec(command_name)["uses_engine"])
 
 
 def execute_command(args, config) -> dict:
@@ -567,7 +590,7 @@ def execute_command(args, config) -> dict:
 def add_command_parser(subparsers, command_name: str, command: dict) -> None:
     kind = command["kind"]
     try:
-        builder = COMMAND_KIND_SPECS[kind]["parser_builder"]
+        builder = get_command_kind_spec(command_name)["parser_builder"]
     except KeyError as exc:
         raise ValueError(f"unsupported command kind: {kind}") from exc
     builder(subparsers, command_name, command)
@@ -577,8 +600,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="denotary-db-agent")
     parser.add_argument("--config", required=True, help="Path to agent config JSON")
     subparsers = parser.add_subparsers(dest="command", required=True)
-    for command_name, command in RESOLVED_COMMAND_SPECS.items():
-        add_command_parser(subparsers, command_name, command)
+    for command_name in RESOLVED_COMMAND_SPECS:
+        add_command_parser(subparsers, command_name, get_command_spec(command_name))
     return parser
 
 def main(argv: list[str] | None = None) -> int:

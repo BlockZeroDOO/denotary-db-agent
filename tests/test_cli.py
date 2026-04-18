@@ -7,7 +7,7 @@ from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
-from denotary_db_agent.cli import COMMAND_KIND_BEHAVIOR_DEFAULTS, COMMAND_KIND_COMMAND_DEFAULTS, COMMAND_KIND_HANDLERS, COMMAND_KIND_OPTION_LAYOUTS, COMMAND_KIND_PARSER_BUILDERS, COMMAND_KIND_SPECS, COMMAND_SPECS, EVIDENCE_COMMANDS, ENGINE_DISPATCH_COMMANDS, JSON_ENGINE_COMMANDS, OPTION_SPECS, RESOLVED_COMMAND_SPECS, SOURCE_ACTION_COMMANDS, build_command_result, build_engine_dispatch_commands, build_kind_component_map, build_kind_registry, build_parser, command_uses_engine, emit_command_result, evaluate_command_exit_policy, execute_command, main, maybe_export_snapshot, select_commands
+from denotary_db_agent.cli import COMMAND_GROUPS, COMMAND_KIND_BEHAVIOR_DEFAULTS, COMMAND_KIND_COMMAND_DEFAULTS, COMMAND_KIND_HANDLERS, COMMAND_KIND_OPTION_LAYOUTS, COMMAND_KIND_PARSER_BUILDERS, COMMAND_KIND_SPECS, COMMAND_SPECS, EVIDENCE_COMMANDS, ENGINE_DISPATCH_COMMANDS, JSON_ENGINE_COMMANDS, OPTION_SPECS, RESOLVED_COMMAND_SPECS, SOURCE_ACTION_COMMANDS, build_command_groups, build_command_result, build_engine_dispatch_commands, build_kind_component_map, build_kind_registry, build_parser, command_uses_engine, emit_command_result, evaluate_command_exit_policy, execute_command, get_command_behavior, get_command_kind_spec, get_command_spec, main, maybe_export_snapshot, select_commands
 from denotary_db_agent.diagnostics_snapshots import (
     artifact_kind,
     build_snapshot_metadata,
@@ -42,6 +42,8 @@ class CliTest(unittest.TestCase):
         self.assertEqual(EVIDENCE_COMMANDS["diagnostics"]["engine_method"], "diagnostics")
         self.assertEqual(set(select_commands(kind="evidence")), set(EVIDENCE_COMMANDS))
         self.assertEqual(build_kind_registry(kind="evidence"), EVIDENCE_COMMANDS)
+        self.assertEqual(build_command_groups()["evidence"], EVIDENCE_COMMANDS)
+        self.assertEqual(COMMAND_GROUPS["evidence"], EVIDENCE_COMMANDS)
 
     def test_command_behaviors_cover_evidence_output_and_strict_policy(self) -> None:
         self.assertEqual(COMMAND_KIND_BEHAVIOR_DEFAULTS["default"]["output_mode"], "json")
@@ -54,6 +56,7 @@ class CliTest(unittest.TestCase):
         self.assertEqual(RESOLVED_COMMAND_SPECS["report"]["behavior"]["snapshot_prefix"], "report")
         self.assertEqual(RESOLVED_COMMAND_SPECS["metrics"]["behavior"]["output_mode"], "json")
         self.assertTrue(RESOLVED_COMMAND_SPECS["diagnostics"]["behavior"]["supports_output_path"])
+        self.assertEqual(get_command_behavior("doctor"), RESOLVED_COMMAND_SPECS["doctor"]["behavior"])
 
     def test_evaluate_command_exit_policy_uses_behavior_contract(self) -> None:
         args = type("Args", (), {"strict": True})()
@@ -104,6 +107,7 @@ class CliTest(unittest.TestCase):
         self.assertEqual(ENGINE_DISPATCH_COMMANDS["run"]["kind"], "run")
         self.assertEqual(ENGINE_DISPATCH_COMMANDS["checkpoint"]["kind"], "checkpoint")
         self.assertEqual(ENGINE_DISPATCH_COMMANDS["proof"]["kind"], "proof")
+        self.assertEqual(COMMAND_GROUPS["engine_dispatch"], ENGINE_DISPATCH_COMMANDS)
         self.assertEqual(COMMAND_KIND_HANDLERS["proof"].__name__, "run_proof_command")
         self.assertEqual(COMMAND_KIND_PARSER_BUILDERS["artifacts"].__name__, "add_generic_parser")
         self.assertEqual(build_engine_dispatch_commands(), ENGINE_DISPATCH_COMMANDS)
@@ -114,6 +118,8 @@ class CliTest(unittest.TestCase):
         self.assertEqual(COMMAND_KIND_OPTION_LAYOUTS["run"][1]["name"], "interval_sec")
         self.assertFalse(RESOLVED_COMMAND_SPECS["validate"]["source_arg"])
         self.assertTrue(RESOLVED_COMMAND_SPECS["pause"]["source_required"])
+        self.assertEqual(get_command_spec("metrics"), RESOLVED_COMMAND_SPECS["metrics"])
+        self.assertEqual(get_command_kind_spec("metrics"), COMMAND_KIND_SPECS["json_engine"])
 
     def test_evidence_parser_specs_are_built_from_registry(self) -> None:
         parser = build_parser()
