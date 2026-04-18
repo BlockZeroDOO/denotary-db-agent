@@ -5,6 +5,7 @@ import json
 
 from denotary_db_agent.config import load_config
 from denotary_db_agent.diagnostics_snapshots import (
+    default_evidence_manifest_path,
     export_diagnostics_snapshot,
     export_named_snapshot,
 )
@@ -122,6 +123,7 @@ def main(argv: list[str] | None = None) -> int:
             )
             report["snapshot_path"] = str(snapshot_path)
             report["pruned_snapshot_paths"] = [str(item) for item in removed]
+            report["manifest_path"] = str(default_evidence_manifest_path(config.storage.state_db))
         elif args.save_snapshot:
             snapshot_path, removed = export_named_snapshot(
                 report,
@@ -132,6 +134,7 @@ def main(argv: list[str] | None = None) -> int:
             )
             report["snapshot_path"] = str(snapshot_path)
             report["pruned_snapshot_paths"] = [str(item) for item in removed]
+            report["manifest_path"] = str(default_evidence_manifest_path(config.storage.state_db))
         print(json.dumps(report, indent=2))
         if args.strict and report.get("overall", {}).get("severity") in {"critical", "error"}:
             return 1
@@ -152,6 +155,7 @@ def main(argv: list[str] | None = None) -> int:
             )
             report["snapshot_path"] = str(snapshot_path)
             report["pruned_snapshot_paths"] = [str(item) for item in removed]
+            report["manifest_path"] = str(default_evidence_manifest_path(config.storage.state_db))
         elif args.save_snapshot:
             snapshot_path, removed = export_named_snapshot(
                 report,
@@ -162,6 +166,7 @@ def main(argv: list[str] | None = None) -> int:
             )
             report["snapshot_path"] = str(snapshot_path)
             report["pruned_snapshot_paths"] = [str(item) for item in removed]
+            report["manifest_path"] = str(default_evidence_manifest_path(config.storage.state_db))
         print(json.dumps(report, indent=2))
         return 0
     if args.command == "diagnostics":
@@ -176,6 +181,7 @@ def main(argv: list[str] | None = None) -> int:
             )
             diagnostics["snapshot_path"] = str(snapshot_path)
             diagnostics["pruned_snapshot_paths"] = [str(item) for item in removed]
+            diagnostics["manifest_path"] = str(default_evidence_manifest_path(config.storage.state_db))
         elif args.save_snapshot:
             snapshot_path, removed = export_diagnostics_snapshot(
                 diagnostics,
@@ -185,6 +191,7 @@ def main(argv: list[str] | None = None) -> int:
             )
             diagnostics["snapshot_path"] = str(snapshot_path)
             diagnostics["pruned_snapshot_paths"] = [str(item) for item in removed]
+            diagnostics["manifest_path"] = str(default_evidence_manifest_path(config.storage.state_db))
         print(json.dumps(diagnostics, indent=2))
         return 0
     if args.command == "bootstrap":

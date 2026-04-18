@@ -146,6 +146,10 @@ denotary-db-agent --config /etc/denotary-db-agent/agent.json doctor --source pg-
 denotary-db-agent --config /etc/denotary-db-agent/agent.json report --source pg-core-ledger --save-snapshot
 ```
 
+Saved rollout artifacts are indexed automatically in:
+
+- `data/diagnostics/evidence-manifest.json`
+
 Optional startup gate:
 
 ```bash

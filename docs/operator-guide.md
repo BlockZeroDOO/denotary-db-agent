@@ -141,6 +141,10 @@ Returns and optionally saves one compact rollout evidence bundle with:
 
 Use this when operators want one file per rollout or change window instead of several separate JSON artifacts.
 
+All saved `diagnostics`, `doctor`, and `report` snapshots are also indexed in the local manifest:
+
+- `data/diagnostics/evidence-manifest.json`
+
 ### Diagnostics
 
 ```bash

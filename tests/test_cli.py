@@ -104,6 +104,9 @@ class CliTest(unittest.TestCase):
             self.assertTrue(snapshot_path.exists())
             self.assertEqual(json.loads(snapshot_path.read_text(encoding="utf-8"))["agent_name"], "denotary-db-agent")
             self.assertEqual(payload["pruned_snapshot_paths"], [])
+            self.assertIn("manifest_path", payload)
+            manifest_payload = json.loads(Path(payload["manifest_path"]).read_text(encoding="utf-8"))
+            self.assertEqual(manifest_payload["artifacts"][-1]["kind"], "diagnostics")
 
     def test_diagnostics_save_snapshot_prunes_older_matching_files(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -292,9 +295,12 @@ class CliTest(unittest.TestCase):
             self.assertEqual(exit_code, 0)
             payload = json.loads(stdout.getvalue())
             self.assertIn("snapshot_path", payload)
+            self.assertIn("manifest_path", payload)
             self.assertEqual(len(payload["pruned_snapshot_paths"]), 1)
             remaining = sorted(diagnostics_dir.glob("report-pg-core-ledger-*.json"))
             self.assertEqual(len(remaining), 2)
+            manifest_payload = json.loads(Path(payload["manifest_path"]).read_text(encoding="utf-8"))
+            self.assertEqual(manifest_payload["artifacts"][-1]["kind"], "report")
 
     def test_doctor_command_prints_engine_doctor_report(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -385,6 +391,9 @@ class CliTest(unittest.TestCase):
             self.assertTrue(snapshot_path.exists())
             self.assertTrue(snapshot_path.name.startswith("doctor-pg-core-ledger-"))
             self.assertEqual(payload["pruned_snapshot_paths"], [])
+            self.assertIn("manifest_path", payload)
+            manifest_payload = json.loads(Path(payload["manifest_path"]).read_text(encoding="utf-8"))
+            self.assertEqual(manifest_payload["artifacts"][-1]["kind"], "doctor")
 
     def test_doctor_save_snapshot_prunes_older_matching_files(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

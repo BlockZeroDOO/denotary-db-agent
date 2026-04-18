@@ -127,6 +127,8 @@ Note:
   - `metrics`
   - `diagnostics`
   - `status`
+- saved `diagnostics` / `doctor` / `report` snapshots are also registered in:
+  - `data/diagnostics/evidence-manifest.json`
 - `metrics` gives a compact export-friendly summary of source counters, backlog indicators, stream state, and severity
 - `diagnostics` gives a compact stream/logical-slot focused report per source
 - `diagnostics --save-snapshot` writes the report to a timestamped JSON file under the local runtime directory
