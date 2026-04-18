@@ -8,7 +8,7 @@
 | MySQL | enterprise | 8.0 | watermark polling baseline plus shared row-based binlog CDC baseline | live watermark snapshot baseline plus live binlog CDC/full-cycle proof export |
 | MariaDB | enterprise | 10.6 | watermark polling baseline plus shared row-based binlog CDC baseline | live watermark snapshot baseline plus live binlog CDC/full-cycle proof export |
 | SQL Server | enterprise | 2019 | watermark polling baseline plus native Change Tracking CDC baseline | live Docker-backed watermark snapshot baseline plus live Change Tracking CDC/full-cycle proof export |
-| Oracle | enterprise | 19c | watermark polling baseline now; redo / LogMiner next | live Docker-backed watermark snapshot baseline with local full-cycle proof export |
+| Oracle | enterprise | 19c | watermark polling baseline plus LogMiner CDC baseline | live Docker-backed watermark snapshot baseline plus live LogMiner CDC/full-cycle proof export |
 | MongoDB | enterprise | 6.0 | watermark polling baseline and change streams | live Docker-backed watermark snapshot baseline plus change-stream CDC with local full-cycle proof export |
 
 ## Common v1 Rules

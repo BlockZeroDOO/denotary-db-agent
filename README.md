@@ -64,6 +64,14 @@ Current SQL Server status:
 - live Docker-backed `change_tracking` validation is implemented
 - local full-cycle proof export is implemented for both `watermark` and `change_tracking`
 
+Current Oracle status:
+
+- live `watermark` / snapshot baseline is implemented
+- `logminer` live CDC baseline is implemented through a root-admin connection
+- live Docker-backed `insert / update / delete` validation is implemented for `logminer`
+- local full-cycle proof export is implemented for `watermark`
+- local full-cycle proof export is implemented for `logminer`
+
 ## Quick Start
 
 ```bash

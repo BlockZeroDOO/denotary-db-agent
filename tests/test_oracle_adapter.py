@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import unittest
 from unittest.mock import patch
 
@@ -77,10 +78,11 @@ class OracleAdapterTest(unittest.TestCase):
 
         self.assertEqual(capabilities.source_type, "oracle")
         self.assertEqual(capabilities.minimum_version, "19c")
-        self.assertFalse(capabilities.supports_cdc)
+        self.assertTrue(capabilities.supports_cdc)
         self.assertTrue(capabilities.supports_snapshot)
         self.assertEqual(capabilities.operations, ("snapshot",))
-        self.assertEqual(capabilities.capture_modes, ("watermark",))
+        self.assertEqual(capabilities.capture_modes, ("watermark", "logminer"))
+        self.assertEqual(capabilities.cdc_modes, ("logminer",))
         self.assertEqual(
             capabilities.bootstrap_requirements,
             ("tracked tables visible", "watermark columns configured"),
@@ -190,7 +192,7 @@ class OracleAdapterTest(unittest.TestCase):
             connect.return_value.__exit__.return_value = False
             inspect = adapter.inspect()
 
-        self.assertEqual(inspect["capture_modes"], ["watermark"])
+        self.assertEqual(inspect["capture_modes"], ["watermark", "logminer"])
         self.assertEqual(inspect["bootstrap_requirements"], ["tracked tables visible", "watermark columns configured"])
         self.assertEqual(inspect["tracked_tables"][0]["primary_key_columns"], ["ID"])
 
@@ -291,5 +293,253 @@ class OracleAdapterTest(unittest.TestCase):
 
     def test_start_stream_raises_until_cdc_is_added(self) -> None:
         adapter = OracleAdapter(self.config)
-        with self.assertRaisesRegex(NotImplementedError, "oracle CDC streaming is not implemented yet"):
+        with self.assertRaisesRegex(
+            NotImplementedError,
+            "oracle CDC streaming is only available when capture_mode is set to logminer",
+        ):
             list(adapter.start_stream(None))
+
+    def test_logminer_bootstrap_and_inspect_report_admin_prereqs(self) -> None:
+        config = SourceConfig(
+            **{
+                **self.config.__dict__,
+                "connection": {
+                    **self.config.connection,
+                    "admin_username": "system",
+                    "admin_password": "oraclepw",
+                    "admin_service_name": "FREE",
+                },
+                "options": {
+                    **self.config.options,
+                    "capture_mode": "logminer",
+                },
+            }
+        )
+        adapter = OracleAdapter(config)
+        summary = {
+            "capture_mode": "logminer",
+            "admin_container_name": "CDB$ROOT",
+            "log_mode": "NOARCHIVELOG",
+            "open_mode": "READ WRITE",
+            "supplemental_log_data_min": "YES",
+            "supplemental_log_data_pk": "NO",
+            "redo_members": [{"member": "/redo01.log", "status": "", "sequence_no": 11}],
+            "logminer_packages": ["DBMS_LOGMNR", "DBMS_LOGMNR_D"],
+        }
+        with patch.object(adapter, "validate_connection"), patch.object(adapter, "_connect") as connect, patch.object(
+            adapter, "_load_table_specs"
+        ) as load_specs, patch.object(adapter, "_cdc_summary", return_value=summary):
+            connect.return_value.__enter__.return_value = FakeConnection([])
+            connect.return_value.__exit__.return_value = False
+            load_specs.return_value = [
+                type(
+                    "Spec",
+                    (),
+                    {
+                        "schema_name": "DENOTARY",
+                        "table_name": "INVOICES",
+                        "watermark_column": "UPDATED_AT",
+                        "commit_timestamp_column": "UPDATED_AT",
+                        "primary_key_columns": ["ID"],
+                        "selected_columns": ["ID", "STATUS", "UPDATED_AT"],
+                    },
+                )()
+            ]
+            bootstrap = adapter.bootstrap()
+            inspect = adapter.inspect()
+
+        self.assertEqual(bootstrap["capture_mode"], "logminer")
+        self.assertEqual(bootstrap["cdc"]["admin_container_name"], "CDB$ROOT")
+        self.assertEqual(inspect["cdc_modes"], ["logminer"])
+        self.assertTrue(inspect["supports_cdc"])
+
+    def test_validate_logminer_prerequisites_requires_root_and_supplemental_logging(self) -> None:
+        config = SourceConfig(
+            **{
+                **self.config.__dict__,
+                "connection": {
+                    **self.config.connection,
+                    "admin_username": "system",
+                    "admin_password": "oraclepw",
+                    "admin_service_name": "FREE",
+                },
+                "options": {
+                    **self.config.options,
+                    "capture_mode": "logminer",
+                },
+            }
+        )
+        adapter = OracleAdapter(config)
+        with patch.object(
+            adapter,
+            "_read_logminer_summary",
+            return_value={
+                "capture_mode": "logminer",
+                "admin_container_name": "FREEPDB1",
+                "log_mode": "NOARCHIVELOG",
+                "open_mode": "READ WRITE",
+                "supplemental_log_data_min": "NO",
+                "supplemental_log_data_pk": "NO",
+                "redo_members": [],
+                "logminer_packages": ["DBMS_LOGMNR"],
+            },
+        ):
+            with self.assertRaisesRegex(ValueError, "logminer admin connection must target CDB\\$ROOT"):
+                adapter._validate_logminer_prerequisites(object())
+
+    def test_start_stream_logminer_without_checkpoint_sets_initial_scn_baseline(self) -> None:
+        config = SourceConfig(
+            **{
+                **self.config.__dict__,
+                "connection": {
+                    **self.config.connection,
+                    "admin_username": "system",
+                    "admin_password": "oraclepw",
+                    "admin_service_name": "FREE",
+                },
+                "options": {
+                    **self.config.options,
+                    "capture_mode": "logminer",
+                },
+            }
+        )
+        adapter = OracleAdapter(config)
+        with patch.object(adapter, "_connect") as connect, patch.object(adapter, "_connect_logminer_admin") as admin_connect, patch.object(
+            adapter, "_load_table_specs"
+        ) as load_specs, patch.object(adapter, "_validate_logminer_prerequisites"), patch.object(
+            adapter, "_read_source_container_name", return_value="FREEPDB1"
+        ), patch.object(adapter, "_current_root_scn", return_value=424242):
+            connect.return_value.__enter__.return_value = FakeConnection([])
+            connect.return_value.__exit__.return_value = False
+            admin_connect.return_value.__enter__.return_value = FakeConnection([])
+            admin_connect.return_value.__exit__.return_value = False
+            load_specs.return_value = []
+            events = list(adapter.start_stream(None))
+
+        self.assertEqual(events, [])
+        self.assertEqual(adapter._logminer_initial_scn, 424242)
+
+    def test_start_stream_logminer_emits_insert_update_delete_events(self) -> None:
+        config = SourceConfig(
+            **{
+                **self.config.__dict__,
+                "connection": {
+                    **self.config.connection,
+                    "admin_username": "system",
+                    "admin_password": "oraclepw",
+                    "admin_service_name": "FREE",
+                },
+                "options": {
+                    **self.config.options,
+                    "capture_mode": "logminer",
+                },
+            }
+        )
+        adapter = OracleAdapter(config)
+        checkpoint = SourceCheckpoint(
+            source_id=config.id,
+            token=json.dumps({"mode": "logminer", "scn": 1000, "rs_id": "", "ssn": 0, "row_index": 0}),
+            updated_at="2026-04-18T12:00:00Z",
+        )
+        spec = type(
+            "Spec",
+            (),
+            {
+                "schema_name": "DENOTARY",
+                "table_name": "INVOICES",
+                "primary_key_columns": ["ID"],
+            },
+        )()
+        rows = [
+            {
+                "SCN": 1001,
+                "RS_ID": "0x001",
+                "SSN": 1,
+                "TIMESTAMP": "2026-04-18T12:00:01Z",
+                "OPERATION": "INSERT",
+                "SEG_OWNER": "DENOTARY",
+                "TABLE_NAME": "INVOICES",
+                "SQL_REDO": "insert into \"DENOTARY\".\"INVOICES\"(\"ID\",\"STATUS\") values ('1','issued');",
+                "SQL_UNDO": "",
+                "SRC_CON_NAME": "FREEPDB1",
+            },
+            {
+                "SCN": 1002,
+                "RS_ID": "0x002",
+                "SSN": 1,
+                "TIMESTAMP": "2026-04-18T12:00:02Z",
+                "OPERATION": "UPDATE",
+                "SEG_OWNER": "DENOTARY",
+                "TABLE_NAME": "INVOICES",
+                "SQL_REDO": "update \"DENOTARY\".\"INVOICES\" set \"STATUS\" = 'paid' where \"ID\" = '1' and \"STATUS\" = 'issued';",
+                "SQL_UNDO": "update \"DENOTARY\".\"INVOICES\" set \"STATUS\" = 'issued' where \"ID\" = '1' and \"STATUS\" = 'paid';",
+                "SRC_CON_NAME": "FREEPDB1",
+            },
+            {
+                "SCN": 1003,
+                "RS_ID": "0x003",
+                "SSN": 1,
+                "TIMESTAMP": "2026-04-18T12:00:03Z",
+                "OPERATION": "DELETE",
+                "SEG_OWNER": "DENOTARY",
+                "TABLE_NAME": "INVOICES",
+                "SQL_REDO": "delete from \"DENOTARY\".\"INVOICES\" where \"ID\" = '1' and \"STATUS\" = 'paid';",
+                "SQL_UNDO": "",
+                "SRC_CON_NAME": "FREEPDB1",
+            },
+        ]
+        with patch.object(adapter, "_connect") as connect, patch.object(adapter, "_connect_logminer_admin") as admin_connect, patch.object(
+            adapter, "_load_table_specs", return_value=[spec]
+        ), patch.object(adapter, "_read_source_container_name", return_value="FREEPDB1"), patch.object(
+            adapter, "_validate_logminer_prerequisites"
+        ), patch.object(adapter, "_start_logminer_session"), patch.object(adapter, "_end_logminer_session"), patch.object(
+            adapter, "_fetch_logminer_rows", return_value=rows
+        ):
+            connect.return_value.__enter__.return_value = FakeConnection([])
+            connect.return_value.__exit__.return_value = False
+            admin_connect.return_value.__enter__.return_value = FakeConnection([])
+            admin_connect.return_value.__exit__.return_value = False
+            events = list(adapter.start_stream(checkpoint))
+
+        self.assertEqual([event.operation for event in events], ["insert", "update", "delete"])
+        self.assertEqual(events[0].after, {"ID": "1", "STATUS": "issued"})
+        self.assertEqual(events[1].before, {"ID": "1", "STATUS": "issued"})
+        self.assertEqual(events[1].after, {"STATUS": "paid", "ID": "1"})
+        self.assertEqual(events[2].before, {"ID": "1", "STATUS": "paid"})
+        self.assertEqual(events[2].primary_key, {"ID": "1"})
+
+    def test_start_stream_logminer_raises_clear_runtime_message_when_redo_window_is_gone(self) -> None:
+        config = SourceConfig(
+            **{
+                **self.config.__dict__,
+                "connection": {
+                    **self.config.connection,
+                    "admin_username": "system",
+                    "admin_password": "oraclepw",
+                    "admin_service_name": "FREE",
+                },
+                "options": {
+                    **self.config.options,
+                    "capture_mode": "logminer",
+                },
+            }
+        )
+        adapter = OracleAdapter(config)
+        checkpoint = SourceCheckpoint(
+            source_id=config.id,
+            token=json.dumps({"mode": "logminer", "scn": 999, "rs_id": "", "ssn": 0, "row_index": 0}),
+            updated_at="2026-04-18T12:00:00Z",
+        )
+        with patch.object(adapter, "_connect") as connect, patch.object(adapter, "_connect_logminer_admin") as admin_connect, patch.object(
+            adapter, "_load_table_specs", return_value=[]
+        ), patch.object(adapter, "_read_source_container_name", return_value="FREEPDB1"), patch.object(
+            adapter, "_validate_logminer_prerequisites"
+        ), patch.object(
+            adapter, "_start_logminer_session", side_effect=ValueError("oracle LogMiner checkpoint is older than the current online redo window")
+        ):
+            connect.return_value.__enter__.return_value = FakeConnection([])
+            connect.return_value.__exit__.return_value = False
+            admin_connect.return_value.__enter__.return_value = FakeConnection([])
+            admin_connect.return_value.__exit__.return_value = False
+            with self.assertRaisesRegex(ValueError, "older than the current online redo window"):
+                list(adapter.start_stream(checkpoint))

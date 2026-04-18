@@ -319,6 +319,7 @@ class OracleFullCycleLiveIntegrationTest(unittest.TestCase):
         cls._docker_compose("down", "-v")
         cls._docker_compose("up", "-d")
         cls._wait_for_oracle()
+        cls._enable_root_supplemental_logging()
         cls._apply_init_sql()
 
     @classmethod
@@ -360,6 +361,39 @@ class OracleFullCycleLiveIntegrationTest(unittest.TestCase):
             connection.commit()
         finally:
             connection.close()
+
+    @classmethod
+    def _connect_root(cls):
+        return oracledb.connect(
+            user="system",
+            password="oraclepw",
+            host="127.0.0.1",
+            port=ORACLE_PORT,
+            service_name="FREE",
+            tcp_connect_timeout=10,
+        )
+
+    @classmethod
+    def _enable_root_supplemental_logging(cls) -> None:
+        deadline = time.time() + 60
+        while True:
+            connection = cls._connect_root()
+            try:
+                cursor = connection.cursor()
+                try:
+                    cursor.execute("alter database add supplemental log data")
+                except oracledb.DatabaseError as exc:
+                    message = str(exc)
+                    if "ORA-32588" in message:
+                        return
+                    if "ORA-32593" in message and time.time() < deadline:
+                        time.sleep(2)
+                        continue
+                    raise
+                connection.commit()
+                return
+            finally:
+                connection.close()
 
     @classmethod
     def _connect(cls):
@@ -428,6 +462,7 @@ class OracleFullCycleLiveIntegrationTest(unittest.TestCase):
         audit_port: int,
         chain_port: int,
         batch_enabled: bool = False,
+        capture_mode: str = "watermark",
     ) -> None:
         config = {
             "agent_name": "oracle-full-cycle-live-test",
@@ -466,12 +501,15 @@ class OracleFullCycleLiveIntegrationTest(unittest.TestCase):
                         "username": ORACLE_USERNAME,
                         "password": ORACLE_PASSWORD,
                         "service_name": ORACLE_SERVICE_NAME,
+                        "admin_username": "system",
+                        "admin_password": "oraclepw",
+                        "admin_service_name": "FREE",
                     },
                     "backfill_mode": "full",
                     "batch_enabled": batch_enabled,
                     "batch_size": 10,
                     "options": {
-                        "capture_mode": "watermark",
+                        "capture_mode": capture_mode,
                         "watermark_column": "updated_at",
                         "commit_timestamp_column": "updated_at",
                         "row_limit": 100,
@@ -491,6 +529,21 @@ class OracleFullCycleLiveIntegrationTest(unittest.TestCase):
                 values (:1, :2, :3, :4)
                 """,
                 (9001, "issued", 111.00, datetime(2026, 4, 18, 10, 0, 1)),
+            )
+            connection.commit()
+        finally:
+            connection.close()
+
+    def _insert_logminer_row(self) -> None:
+        connection = self._connect()
+        try:
+            cursor = connection.cursor()
+            cursor.execute(
+                """
+                insert into invoices (id, status, amount, updated_at)
+                values (:1, :2, :3, :4)
+                """,
+                (9201, "issued", 151.00, datetime(2026, 4, 18, 10, 20, 1)),
             )
             connection.commit()
         finally:
@@ -568,6 +621,42 @@ class OracleFullCycleLiveIntegrationTest(unittest.TestCase):
         self.assertEqual(proof_payload["request_id"], "oracle-batch-request-1")
         self.assertEqual(proof_payload["mode"], "batch")
         self.assertEqual(len(proof_payload["members"]), 2)
+
+    def test_live_oracle_logminer_full_cycle_exports_proof_bundle(self) -> None:
+        self._write_config(
+            ingress_port=self.servers[0].server_address[1],
+            watcher_port=self.servers[1].server_address[1],
+            receipt_port=self.servers[2].server_address[1],
+            audit_port=self.servers[3].server_address[1],
+            chain_port=self.servers[4].server_address[1],
+            capture_mode="logminer",
+        )
+        engine = AgentEngine(load_config(self.config_path))
+
+        bootstrap = engine.bootstrap("oracle-core-ledger")
+        self.assertEqual(bootstrap["sources"][0]["capture_mode"], "logminer")
+        baseline = engine.run_once()
+        self.assertEqual(baseline["processed"], 0)
+        self.assertEqual(baseline["failed"], 0)
+
+        self._insert_logminer_row()
+        result = engine.run_once()
+
+        self.assertEqual(result["processed"], 1)
+        self.assertEqual(result["failed"], 0)
+        deliveries = engine.store.list_deliveries("oracle-core-ledger")
+        self.assertEqual(len(deliveries), 1)
+        self.assertEqual(deliveries[0]["status"], "finalized_exported")
+
+        proofs = engine.store.list_proofs("oracle-core-ledger")
+        self.assertEqual(len(proofs), 1)
+        export_path = proofs[0]["export_path"]
+        self.assertTrue(export_path)
+        self.assertTrue(Path(str(export_path)).exists())
+
+        proof_payload = json.loads(Path(str(export_path)).read_text(encoding="utf-8"))
+        self.assertEqual(proof_payload["request_id"], "oracle-request-1")
+        self.assertEqual(proof_payload["receipt"]["tx_id"], "c" * 64)
 
 
 if __name__ == "__main__":

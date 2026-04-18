@@ -99,6 +99,7 @@ class OracleLiveIntegrationTest(unittest.TestCase):
         cls._docker_compose("down", "-v")
         cls._docker_compose("up", "-d")
         cls._wait_for_oracle()
+        cls._enable_root_supplemental_logging()
         cls._apply_init_sql()
 
     @classmethod
@@ -140,6 +141,39 @@ class OracleLiveIntegrationTest(unittest.TestCase):
             connection.commit()
         finally:
             connection.close()
+
+    @classmethod
+    def _connect_root(cls):
+        return oracledb.connect(
+            user="system",
+            password="oraclepw",
+            host="127.0.0.1",
+            port=ORACLE_PORT,
+            service_name="FREE",
+            tcp_connect_timeout=10,
+        )
+
+    @classmethod
+    def _enable_root_supplemental_logging(cls) -> None:
+        deadline = time.time() + 60
+        while True:
+            connection = cls._connect_root()
+            try:
+                cursor = connection.cursor()
+                try:
+                    cursor.execute("alter database add supplemental log data")
+                except oracledb.DatabaseError as exc:
+                    message = str(exc)
+                    if "ORA-32588" in message:
+                        return
+                    if "ORA-32593" in message and time.time() < deadline:
+                        time.sleep(2)
+                        continue
+                    raise
+                connection.commit()
+                return
+            finally:
+                connection.close()
 
     @classmethod
     def _connect(cls):
@@ -189,7 +223,12 @@ class OracleLiveIntegrationTest(unittest.TestCase):
         finally:
             connection.close()
 
-    def _write_config(self, backfill_mode: str = "full", row_limit: int = 100) -> None:
+    def _write_config(
+        self,
+        backfill_mode: str = "full",
+        row_limit: int = 100,
+        capture_mode: str = "watermark",
+    ) -> None:
         config = {
             "agent_name": "live-oracle-test",
             "log_level": "INFO",
@@ -218,11 +257,14 @@ class OracleLiveIntegrationTest(unittest.TestCase):
                         "username": ORACLE_USERNAME,
                         "password": ORACLE_PASSWORD,
                         "service_name": ORACLE_SERVICE_NAME,
+                        "admin_username": "system",
+                        "admin_password": "oraclepw",
+                        "admin_service_name": "FREE",
                     },
                     "backfill_mode": backfill_mode,
                     "batch_size": 100,
                     "options": {
-                        "capture_mode": "watermark",
+                        "capture_mode": capture_mode,
                         "watermark_column": "updated_at",
                         "commit_timestamp_column": "updated_at",
                         "row_limit": row_limit,
@@ -268,6 +310,46 @@ class OracleLiveIntegrationTest(unittest.TestCase):
                 """,
                 (2002, 1001, 100.00, datetime(2026, 4, 17, 10, 0, 4)),
             )
+            connection.commit()
+        finally:
+            connection.close()
+
+    def _insert_invoice_row(self, invoice_id: int, status: str) -> None:
+        connection = self._connect()
+        try:
+            cursor = connection.cursor()
+            cursor.execute(
+                """
+                insert into invoices (id, status, amount, updated_at)
+                values (:1, :2, :3, :4)
+                """,
+                (invoice_id, status, 100.00, datetime(2026, 4, 17, 10, 0, 10)),
+            )
+            connection.commit()
+        finally:
+            connection.close()
+
+    def _update_invoice_status(self, invoice_id: int, status: str) -> None:
+        connection = self._connect()
+        try:
+            cursor = connection.cursor()
+            cursor.execute(
+                """
+                update invoices
+                set status = :1, updated_at = :2
+                where id = :3
+                """,
+                (status, datetime(2026, 4, 17, 10, 0, 11), invoice_id),
+            )
+            connection.commit()
+        finally:
+            connection.close()
+
+    def _delete_invoice_row(self, invoice_id: int) -> None:
+        connection = self._connect()
+        try:
+            cursor = connection.cursor()
+            cursor.execute("delete from invoices where id = :1", (invoice_id,))
             connection.commit()
         finally:
             connection.close()
@@ -318,7 +400,7 @@ class OracleLiveIntegrationTest(unittest.TestCase):
         validation = engine.validate()
         self.assertEqual(validation[0]["source_type"], "oracle")
         self.assertEqual(validation[0]["supports_snapshot"], "true")
-        self.assertEqual(validation[0]["capture_modes"], ["watermark"])
+        self.assertEqual(validation[0]["capture_modes"], ["watermark", "logminer"])
 
         bootstrap = engine.bootstrap("oracle-core-ledger")
         self.assertEqual(bootstrap["sources"][0]["capture_mode"], "watermark")
@@ -374,6 +456,52 @@ class OracleLiveIntegrationTest(unittest.TestCase):
         result = engine.run_once()
         self.assertEqual(result["processed"], 0)
         self.assertEqual(result["failed"], 0)
+
+    def test_live_oracle_logminer_bootstrap_and_inspect_admin_prereqs(self) -> None:
+        self._write_config(capture_mode="logminer", backfill_mode="none")
+        engine = AgentEngine(load_config(self.config_path))
+
+        validation = engine.validate()
+        self.assertEqual(validation[0]["capture_modes"], ["watermark", "logminer"])
+
+        bootstrap = engine.bootstrap("oracle-core-ledger")
+        self.assertEqual(bootstrap["sources"][0]["capture_mode"], "logminer")
+        self.assertEqual(bootstrap["sources"][0]["cdc"]["admin_container_name"], "CDB$ROOT")
+        self.assertEqual(bootstrap["sources"][0]["cdc"]["supplemental_log_data_min"], "YES")
+        self.assertGreaterEqual(len(bootstrap["sources"][0]["cdc"]["redo_members"]), 1)
+
+        inspect = engine.inspect("oracle-core-ledger")
+        self.assertEqual(inspect["sources"][0]["cdc_modes"], ["logminer"])
+        self.assertEqual(inspect["sources"][0]["cdc"]["admin_container_name"], "CDB$ROOT")
+
+    def test_live_oracle_logminer_stream_captures_insert_update_delete(self) -> None:
+        self._write_config(capture_mode="logminer", backfill_mode="none", row_limit=10)
+        engine = AgentEngine(load_config(self.config_path))
+
+        bootstrap = engine.bootstrap("oracle-core-ledger")
+        self.assertEqual(bootstrap["sources"][0]["capture_mode"], "logminer")
+
+        baseline = engine.run_once()
+        self.assertEqual(baseline["processed"], 0)
+        self.assertEqual(baseline["failed"], 0)
+
+        self._insert_invoice_row(3001, "issued")
+        inserted = engine.run_once()
+        self.assertEqual(inserted["processed"], 1)
+        self.assertEqual(inserted["failed"], 0)
+
+        self._update_invoice_status(3001, "paid")
+        updated = engine.run_once()
+        self.assertEqual(updated["processed"], 1)
+        self.assertEqual(updated["failed"], 0)
+
+        self._delete_invoice_row(3001)
+        deleted = engine.run_once()
+        self.assertEqual(deleted["processed"], 1)
+        self.assertEqual(deleted["failed"], 0)
+
+        deliveries = engine.store.list_deliveries("oracle-core-ledger")
+        self.assertEqual(len(deliveries), 3)
 
 
 if __name__ == "__main__":
