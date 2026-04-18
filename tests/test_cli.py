@@ -7,7 +7,7 @@ from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
-from denotary_db_agent.cli import COMMAND_BEHAVIORS, COMMAND_KIND_HANDLERS, COMMAND_KIND_PARSER_BUILDERS, COMMAND_SPECS, EVIDENCE_COMMANDS, ENGINE_DISPATCH_COMMANDS, JSON_ENGINE_COMMANDS, OPTION_SPECS, SOURCE_ACTION_COMMANDS, build_command_result, build_parser, command_uses_engine, emit_command_result, evaluate_command_exit_policy, execute_command, main, maybe_export_snapshot
+from denotary_db_agent.cli import COMMAND_BEHAVIORS, COMMAND_KIND_HANDLERS, COMMAND_KIND_PARSER_BUILDERS, COMMAND_SPECS, EVIDENCE_COMMANDS, ENGINE_DISPATCH_COMMANDS, JSON_ENGINE_COMMANDS, OPTION_SPECS, SOURCE_ACTION_COMMANDS, build_command_result, build_engine_dispatch_commands, build_parser, command_uses_engine, emit_command_result, evaluate_command_exit_policy, execute_command, main, maybe_export_snapshot, select_commands
 from denotary_db_agent.diagnostics_snapshots import (
     artifact_kind,
     build_snapshot_metadata,
@@ -40,6 +40,7 @@ class CliTest(unittest.TestCase):
         self.assertEqual(EVIDENCE_COMMANDS["doctor"]["engine_method"], "doctor")
         self.assertEqual(EVIDENCE_COMMANDS["report"]["engine_method"], "report")
         self.assertEqual(EVIDENCE_COMMANDS["diagnostics"]["engine_method"], "diagnostics")
+        self.assertEqual(set(select_commands(kind="evidence")), set(EVIDENCE_COMMANDS))
 
     def test_command_behaviors_cover_evidence_output_and_strict_policy(self) -> None:
         self.assertTrue(COMMAND_BEHAVIORS["doctor"]["supports_snapshot_export"])
@@ -100,6 +101,7 @@ class CliTest(unittest.TestCase):
         self.assertEqual(ENGINE_DISPATCH_COMMANDS["proof"]["kind"], "proof")
         self.assertEqual(COMMAND_KIND_HANDLERS["proof"].__name__, "run_proof_command")
         self.assertEqual(COMMAND_KIND_PARSER_BUILDERS["artifacts"].__name__, "add_artifacts_parser")
+        self.assertEqual(build_engine_dispatch_commands(), ENGINE_DISPATCH_COMMANDS)
 
     def test_evidence_parser_specs_are_built_from_registry(self) -> None:
         parser = build_parser()

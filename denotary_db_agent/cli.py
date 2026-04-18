@@ -173,18 +173,36 @@ def build_command_behavior(command_name: str, command: dict) -> dict:
         behavior.setdefault("snapshot_prefix", command_name)
     return behavior
 
-EVIDENCE_COMMANDS = {name: command for name, command in COMMAND_SPECS.items() if command["kind"] == "evidence"}
-JSON_ENGINE_COMMANDS = {name: command for name, command in COMMAND_SPECS.items() if command["kind"] == "json_engine"}
-SOURCE_ACTION_COMMANDS = {name: command for name, command in COMMAND_SPECS.items() if command["kind"] == "source_action"}
-ENGINE_DISPATCH_COMMANDS = {
-    name: {"kind": command["kind"]}
-    for name, command in COMMAND_SPECS.items()
-    if command["kind"] != "artifacts"
-}
-COMMAND_BEHAVIORS = {
-    name: build_command_behavior(name, command)
-    for name, command in COMMAND_SPECS.items()
-}
+def select_commands(*, kind: str | None = None, exclude_kind: str | None = None) -> dict[str, dict]:
+    selected: dict[str, dict] = {}
+    for name, command in COMMAND_SPECS.items():
+        if kind is not None and command["kind"] != kind:
+            continue
+        if exclude_kind is not None and command["kind"] == exclude_kind:
+            continue
+        selected[name] = command
+    return selected
+
+
+def build_engine_dispatch_commands() -> dict[str, dict]:
+    return {
+        name: {"kind": command["kind"]}
+        for name, command in select_commands(exclude_kind="artifacts").items()
+    }
+
+
+def build_command_behaviors() -> dict[str, dict]:
+    return {
+        name: build_command_behavior(name, command)
+        for name, command in COMMAND_SPECS.items()
+    }
+
+
+EVIDENCE_COMMANDS = select_commands(kind="evidence")
+JSON_ENGINE_COMMANDS = select_commands(kind="json_engine")
+SOURCE_ACTION_COMMANDS = select_commands(kind="source_action")
+ENGINE_DISPATCH_COMMANDS = build_engine_dispatch_commands()
+COMMAND_BEHAVIORS = build_command_behaviors()
 
 
 def add_evidence_parser(subparsers, command_name: str, command: dict) -> None:
