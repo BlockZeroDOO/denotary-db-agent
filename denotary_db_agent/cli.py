@@ -78,9 +78,11 @@ COMMAND_SPECS = {
     "doctor": {
         "kind": "evidence",
         "engine_method": "doctor",
-        "strict_on_severity": {"critical", "error"},
         "help": "Run a live preflight report for deploy readiness",
-        "supports_strict": True,
+        "behavior": {
+            "supports_strict": True,
+            "strict_on_severity": {"critical", "error"},
+        },
     },
     "report": {
         "kind": "evidence",
@@ -161,6 +163,16 @@ OPTION_SPECS = {
     },
 }
 
+
+def build_command_behavior(command_name: str, command: dict) -> dict:
+    behavior = {"output_mode": "json"}
+    behavior.update(command.get("behavior", {}))
+    if command["kind"] == "evidence":
+        behavior.setdefault("supports_snapshot_export", True)
+        behavior.setdefault("supports_output_path", True)
+        behavior.setdefault("snapshot_prefix", command_name)
+    return behavior
+
 EVIDENCE_COMMANDS = {name: command for name, command in COMMAND_SPECS.items() if command["kind"] == "evidence"}
 JSON_ENGINE_COMMANDS = {name: command for name, command in COMMAND_SPECS.items() if command["kind"] == "json_engine"}
 SOURCE_ACTION_COMMANDS = {name: command for name, command in COMMAND_SPECS.items() if command["kind"] == "source_action"}
@@ -169,28 +181,35 @@ ENGINE_DISPATCH_COMMANDS = {
     for name, command in COMMAND_SPECS.items()
     if command["kind"] != "artifacts"
 }
+COMMAND_BEHAVIORS = {
+    name: build_command_behavior(name, command)
+    for name, command in COMMAND_SPECS.items()
+}
 
 
 def add_evidence_parser(subparsers, command_name: str, command: dict) -> None:
     parser = subparsers.add_parser(command_name, help=command["help"])
+    behavior = COMMAND_BEHAVIORS[command_name]
     add_option(parser, "source")
-    if command.get("supports_strict"):
+    if behavior.get("supports_strict"):
         add_option(
             parser,
             "strict",
             help=f"Exit with status 1 when {command_name} reports critical or error severity",
         )
-    add_option(parser, "output", help=f"Write {command_name} JSON to this file")
-    add_option(
-        parser,
-        "save_snapshot",
-        help=f"Save {command_name} snapshot to a timestamped JSON file under the local runtime directory",
-    )
-    add_option(
-        parser,
-        "snapshot_retention",
-        help=f"When saving {command_name} snapshots, keep only the newest N matching files (default: 20)",
-    )
+    if behavior.get("supports_output_path"):
+        add_option(parser, "output", help=f"Write {command_name} JSON to this file")
+    if behavior.get("supports_snapshot_export"):
+        add_option(
+            parser,
+            "save_snapshot",
+            help=f"Save {command_name} snapshot to a timestamped JSON file under the local runtime directory",
+        )
+        add_option(
+            parser,
+            "snapshot_retention",
+            help=f"When saving {command_name} snapshots, keep only the newest N matching files (default: 20)",
+        )
 
 
 def add_option(parser, name: str, **overrides: object) -> None:
@@ -271,19 +290,20 @@ def run_evidence_command(
     manifest_retention: int,
 ) -> int:
     command = COMMAND_SPECS[command_name]
+    behavior = COMMAND_BEHAVIORS[command_name]
     payload = getattr(engine, command["engine_method"])(args.source)
     maybe_export_snapshot(
         payload,
         state_db=state_db,
         source_id=args.source,
-        prefix=command_name,
-        output_path=getattr(args, "output", None),
-        save_snapshot=bool(getattr(args, "save_snapshot", False)),
+        prefix=behavior.get("snapshot_prefix"),
+        output_path=getattr(args, "output", None) if behavior.get("supports_output_path") else None,
+        save_snapshot=bool(getattr(args, "save_snapshot", False)) if behavior.get("supports_snapshot_export") else False,
         retention=int(getattr(args, "snapshot_retention", 20)),
         manifest_retention=manifest_retention,
     )
     print(json.dumps(payload, indent=2))
-    strict_on_severity = command.get("strict_on_severity")
+    strict_on_severity = behavior.get("strict_on_severity")
     if strict_on_severity and getattr(args, "strict", False):
         if payload.get("overall", {}).get("severity") in strict_on_severity:
             return 1
