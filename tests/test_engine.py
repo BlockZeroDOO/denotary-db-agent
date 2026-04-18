@@ -574,3 +574,38 @@ class EngineTest(unittest.TestCase):
         self.assertEqual(source["stream_effective_runtime_mode"], "peek")
         self.assertEqual(source["stream_reconnect_count"], 2)
         self.assertTrue(source["stream_backoff_active"])
+
+    def test_doctor_reports_submitter_key_gap_and_service_probe(self) -> None:
+        engine = AgentEngine(load_config(self.config_path))
+
+        report = engine.doctor("pg-core-ledger")
+
+        self.assertEqual(report["agent_name"], "test-agent")
+        self.assertEqual(report["services"]["ingress"]["severity"], "healthy")
+        self.assertTrue(report["services"]["ingress"]["reachable"])
+        self.assertEqual(report["services"]["watcher"]["severity"], "healthy")
+        self.assertEqual(report["signer"]["severity"], "critical")
+        self.assertFalse(report["signer"]["private_key_present"])
+        self.assertFalse(report["signer"]["broadcast_ready"])
+        self.assertEqual(len(report["sources"]), 1)
+        self.assertTrue(report["sources"][0]["connectivity_ok"])
+        self.assertIn("submitter_private_key is not configured", report["errors"])
+
+    def test_doctor_marks_owner_permission_as_degraded_when_otherwise_ready(self) -> None:
+        config = json.loads(self.config_path.read_text(encoding="utf-8"))
+        config["denotary"]["chain_rpc_url"] = "https://history.denotary.io"
+        config["denotary"]["submitter_private_key"] = "test-wif"
+        config["denotary"]["submitter_permission"] = "owner"
+        self.config_path.write_text(json.dumps(config), encoding="utf-8")
+
+        engine = AgentEngine(load_config(self.config_path))
+        engine.chain = SimpleNamespace(
+            health=lambda: {"server_version_string": "v1", "chain_id": "abc"},
+            get_account=lambda account: {"account_name": account, "permissions": [{"perm_name": "owner"}]},
+        )
+
+        report = engine.doctor("pg-core-ledger")
+
+        self.assertEqual(report["signer"]["severity"], "degraded")
+        self.assertTrue(report["signer"]["broadcast_ready"])
+        self.assertIn("submitter_permission is owner; a dedicated hot permission such as dnanchor is recommended", report["warnings"])

@@ -75,6 +75,28 @@ Returns:
 - configured ingress / watcher endpoints
 - source-level warnings for logical slot drift and WAL lag thresholds when PostgreSQL logical mode is used
 
+### Doctor
+
+```bash
+denotary-db-agent --config examples/agent.example.json doctor --source pg-core-ledger
+```
+
+Returns one compact live preflight report for deploy readiness with:
+
+- config path checks
+- reachability of configured deNotary services
+- chain RPC readiness
+- signer readiness for `submitter@submitter_permission`
+- billing account existence
+- per-source connectivity and tracked-table visibility
+
+Use this before:
+
+- first live rollout
+- key rotation
+- moving the agent to a new host
+- enabling a new PostgreSQL source
+
 ### Metrics
 
 ```bash

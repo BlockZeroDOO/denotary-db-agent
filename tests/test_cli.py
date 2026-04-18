@@ -194,3 +194,46 @@ class CliTest(unittest.TestCase):
             payload = json.loads(stdout.getvalue())
             self.assertEqual(payload["totals"]["source_count"], 1)
             self.assertEqual(payload["sources"][0]["source_id"], "pg-core-ledger")
+
+    def test_doctor_command_prints_engine_doctor_report(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "config.json"
+            config_path.write_text("{}", encoding="utf-8")
+            fake_config = type(
+                "FakeConfig",
+                (),
+                {
+                    "storage": type("FakeStorage", (), {"state_db": str(Path(temp_dir) / "runtime" / "state.sqlite3")})(),
+                },
+            )()
+            fake_engine = type(
+                "FakeEngine",
+                (),
+                {
+                    "doctor": lambda self, source: {
+                        "agent_name": "denotary-db-agent",
+                        "overall": {"severity": "healthy", "ok": True},
+                        "sources": [{"source_id": source}],
+                    },
+                },
+            )()
+
+            stdout = StringIO()
+            with patch("denotary_db_agent.cli.load_config", return_value=fake_config), patch(
+                "denotary_db_agent.cli.AgentEngine",
+                return_value=fake_engine,
+            ), patch("sys.stdout", stdout):
+                exit_code = main(
+                    [
+                        "--config",
+                        str(config_path),
+                        "doctor",
+                        "--source",
+                        "pg-core-ledger",
+                    ]
+                )
+
+            self.assertEqual(exit_code, 0)
+            payload = json.loads(stdout.getvalue())
+            self.assertEqual(payload["overall"]["severity"], "healthy")
+            self.assertEqual(payload["sources"][0]["source_id"], "pg-core-ledger")

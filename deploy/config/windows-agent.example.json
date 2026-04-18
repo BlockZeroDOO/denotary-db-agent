@@ -1,0 +1,78 @@
+{
+  "agent_name": "denotary-db-agent-windows",
+  "log_level": "INFO",
+  "denotary": {
+    "ingress_url": "http://127.0.0.1:8080",
+    "watcher_url": "http://127.0.0.1:8081",
+    "watcher_auth_token": "REPLACE_WITH_WATCHER_TOKEN",
+    "receipt_url": "http://127.0.0.1:8082",
+    "audit_url": "http://127.0.0.1:8083",
+    "chain_rpc_url": "https://history.denotary.io",
+    "submitter": "enterpriseac1",
+    "submitter_permission": "dnanchor",
+    "submitter_private_key": "REPLACE_WITH_DNANCHOR_WIF",
+    "schema_id": 1,
+    "policy_id": 1,
+    "billing_account": "verifbill",
+    "wait_for_finality": true,
+    "finality_timeout_sec": 180,
+    "finality_poll_interval_sec": 3.0
+  },
+  "storage": {
+    "state_db": "C:\\deNotary\\denotary-db-agent\\data\\agent-state.sqlite3",
+    "proof_dir": "C:\\deNotary\\denotary-db-agent\\data\\proofs",
+    "proof_retention": 1000,
+    "delivery_retention": 5000,
+    "dlq_retention": 1000,
+    "diagnostics_snapshot_interval_sec": 900,
+    "diagnostics_snapshot_retention": 20
+  },
+  "sources": [
+    {
+      "id": "pg-core-ledger",
+      "adapter": "postgresql",
+      "enabled": true,
+      "source_instance": "erp-eu-1",
+      "database_name": "ledger",
+      "include": {
+        "public": [
+          "invoices",
+          "payments"
+        ]
+      },
+      "exclude": {},
+      "checkpoint_policy": "after_ack",
+      "backfill_mode": "full",
+      "batch_enabled": false,
+      "batch_size": 100,
+      "flush_interval_ms": 1000,
+      "connection": {
+        "host": "127.0.0.1",
+        "port": 5432,
+        "username": "denotary",
+        "password": "REPLACE_WITH_POSTGRES_PASSWORD",
+        "database": "ledger",
+        "sslmode": "prefer",
+        "connect_timeout": 5
+      },
+      "options": {
+        "capture_mode": "logical",
+        "commit_timestamp_column": "updated_at",
+        "slot_name": "denotary_slot",
+        "output_plugin": "pgoutput",
+        "publication_name": "denotary_pub",
+        "logical_runtime_mode": "stream",
+        "auto_create_slot": true,
+        "auto_create_publication": true,
+        "replica_identity_full": true,
+        "row_limit": 250,
+        "logical_stream_reconnect_base_delay_sec": 0.5,
+        "logical_stream_reconnect_max_delay_sec": 10.0,
+        "logical_stream_error_history_size": 5,
+        "logical_stream_fallback_failure_threshold": 3,
+        "logical_stream_fallback_sec": 30.0,
+        "logical_stream_probation_sec": 15.0
+      }
+    }
+  ]
+}

@@ -25,6 +25,8 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("validate", help="Validate config and adapter connectivity")
     subparsers.add_parser("status", help="Show source status")
     subparsers.add_parser("health", help="Show service and source health")
+    doctor_parser = subparsers.add_parser("doctor", help="Run a live preflight report for deploy readiness")
+    doctor_parser.add_argument("--source", help="Source id")
     metrics_parser = subparsers.add_parser("metrics", help="Show compact export-friendly metrics")
     metrics_parser.add_argument("--source", help="Source id")
     diagnostics_parser = subparsers.add_parser("diagnostics", help="Show compact stream/runtime diagnostics")
@@ -77,6 +79,9 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "health":
         print(json.dumps(engine.health(), indent=2))
+        return 0
+    if args.command == "doctor":
+        print(json.dumps(engine.doctor(args.source), indent=2))
         return 0
     if args.command == "metrics":
         print(json.dumps(engine.metrics(args.source), indent=2))

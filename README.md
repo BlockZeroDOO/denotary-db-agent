@@ -13,7 +13,7 @@ Current scope:
 - Finality Watcher registration and inclusion/finality updates
 - receipt / audit-chain retrieval and local proof bundle export
 - CLI for run / validate / status / health / diagnostics / bootstrap / inspect / refresh / pause / resume / replay / checkpoint / proof
-- CLI for run / validate / status / health / metrics / diagnostics / bootstrap / inspect / refresh / pause / resume / replay / checkpoint / proof
+- CLI for run / validate / status / health / doctor / metrics / diagnostics / bootstrap / inspect / refresh / pause / resume / replay / checkpoint / proof
 
 The first wave of database targets is:
 
@@ -57,6 +57,7 @@ python -m venv .venv
 pip install -e .
 denotary-db-agent status --config examples/agent.example.json
 denotary-db-agent health --config examples/agent.example.json
+denotary-db-agent doctor --config examples/agent.example.json --source pg-core-ledger
 denotary-db-agent metrics --config examples/agent.example.json --source pg-core-ledger
 denotary-db-agent diagnostics --config examples/agent.example.json --source pg-core-ledger
 denotary-db-agent diagnostics --config examples/agent.example.json --source pg-core-ledger --save-snapshot
@@ -89,6 +90,7 @@ See:
 python -m unittest discover -s tests -v
 python -m denotary_db_agent --config examples/agent.example.json status
 python -m denotary_db_agent --config examples/agent.example.json health
+python -m denotary_db_agent --config examples/agent.example.json doctor --source pg-core-ledger
 python -m denotary_db_agent --config examples/agent.example.json metrics --source pg-core-ledger
 python -m denotary_db_agent --config examples/agent.example.json diagnostics --source pg-core-ledger
 python -m denotary_db_agent --config examples/agent.example.json diagnostics --source pg-core-ledger --save-snapshot
@@ -106,6 +108,12 @@ Note:
 - `health` shows local source state and best-effort health for configured chain/receipt/audit services
 - `health` now also surfaces logical slot warnings such as publication drift, REPLICA IDENTITY drift, and WAL lag thresholds
 - `health` now classifies each source as `healthy`, `degraded`, `critical`, or `error`
+- `doctor` is the compact live preflight report for deploy readiness:
+  - config paths
+  - HTTP reachability for deNotary services
+  - chain RPC readiness
+  - signer hot-permission readiness
+  - per-source connectivity and tracked table visibility
 - `metrics` gives a compact export-friendly summary of source counters, backlog indicators, stream state, and severity
 - `diagnostics` gives a compact stream/logical-slot focused report per source
 - `diagnostics --save-snapshot` writes the report to a timestamped JSON file under the local runtime directory
@@ -168,6 +176,7 @@ Production packaging templates are included for:
 - `systemd`
 - Windows Service
 - Docker Compose
+- Linux / Windows / Docker config packs
 
 See:
 
@@ -175,6 +184,9 @@ See:
 - [deploy/systemd/denotary-db-agent.service.example](deploy/systemd/denotary-db-agent.service.example)
 - [deploy/docker-compose.example.yml](deploy/docker-compose.example.yml)
 - [scripts/install-windows-service.ps1](scripts/install-windows-service.ps1)
+- [deploy/config/linux-agent.example.json](deploy/config/linux-agent.example.json)
+- [deploy/config/windows-agent.example.json](deploy/config/windows-agent.example.json)
+- [deploy/config/docker-agent.example.json](deploy/config/docker-agent.example.json)
 
 ## Full-Cycle Result
 

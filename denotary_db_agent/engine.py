@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import os
 import time
+import urllib.error
+import urllib.request
 from dataclasses import dataclass
+from pathlib import Path
 from time import monotonic
 
 from denotary_db_agent.adapters.base import BaseAdapter
@@ -205,6 +208,52 @@ class AgentEngine:
             "agent_name": self.config.agent_name,
             "services": services,
             "sources": source_entries,
+        }
+
+    def doctor(self, source_id: str | None = None) -> dict:
+        services = {
+            "ingress": self._probe_service_url(self.config.denotary.ingress_url, "/healthz"),
+            "watcher": self._probe_service_url(self.config.denotary.watcher_url, "/healthz"),
+            "receipt": self._probe_service_url(self.config.denotary.receipt_url, "/healthz"),
+            "audit": self._probe_service_url(self.config.denotary.audit_url, "/healthz"),
+            "chain_rpc": self._probe_chain_rpc(),
+        }
+        signer = self._doctor_signer()
+        sources = self._doctor_sources(source_id)
+        config_checks = self._doctor_config_paths()
+
+        all_severities = [config_checks["severity"], signer["severity"]]
+        all_severities.extend(item["severity"] for item in services.values())
+        all_severities.extend(item["severity"] for item in sources)
+        overall_severity = self._max_severity(all_severities)
+
+        warnings: list[str] = []
+        errors: list[str] = []
+        warnings.extend(config_checks.get("warnings", []))
+        warnings.extend(signer.get("warnings", []))
+        errors.extend(signer.get("errors", []))
+        for item in services.values():
+            warnings.extend(item.get("warnings", []))
+            errors.extend(item.get("errors", []))
+        for item in sources:
+            warnings.extend(item.get("warnings", []))
+            errors.extend(item.get("errors", []))
+
+        return {
+            "agent_name": self.config.agent_name,
+            "overall": {
+                "severity": overall_severity,
+                "ok": overall_severity == "healthy",
+                "source_count": len(sources),
+                "warning_count": len(warnings),
+                "error_count": len(errors),
+            },
+            "config": config_checks,
+            "services": services,
+            "signer": signer,
+            "sources": sources,
+            "warnings": warnings,
+            "errors": errors,
         }
 
     def _classify_source_health_severity(self, cdc: dict[str, object] | None, warnings: list[str]) -> str:
@@ -427,6 +476,214 @@ class AgentEngine:
             "totals": totals,
             "sources": sources,
         }
+
+    def _doctor_config_paths(self) -> dict[str, object]:
+        state_db = Path(self.config.storage.state_db).expanduser()
+        proof_dir = Path(self.config.storage.proof_dir).expanduser()
+        state_parent = state_db.parent
+        warnings: list[str] = []
+        if not state_parent.exists():
+            warnings.append(f"state_db parent directory does not exist yet: {state_parent}")
+        if not proof_dir.exists():
+            warnings.append(f"proof_dir does not exist yet: {proof_dir}")
+        return {
+            "severity": "degraded" if warnings else "healthy",
+            "state_db": str(state_db),
+            "state_db_parent": str(state_parent),
+            "state_db_parent_exists": state_parent.exists(),
+            "proof_dir": str(proof_dir),
+            "proof_dir_exists": proof_dir.exists(),
+            "wait_for_finality": self.config.denotary.wait_for_finality,
+            "warnings": warnings,
+        }
+
+    def _probe_service_url(self, base_url: str, probe_path: str) -> dict[str, object]:
+        if not base_url:
+            return {
+                "configured": False,
+                "severity": "degraded",
+                "reachable": False,
+                "warnings": ["service URL is not configured"],
+                "errors": [],
+            }
+        url = f"{base_url.rstrip('/')}{probe_path}"
+        request = urllib.request.Request(url, method="GET")
+        try:
+            with urllib.request.urlopen(request, timeout=10) as response:
+                status_code = int(response.status)
+            return {
+                "configured": True,
+                "reachable": True,
+                "severity": "healthy",
+                "probe_url": url,
+                "status_code": status_code,
+                "warnings": [],
+                "errors": [],
+            }
+        except urllib.error.HTTPError as exc:
+            return {
+                "configured": True,
+                "reachable": True,
+                "severity": "healthy",
+                "probe_url": url,
+                "status_code": int(exc.code),
+                "warnings": [f"probe endpoint returned HTTP {exc.code} but the service is reachable"],
+                "errors": [],
+            }
+        except Exception as exc:  # noqa: BLE001
+            return {
+                "configured": True,
+                "reachable": False,
+                "severity": "critical",
+                "probe_url": url,
+                "warnings": [],
+                "errors": [str(exc)],
+            }
+
+    def _probe_chain_rpc(self) -> dict[str, object]:
+        if not self.config.denotary.chain_rpc_url:
+            return {
+                "configured": False,
+                "severity": "critical",
+                "reachable": False,
+                "warnings": [],
+                "errors": ["chain_rpc_url is not configured"],
+            }
+        if self.chain is not None:
+            try:
+                info = self.chain.health()
+                return {
+                    "configured": True,
+                    "reachable": True,
+                    "severity": "healthy",
+                    "url": self.config.denotary.chain_rpc_url,
+                    "server_version": info.get("server_version_string") or info.get("server_version"),
+                    "chain_id": info.get("chain_id"),
+                    "warnings": [],
+                    "errors": [],
+                }
+            except Exception as exc:  # noqa: BLE001
+                return {
+                    "configured": True,
+                    "reachable": False,
+                    "severity": "critical",
+                    "url": self.config.denotary.chain_rpc_url,
+                    "warnings": [],
+                    "errors": [str(exc)],
+                }
+        return self._probe_service_url(self.config.denotary.chain_rpc_url, "/v1/chain/get_info")
+
+    def _doctor_signer(self) -> dict[str, object]:
+        warnings: list[str] = []
+        errors: list[str] = []
+        permission = self.config.denotary.submitter_permission
+        private_key_present = bool(self.config.denotary.submitter_private_key)
+        chain_ready = bool(self.config.denotary.chain_rpc_url)
+        if permission in {"owner", "active"}:
+            warnings.append(f"submitter_permission is {permission}; a dedicated hot permission such as dnanchor is recommended")
+        if not private_key_present:
+            errors.append("submitter_private_key is not configured")
+        if not chain_ready:
+            errors.append("chain_rpc_url is not configured")
+
+        account_exists = False
+        permission_exists = False
+        billing_account_exists = False
+        account_error = ""
+        if self.chain is not None:
+            try:
+                account = self.chain.get_account(self.config.denotary.submitter)
+                account_exists = True
+                permissions = account.get("permissions") or []
+                permission_exists = any(str(item.get("perm_name") or "") == permission for item in permissions)
+                if not permission_exists:
+                    errors.append(f"submitter permission {self.config.denotary.submitter}@{permission} does not exist on chain")
+            except Exception as exc:  # noqa: BLE001
+                account_error = str(exc)
+                errors.append(f"unable to load submitter account {self.config.denotary.submitter}: {exc}")
+            try:
+                self.chain.get_account(self.config.denotary.billing_account)
+                billing_account_exists = True
+            except Exception as exc:  # noqa: BLE001
+                errors.append(f"unable to load billing account {self.config.denotary.billing_account}: {exc}")
+
+        severity = "healthy"
+        if errors:
+            severity = "critical"
+        elif warnings:
+            severity = "degraded"
+
+        return {
+            "severity": severity,
+            "submitter": self.config.denotary.submitter,
+            "permission": permission,
+            "billing_account": self.config.denotary.billing_account,
+            "schema_id": self.config.denotary.schema_id,
+            "policy_id": self.config.denotary.policy_id,
+            "private_key_present": private_key_present,
+            "chain_rpc_configured": chain_ready,
+            "uses_recommended_hot_permission": permission not in {"owner", "active"},
+            "account_exists": account_exists,
+            "permission_exists": permission_exists,
+            "billing_account_exists": billing_account_exists,
+            "broadcast_ready": chain_ready and private_key_present and (self.chain is None or (account_exists and permission_exists)),
+            "account_error": account_error or None,
+            "warnings": warnings,
+            "errors": errors,
+        }
+
+    def _doctor_sources(self, source_id: str | None) -> list[dict[str, object]]:
+        results: list[dict[str, object]] = []
+        for runtime in self.runtimes():
+            if source_id and runtime.config.id != source_id:
+                continue
+            warnings: list[str] = []
+            errors: list[str] = []
+            inspect_payload: dict[str, object] = {}
+            connectivity_ok = False
+            try:
+                runtime.adapter.validate_connection()
+                connectivity_ok = True
+            except Exception as exc:  # noqa: BLE001
+                errors.append(str(exc))
+            if connectivity_ok:
+                try:
+                    inspect_payload = runtime.adapter.inspect()
+                except Exception as exc:  # noqa: BLE001
+                    errors.append(f"inspect failed: {exc}")
+            capture_mode = inspect_payload.get("capture_mode") if inspect_payload else runtime.config.options.get("capture_mode", "watermark")
+            tracked_tables = inspect_payload.get("tracked_tables") if inspect_payload else []
+            cdc = inspect_payload.get("cdc") if inspect_payload else None
+            if isinstance(cdc, dict):
+                warnings.extend(self._build_source_health_warnings(runtime, cdc))
+            severity = "healthy"
+            if errors:
+                severity = "critical"
+            elif warnings:
+                severity = "degraded"
+            results.append(
+                {
+                    "source_id": runtime.config.id,
+                    "adapter": runtime.config.adapter,
+                    "paused": self._is_paused(runtime.config.id),
+                    "capture_mode": capture_mode,
+                    "connectivity_ok": connectivity_ok,
+                    "inspect_ok": connectivity_ok and not errors,
+                    "tracked_table_count": len(tracked_tables) if isinstance(tracked_tables, list) else 0,
+                    "severity": severity,
+                    "warnings": warnings,
+                    "errors": errors,
+                }
+            )
+        return results
+
+    def _severity_rank(self, severity: str) -> int:
+        return {"healthy": 0, "degraded": 1, "critical": 2, "error": 3}.get(severity, 3)
+
+    def _max_severity(self, severities: list[str]) -> str:
+        if not severities:
+            return "healthy"
+        return max(severities, key=self._severity_rank)
 
     def run_once(self) -> dict[str, int]:
         return self._run_runtimes_once(self.runtimes())

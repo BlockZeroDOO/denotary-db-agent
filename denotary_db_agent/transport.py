@@ -120,6 +120,15 @@ class ChainClient:
     def health(self) -> dict[str, Any]:
         return dict(self.api.get_info())
 
+    def get_account(self, account: str) -> dict[str, Any]:
+        _, body = _request_json(
+            f"{self.rpc_url}/v1/chain/get_account",
+            method="POST",
+            payload={"account_name": account},
+            expected_status=200,
+        )
+        return body
+
     def push_prepared_action(self, prepared_action: dict[str, Any]) -> BroadcastResult:
         contract = str(prepared_action.get("contract") or prepared_action.get("account") or "")
         action = str(prepared_action.get("action") or prepared_action.get("name") or "")

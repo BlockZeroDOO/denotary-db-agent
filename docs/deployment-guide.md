@@ -25,6 +25,8 @@ Recommended layout:
 - code: `/opt/denotary-db-agent`
 - config: `/etc/denotary-db-agent/agent.json`
 - runtime state and proofs: configured inside `storage`
+- starter config pack:
+  - [deploy/config/linux-agent.example.json](../deploy/config/linux-agent.example.json)
 
 Typical install flow:
 
@@ -50,6 +52,8 @@ Helper scripts:
 
 - [scripts/install-windows-service.ps1](../scripts/install-windows-service.ps1)
 - [scripts/remove-windows-service.ps1](../scripts/remove-windows-service.ps1)
+- starter config pack:
+  - [deploy/config/windows-agent.example.json](../deploy/config/windows-agent.example.json)
 
 Install example:
 
@@ -80,6 +84,8 @@ Get-Service deNotaryDbAgent
 Template:
 
 - [deploy/docker-compose.example.yml](../deploy/docker-compose.example.yml)
+- starter config pack:
+  - [deploy/config/docker-agent.example.json](../deploy/config/docker-agent.example.json)
 
 Behavior:
 
@@ -102,13 +108,20 @@ docker compose -f deploy/docker-compose.example.yml logs -f
 - set `proof_retention`, `delivery_retention`, and `dlq_retention`
 - enable `diagnostics_snapshot_interval_sec` if you want autonomous operator snapshots
 - use `metrics` and `diagnostics` in health checks and runbooks
+- run `doctor` before first production enablement, after key rotation, and before moving the agent to a new host
+- start from the platform-specific config packs and then replace:
+  - watcher token
+  - PostgreSQL password
+  - `submitter_private_key`
+  - live `schema_id` / `policy_id`
 
 ## Suggested First Operator Checklist
 
 1. Run `validate`
-2. Run `bootstrap`
-3. Run `inspect`
-4. Start daemon mode
-5. Verify `health`
-6. Verify `metrics`
-7. Verify periodic diagnostics snapshots are being written when enabled
+2. Run `doctor`
+3. Run `bootstrap`
+4. Run `inspect`
+5. Start daemon mode
+6. Verify `health`
+7. Verify `metrics`
+8. Verify periodic diagnostics snapshots are being written when enabled
