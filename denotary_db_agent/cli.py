@@ -326,12 +326,23 @@ def build_command_groups() -> dict[str, dict[str, dict]]:
     }
 
 
+def build_command_group_aliases() -> dict[str, dict[str, dict]]:
+    groups = build_command_groups()
+    return {
+        "EVIDENCE_COMMANDS": groups["evidence"],
+        "JSON_ENGINE_COMMANDS": groups["json_engine"],
+        "SOURCE_ACTION_COMMANDS": groups["source_action"],
+        "ENGINE_DISPATCH_COMMANDS": groups["engine_dispatch"],
+    }
+
+
 COMMAND_GROUP_BUILDERS = build_command_group_builders()
 COMMAND_GROUPS = build_command_groups()
-EVIDENCE_COMMANDS = COMMAND_GROUPS["evidence"]
-JSON_ENGINE_COMMANDS = COMMAND_GROUPS["json_engine"]
-SOURCE_ACTION_COMMANDS = COMMAND_GROUPS["source_action"]
-ENGINE_DISPATCH_COMMANDS = COMMAND_GROUPS["engine_dispatch"]
+COMMAND_GROUP_ALIASES = build_command_group_aliases()
+EVIDENCE_COMMANDS = COMMAND_GROUP_ALIASES["EVIDENCE_COMMANDS"]
+JSON_ENGINE_COMMANDS = COMMAND_GROUP_ALIASES["JSON_ENGINE_COMMANDS"]
+SOURCE_ACTION_COMMANDS = COMMAND_GROUP_ALIASES["SOURCE_ACTION_COMMANDS"]
+ENGINE_DISPATCH_COMMANDS = COMMAND_GROUP_ALIASES["ENGINE_DISPATCH_COMMANDS"]
 
 
 def get_command_spec(command_name: str) -> dict:
