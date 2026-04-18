@@ -357,6 +357,13 @@ def get_command_group(group_name: str) -> dict[str, dict]:
     return build_command_group(group_name)
 
 
+def get_command_alias(alias_name: str) -> dict[str, dict]:
+    try:
+        return COMMAND_GROUP_ALIASES[alias_name]
+    except KeyError as exc:
+        raise KeyError(f"unknown command alias: {alias_name}") from exc
+
+
 def add_option(parser, name: str, **overrides: object) -> None:
     option = OPTION_SPECS[name]
     kwargs = dict(option["kwargs"])
