@@ -313,6 +313,12 @@ class MySqlAdapter(BaseAdapter):
         binlog_status = self._read_server_variable(connection, "log_bin")
         binlog_format = self._read_server_variable(connection, "binlog_format")
         binlog_row_image = self._read_server_variable(connection, "binlog_row_image")
+        runtime_cursor = None
+        if self._binlog_stream_identity is not None:
+            runtime_cursor = {
+                "log_file": self._binlog_stream_identity[0],
+                "log_pos": self._binlog_stream_identity[1],
+            }
         return self.build_cdc_summary(
             {
             "capture_mode": "binlog",
@@ -321,6 +327,10 @@ class MySqlAdapter(BaseAdapter):
             "binlog_row_image": str(binlog_row_image or "").upper(),
             "stream_active": self._binlog_stream is not None,
             "server_id": int(self.config.options.get("binlog_server_id", 1001)),
+            "runtime": self.build_stream_runtime_summary(
+                active=self._binlog_stream is not None,
+                cursor=runtime_cursor,
+            ),
             }
         )
 

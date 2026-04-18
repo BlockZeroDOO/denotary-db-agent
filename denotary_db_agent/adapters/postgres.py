@@ -1340,6 +1340,42 @@ class PostgresAdapter(BaseAdapter):
                 else ""
             ),
             "wal_status": str(slot_row["wal_status"]) if slot_row and slot_row["wal_status"] is not None else "",
+            "runtime": self.build_stream_runtime_summary(
+                active=self._active_replication_session is not None and self._active_replication_session.is_open,
+                configured_runtime_mode=self._logical_runtime_mode(),
+                effective_runtime_mode=self._effective_logical_runtime_mode(),
+                cursor={
+                    "start_lsn": self._active_replication_start_lsn,
+                    "acknowledged_lsn": (
+                        self._active_replication_session.acknowledged_lsn
+                        if self._active_replication_session is not None
+                        else self._active_replication_start_lsn
+                    ),
+                },
+                extra={
+                    "connect_count": self._stream_connect_count,
+                    "reconnect_count": self._stream_reconnect_count,
+                    "last_connect_at": self._stream_last_connect_at,
+                    "last_reconnect_at": self._stream_last_reconnect_at,
+                    "last_reconnect_reason": self._stream_last_reconnect_reason,
+                    "last_error": self._stream_last_error,
+                    "last_error_kind": self._stream_last_error_kind,
+                    "last_error_at": self._stream_last_error_at,
+                    "error_history": list(self._stream_error_history),
+                    "failure_streak": self._stream_failure_streak,
+                    "backoff_active": self._stream_backoff_remaining_sec() > 0,
+                    "backoff_remaining_sec": round(self._stream_backoff_remaining_sec(), 3),
+                    "backoff_until": self._stream_backoff_until,
+                    "fallback_active": self._stream_force_peek_remaining_sec() > 0,
+                    "fallback_remaining_sec": round(self._stream_force_peek_remaining_sec(), 3),
+                    "fallback_until": self._stream_force_peek_until,
+                    "fallback_reason": self._stream_force_peek_reason,
+                    "probation_active": self._stream_probation_remaining_sec() > 0,
+                    "probation_remaining_sec": round(self._stream_probation_remaining_sec(), 3),
+                    "probation_until": self._stream_probation_until,
+                    "probation_reason": self._stream_probation_reason,
+                },
+            ),
             "stream_session_active": self._active_replication_session is not None and self._active_replication_session.is_open,
             "stream_start_lsn": self._active_replication_start_lsn,
             "stream_acknowledged_lsn": (

@@ -281,6 +281,15 @@ class MongoDbAdapter(BaseAdapter):
                 "replica_set_name": hello.get("setName"),
                 "deployment_type": hello.get("msg") or ("replica_set" if hello.get("setName") else "standalone"),
                 "streams_active": len(self._active_streams),
+                "runtime": self.build_stream_runtime_summary(
+                    active=bool(self._active_streams),
+                    cursor={
+                        "active_stream_count": len(self._active_streams),
+                    },
+                    extra={
+                        "active_stream_keys": sorted(self._active_streams.keys()),
+                    },
+                ),
             }
         )
 

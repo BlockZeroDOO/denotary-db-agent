@@ -116,6 +116,47 @@ class BaseAdapter(ABC):
             summary.update(extra)
         return summary
 
+    def build_stream_runtime_summary(
+        self,
+        *,
+        active: bool,
+        configured_runtime_mode: str | None = None,
+        effective_runtime_mode: str | None = None,
+        cursor: dict[str, object] | None = None,
+        extra: dict[str, object] | None = None,
+    ) -> dict[str, object]:
+        summary: dict[str, object] = {
+            "transport": "stream",
+            "active": active,
+            "configured_runtime_mode": configured_runtime_mode or self.capture_mode(),
+            "effective_runtime_mode": effective_runtime_mode or configured_runtime_mode or self.capture_mode(),
+            "cursor": cursor,
+            "connect_count": 0,
+            "reconnect_count": 0,
+            "last_connect_at": "",
+            "last_reconnect_at": "",
+            "last_reconnect_reason": "",
+            "last_error": "",
+            "last_error_kind": "",
+            "last_error_at": "",
+            "error_history": [],
+            "failure_streak": 0,
+            "backoff_active": False,
+            "backoff_remaining_sec": 0.0,
+            "backoff_until": "",
+            "fallback_active": False,
+            "fallback_remaining_sec": 0.0,
+            "fallback_until": "",
+            "fallback_reason": "",
+            "probation_active": False,
+            "probation_remaining_sec": 0.0,
+            "probation_until": "",
+            "probation_reason": "",
+        }
+        if extra:
+            summary.update(extra)
+        return summary
+
     def build_bootstrap_result(
         self,
         *,

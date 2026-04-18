@@ -759,14 +759,17 @@ class EngineTest(unittest.TestCase):
                 "adapter": source_config.adapter,
                 "capture_mode": "logical",
                 "cdc": {
-                    "runtime_mode": "stream",
-                    "effective_runtime_mode": "peek",
-                    "stream_session_active": False,
-                    "stream_reconnect_count": 2,
-                    "stream_failure_streak": 1,
-                    "stream_backoff_active": True,
-                    "stream_fallback_active": True,
-                    "stream_probation_active": False,
+                    "runtime": {
+                        "transport": "stream",
+                        "configured_runtime_mode": "stream",
+                        "effective_runtime_mode": "peek",
+                        "active": False,
+                        "reconnect_count": 2,
+                        "failure_streak": 1,
+                        "backoff_active": True,
+                        "fallback_active": True,
+                        "probation_active": False,
+                    },
                     "slot_exists": True,
                     "pending_changes": True,
                     "retained_wal_bytes": 1234,
@@ -811,7 +814,12 @@ class EngineTest(unittest.TestCase):
                     "checkpoint_strategy": "binlog_cursor",
                     "activity_model": "stream",
                     "cdc_modes": ["binlog"],
-                    "stream_session_active": True,
+                    "runtime": {
+                        "transport": "stream",
+                        "active": True,
+                        "configured_runtime_mode": "binlog",
+                        "effective_runtime_mode": "binlog",
+                    },
                 },
             },
         )
@@ -827,8 +835,11 @@ class EngineTest(unittest.TestCase):
         self.assertEqual(diagnostics["sources"][0]["cdc_contract"]["checkpoint_strategy"], "binlog_cursor")
         self.assertEqual(diagnostics["sources"][0]["cdc_contract"]["activity_model"], "stream")
         self.assertTrue(diagnostics["sources"][0]["cdc_contract"]["is_cdc_mode"])
+        self.assertEqual(diagnostics["sources"][0]["cdc_runtime"]["transport"], "stream")
+        self.assertTrue(diagnostics["sources"][0]["stream"]["session_active"])
         self.assertEqual(doctor["sources"][0]["cdc_contract"]["checkpoint_strategy"], "binlog_cursor")
         self.assertEqual(doctor["sources"][0]["cdc_contract"]["activity_model"], "stream")
+        self.assertEqual(doctor["sources"][0]["cdc_runtime"]["configured_runtime_mode"], "binlog")
 
     def test_report_combines_doctor_metrics_diagnostics_and_status(self) -> None:
         engine = AgentEngine(load_config(self.config_path))

@@ -253,14 +253,15 @@ class AgentEngine:
             return "healthy"
         if cdc is None:
             return "degraded"
+        runtime = self._cdc_runtime_summary(cdc)
         if cdc.get("slot_exists") is False:
             return "critical"
-        if cdc.get("stream_fallback_active") is True:
+        if runtime.get("fallback_active") is True:
             return "degraded"
-        if cdc.get("stream_probation_active") is True:
+        if runtime.get("probation_active") is True:
             return "degraded"
-        if cdc.get("stream_backoff_active") is True:
-            failure_streak = int(cdc.get("stream_failure_streak") or 0)
+        if runtime.get("backoff_active") is True:
+            failure_streak = int(runtime.get("failure_streak") or 0)
             return "critical" if failure_streak >= 3 else "degraded"
         return "degraded"
 
@@ -268,6 +269,8 @@ class AgentEngine:
         if cdc is None:
             return []
         warnings: list[str] = []
+        runtime_summary = self._cdc_runtime_summary(cdc)
+        adapter_label = "postgres" if runtime.config.adapter == "postgresql" else runtime.config.adapter
         retained_warn_bytes = int(runtime.config.options.get("logical_warn_retained_wal_bytes", 268_435_456))
         flush_warn_bytes = int(runtime.config.options.get("logical_warn_flush_lag_bytes", 67_108_864))
         retained_wal_bytes = cdc.get("retained_wal_bytes")
@@ -278,24 +281,31 @@ class AgentEngine:
             warnings.append("pgoutput publication tables are out of sync with tracked tables")
         if cdc.get("replica_identity_in_sync") is False:
             warnings.append("tracked logical tables are out of sync with expected REPLICA IDENTITY mode")
-        if cdc.get("stream_fallback_active") is True:
-            fallback_reason = cdc.get("stream_fallback_reason") or "runtime_error"
-            fallback_until = cdc.get("stream_fallback_until") or "unknown"
-            warnings.append(f"postgres stream is temporarily using peek fallback after {fallback_reason}; retry stream after {fallback_until}")
-        if cdc.get("stream_probation_active") is True:
-            probation_reason = cdc.get("stream_probation_reason") or "fallback_recovery"
-            probation_until = cdc.get("stream_probation_until") or "unknown"
+        if runtime_summary.get("fallback_active") is True:
+            fallback_reason = runtime_summary.get("fallback_reason") or "runtime_error"
+            fallback_until = runtime_summary.get("fallback_until") or "unknown"
+            if runtime.config.adapter == "postgresql":
+                warnings.append(
+                    f"{adapter_label} stream is temporarily using peek fallback after {fallback_reason}; retry stream after {fallback_until}"
+                )
+            else:
+                warnings.append(
+                    f"{adapter_label} stream is temporarily using fallback after {fallback_reason}; retry stream after {fallback_until}"
+                )
+        if runtime_summary.get("probation_active") is True:
+            probation_reason = runtime_summary.get("probation_reason") or "fallback_recovery"
+            probation_until = runtime_summary.get("probation_until") or "unknown"
             warnings.append(
-                f"postgres stream is in probation after returning from fallback due to {probation_reason}; observe until {probation_until}"
+                f"{adapter_label} stream is in probation after returning from fallback due to {probation_reason}; observe until {probation_until}"
             )
-        if cdc.get("stream_backoff_active") is True:
-            error_kind = cdc.get("stream_last_error_kind") or "runtime_error"
-            backoff_until = cdc.get("stream_backoff_until") or "unknown"
-            warnings.append(f"postgres stream is in reconnect cooldown after {error_kind}; retry after {backoff_until}")
-        elif isinstance(cdc.get("stream_failure_streak"), int) and int(cdc["stream_failure_streak"]) > 0:
-            error_kind = cdc.get("stream_last_error_kind") or "runtime_error"
+        if runtime_summary.get("backoff_active") is True:
+            error_kind = runtime_summary.get("last_error_kind") or "runtime_error"
+            backoff_until = runtime_summary.get("backoff_until") or "unknown"
+            warnings.append(f"{adapter_label} stream is in reconnect cooldown after {error_kind}; retry after {backoff_until}")
+        elif isinstance(runtime_summary.get("failure_streak"), int) and int(runtime_summary["failure_streak"]) > 0:
+            error_kind = runtime_summary.get("last_error_kind") or "runtime_error"
             warnings.append(
-                f"postgres stream has {int(cdc['stream_failure_streak'])} consecutive failure(s); last error kind: {error_kind}"
+                f"{adapter_label} stream has {int(runtime_summary['failure_streak'])} consecutive failure(s); last error kind: {error_kind}"
             )
         if isinstance(retained_wal_bytes, int) and retained_wal_bytes > retained_warn_bytes:
             warnings.append(
@@ -358,6 +368,7 @@ class AgentEngine:
             if "inspect_error" in inspect_source:
                 entry["inspect_error"] = inspect_source["inspect_error"]
             if isinstance(cdc, dict):
+                runtime_summary = self._cdc_runtime_summary(cdc)
                 entry["cdc_contract"] = {
                     "configured_capture_mode": cdc.get("configured_capture_mode"),
                     "is_cdc_mode": cdc.get("is_cdc_mode"),
@@ -365,33 +376,33 @@ class AgentEngine:
                     "activity_model": cdc.get("activity_model"),
                     "cdc_modes": cdc.get("cdc_modes", []),
                 }
+                entry["cdc_runtime"] = runtime_summary
                 entry["stream"] = {
-                    "configured_runtime_mode": cdc.get("runtime_mode"),
-                    "effective_runtime_mode": cdc.get("effective_runtime_mode", cdc.get("runtime_mode")),
-                    "session_active": cdc.get("stream_session_active"),
-                    "start_lsn": cdc.get("stream_start_lsn"),
-                    "acknowledged_lsn": cdc.get("stream_acknowledged_lsn"),
-                    "connect_count": cdc.get("stream_connect_count"),
-                    "reconnect_count": cdc.get("stream_reconnect_count"),
-                    "last_connect_at": cdc.get("stream_last_connect_at"),
-                    "last_reconnect_at": cdc.get("stream_last_reconnect_at"),
-                    "last_reconnect_reason": cdc.get("stream_last_reconnect_reason"),
-                    "last_error": cdc.get("stream_last_error"),
-                    "last_error_kind": cdc.get("stream_last_error_kind"),
-                    "last_error_at": cdc.get("stream_last_error_at"),
-                    "error_history": cdc.get("stream_error_history", []),
-                    "failure_streak": cdc.get("stream_failure_streak"),
-                    "backoff_active": cdc.get("stream_backoff_active"),
-                    "backoff_remaining_sec": cdc.get("stream_backoff_remaining_sec"),
-                    "backoff_until": cdc.get("stream_backoff_until"),
-                    "fallback_active": cdc.get("stream_fallback_active"),
-                    "fallback_remaining_sec": cdc.get("stream_fallback_remaining_sec"),
-                    "fallback_until": cdc.get("stream_fallback_until"),
-                    "fallback_reason": cdc.get("stream_fallback_reason"),
-                    "probation_active": cdc.get("stream_probation_active"),
-                    "probation_remaining_sec": cdc.get("stream_probation_remaining_sec"),
-                    "probation_until": cdc.get("stream_probation_until"),
-                    "probation_reason": cdc.get("stream_probation_reason"),
+                    "configured_runtime_mode": runtime_summary.get("configured_runtime_mode"),
+                    "effective_runtime_mode": runtime_summary.get("effective_runtime_mode"),
+                    "session_active": runtime_summary.get("active"),
+                    "cursor": runtime_summary.get("cursor"),
+                    "connect_count": runtime_summary.get("connect_count"),
+                    "reconnect_count": runtime_summary.get("reconnect_count"),
+                    "last_connect_at": runtime_summary.get("last_connect_at"),
+                    "last_reconnect_at": runtime_summary.get("last_reconnect_at"),
+                    "last_reconnect_reason": runtime_summary.get("last_reconnect_reason"),
+                    "last_error": runtime_summary.get("last_error"),
+                    "last_error_kind": runtime_summary.get("last_error_kind"),
+                    "last_error_at": runtime_summary.get("last_error_at"),
+                    "error_history": runtime_summary.get("error_history", []),
+                    "failure_streak": runtime_summary.get("failure_streak"),
+                    "backoff_active": runtime_summary.get("backoff_active"),
+                    "backoff_remaining_sec": runtime_summary.get("backoff_remaining_sec"),
+                    "backoff_until": runtime_summary.get("backoff_until"),
+                    "fallback_active": runtime_summary.get("fallback_active"),
+                    "fallback_remaining_sec": runtime_summary.get("fallback_remaining_sec"),
+                    "fallback_until": runtime_summary.get("fallback_until"),
+                    "fallback_reason": runtime_summary.get("fallback_reason"),
+                    "probation_active": runtime_summary.get("probation_active"),
+                    "probation_remaining_sec": runtime_summary.get("probation_remaining_sec"),
+                    "probation_until": runtime_summary.get("probation_until"),
+                    "probation_reason": runtime_summary.get("probation_reason"),
                 }
                 entry["logical_slot"] = {
                     "slot_exists": cdc.get("slot_exists"),
@@ -443,7 +454,7 @@ class AgentEngine:
                 "delivery_count": int(health_source.get("deliveries", 0) or 0),
                 "proof_count": int(health_source.get("proofs", 0) or 0),
                 "dlq_count": int(health_source.get("dlq", 0) or 0),
-                "warning_count": len(list(health_source.get("warnings", []))),
+                    "warning_count": len(list(health_source.get("warnings", []))),
                 "logical_slot_pending_changes": bool(logical_slot.get("pending_changes", False)),
                 "logical_slot_retained_wal_bytes": int(logical_slot.get("retained_wal_bytes", 0) or 0),
                 "logical_slot_flush_lag_bytes": int(logical_slot.get("flush_lag_bytes", 0) or 0),
@@ -862,12 +873,51 @@ class AgentEngine:
                     }
                     if isinstance(cdc, dict)
                     else None,
+                    "cdc_runtime": self._cdc_runtime_summary(cdc) if isinstance(cdc, dict) else None,
                     "severity": severity,
                     "warnings": warnings,
                     "errors": errors,
                 }
             )
         return results
+
+    def _cdc_runtime_summary(self, cdc: dict[str, object]) -> dict[str, object]:
+        runtime = cdc.get("runtime")
+        if isinstance(runtime, dict):
+            return runtime
+        if any(key.startswith("stream_") for key in cdc):
+            return {
+                "transport": "stream",
+                "active": cdc.get("stream_session_active"),
+                "configured_runtime_mode": cdc.get("runtime_mode"),
+                "effective_runtime_mode": cdc.get("effective_runtime_mode", cdc.get("runtime_mode")),
+                "cursor": {
+                    "start_lsn": cdc.get("stream_start_lsn"),
+                    "acknowledged_lsn": cdc.get("stream_acknowledged_lsn"),
+                },
+                "connect_count": cdc.get("stream_connect_count", 0),
+                "reconnect_count": cdc.get("stream_reconnect_count", 0),
+                "last_connect_at": cdc.get("stream_last_connect_at", ""),
+                "last_reconnect_at": cdc.get("stream_last_reconnect_at", ""),
+                "last_reconnect_reason": cdc.get("stream_last_reconnect_reason", ""),
+                "last_error": cdc.get("stream_last_error", ""),
+                "last_error_kind": cdc.get("stream_last_error_kind", ""),
+                "last_error_at": cdc.get("stream_last_error_at", ""),
+                "error_history": cdc.get("stream_error_history", []),
+                "failure_streak": cdc.get("stream_failure_streak", 0),
+                "backoff_active": cdc.get("stream_backoff_active", False),
+                "backoff_remaining_sec": cdc.get("stream_backoff_remaining_sec", 0.0),
+                "backoff_until": cdc.get("stream_backoff_until", ""),
+                "fallback_active": cdc.get("stream_fallback_active", False),
+                "fallback_remaining_sec": cdc.get("stream_fallback_remaining_sec", 0.0),
+                "fallback_until": cdc.get("stream_fallback_until", ""),
+                "fallback_reason": cdc.get("stream_fallback_reason", ""),
+                "probation_active": cdc.get("stream_probation_active", False),
+                "probation_remaining_sec": cdc.get("stream_probation_remaining_sec", 0.0),
+                "probation_until": cdc.get("stream_probation_until", ""),
+                "probation_reason": cdc.get("stream_probation_reason", ""),
+            }
+        return {}
 
     def _severity_rank(self, severity: str) -> int:
         return {"healthy": 0, "degraded": 1, "critical": 2, "error": 3}.get(severity, 3)
