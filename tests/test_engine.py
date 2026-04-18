@@ -749,6 +749,48 @@ class EngineTest(unittest.TestCase):
         second_snapshot = engine._maybe_write_periodic_diagnostics_snapshot()
         self.assertIsNone(second_snapshot)
 
+    def test_metrics_collects_single_source_snapshot_once(self) -> None:
+        engine = AgentEngine(load_config(self.config_path))
+        source_config = engine.config.sources[0]
+        inspect_calls = {"count": 0}
+
+        def inspect_payload() -> dict[str, object]:
+            inspect_calls["count"] += 1
+            return {
+                "source_id": source_config.id,
+                "adapter": source_config.adapter,
+                "capture_mode": "logical",
+                "cdc": {
+                    "runtime": {
+                        "transport": "stream",
+                        "configured_runtime_mode": "stream",
+                        "effective_runtime_mode": "stream",
+                        "active": True,
+                        "reconnect_count": 0,
+                        "failure_streak": 0,
+                        "backoff_active": False,
+                        "fallback_active": False,
+                        "probation_active": False,
+                    },
+                    "slot_exists": True,
+                    "pending_changes": False,
+                    "retained_wal_bytes": 0,
+                    "flush_lag_bytes": 0,
+                },
+            }
+
+        fake_adapter = SimpleNamespace(inspect=inspect_payload)
+
+        with patch.object(
+            engine,
+            "runtimes",
+            return_value=[SourceRuntime(config=source_config, adapter=fake_adapter)],
+        ):
+            metrics = engine.metrics(source_config.id)
+
+        self.assertEqual(len(metrics["sources"]), 1)
+        self.assertEqual(inspect_calls["count"], 1)
+
     def test_metrics_reports_compact_source_counters(self) -> None:
         engine = AgentEngine(load_config(self.config_path))
         source_config = engine.config.sources[0]

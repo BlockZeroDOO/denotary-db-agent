@@ -168,38 +168,10 @@ class AgentEngine:
                 services["audit"].update({"ok": True, "response": self.audit.health()})
             except Exception as exc:  # noqa: BLE001
                 services["audit"].update({"ok": False, "error": str(exc)})
-        source_entries = []
-        for runtime in self.runtimes():
-            source_entry: dict[str, object] = {
-                "source_id": runtime.config.id,
-                "adapter": runtime.config.adapter,
-                "paused": self._is_paused(runtime.config.id),
-                "runtime_signature_stored": self.store.get_runtime_signature(runtime.config.id) is not None,
-                "checkpoint": self._checkpoint_value(runtime.config.id),
-                "deliveries": len(self.store.list_deliveries(runtime.config.id)),
-                "proofs": len(self.store.list_proofs(runtime.config.id)),
-                "dlq": len(self.store.list_dlq(runtime.config.id)),
-            }
-            try:
-                inspect_details = runtime.adapter.inspect()
-                source_entry["capture_mode"] = inspect_details.get("capture_mode")
-                cdc = inspect_details.get("cdc")
-                warnings = self._build_source_health_warnings(runtime, cdc if isinstance(cdc, dict) else None)
-                if isinstance(cdc, dict):
-                    source_entry["cdc"] = cdc
-                source_entry["warnings"] = warnings
-                severity = self._classify_source_health_severity(cdc if isinstance(cdc, dict) else None, warnings)
-                source_entry["severity"] = severity
-                source_entry["ok"] = severity == "healthy"
-            except Exception as exc:  # noqa: BLE001
-                source_entry["ok"] = False
-                source_entry["severity"] = "error"
-                source_entry["warnings"] = [str(exc)]
-            source_entries.append(source_entry)
         return {
             "agent_name": self.config.agent_name,
             "services": services,
-            "sources": source_entries,
+            "sources": [self._build_health_view(self._collect_source_snapshot(runtime)) for runtime in self.runtimes()],
         }
 
     def doctor(self, source_id: str | None = None) -> dict:
@@ -336,52 +308,14 @@ class AgentEngine:
         return {"agent_name": self.config.agent_name, "sources": results}
 
     def diagnostics(self, source_id: str | None = None) -> dict:
-        health = self.health()
         results: list[dict[str, object]] = []
-        runtime_by_source = {runtime.config.id: runtime for runtime in self.runtimes()}
-        for source in health["sources"]:
-            current_source_id = str(source["source_id"])
-            if source_id and current_source_id != source_id:
+        for runtime in self.runtimes():
+            if source_id and runtime.config.id != source_id:
                 continue
-            inspect_source: dict[str, object] = {}
-            runtime = runtime_by_source.get(current_source_id)
-            if runtime is not None:
-                try:
-                    inspect_source = runtime.adapter.inspect()
-                except Exception as exc:  # noqa: BLE001
-                    inspect_source = {
-                        "source_id": current_source_id,
-                        "adapter": runtime.config.adapter,
-                        "capture_mode": source.get("capture_mode"),
-                        "inspect_error": str(exc),
-                    }
-            cdc = inspect_source.get("cdc") if isinstance(inspect_source, dict) else None
-            entry: dict[str, object] = {
-                "source_id": current_source_id,
-                "adapter": source.get("adapter"),
-                "capture_mode": source.get("capture_mode") or inspect_source.get("capture_mode"),
-                "severity": source.get("severity", "unknown"),
-                "ok": source.get("ok", False),
-                "warnings": source.get("warnings", []),
-                "paused": source.get("paused", False),
-            }
-            if "inspect_error" in inspect_source:
-                entry["inspect_error"] = inspect_source["inspect_error"]
-            if isinstance(cdc, dict):
-                runtime_summary = self._cdc_runtime_summary(cdc)
-                entry["cdc_contract"] = self._build_cdc_contract_view(cdc)
-                entry["cdc_runtime"] = runtime_summary
-                stream_view = self._build_stream_runtime_view(runtime_summary)
-                if stream_view is not None:
-                    entry["stream"] = stream_view
-                logical_slot_view = self._build_logical_slot_view(cdc)
-                if logical_slot_view is not None:
-                    entry["logical_slot"] = logical_slot_view
-            results.append(entry)
+            results.append(self._build_diagnostics_view(self._collect_source_snapshot(runtime)))
         return {"agent_name": self.config.agent_name, "sources": results}
 
     def metrics(self, source_id: str | None = None) -> dict:
-        diagnostics = self.diagnostics(source_id)
         sources: list[dict[str, object]] = []
         totals = {
             "source_count": 0,
@@ -395,43 +329,12 @@ class AgentEngine:
             "error_count": 0,
         }
 
-        for health_source in self.health()["sources"]:
-            current_source_id = str(health_source["source_id"])
-            if source_id and current_source_id != source_id:
+        for runtime in self.runtimes():
+            if source_id and runtime.config.id != source_id:
                 continue
-            diagnostics_source = next(
-                (item for item in diagnostics["sources"] if str(item.get("source_id")) == current_source_id),
-                {},
-            )
-            runtime_summary = diagnostics_source.get("cdc_runtime", {}) if isinstance(diagnostics_source, dict) else {}
-            logical_slot = diagnostics_source.get("logical_slot", {}) if isinstance(diagnostics_source, dict) else {}
-            severity = str(health_source.get("severity", "unknown"))
-            cdc_metrics = self._build_cdc_metrics_view(runtime_summary, logical_slot)
-
-            entry = {
-                "source_id": current_source_id,
-                "adapter": health_source.get("adapter"),
-                "capture_mode": health_source.get("capture_mode"),
-                "severity": severity,
-                "ok": bool(health_source.get("ok", False)),
-                "paused": bool(health_source.get("paused", False)),
-                "runtime_signature_stored": bool(health_source.get("runtime_signature_stored", False)),
-                "delivery_count": int(health_source.get("deliveries", 0) or 0),
-                "proof_count": int(health_source.get("proofs", 0) or 0),
-                "dlq_count": int(health_source.get("dlq", 0) or 0),
-                "warning_count": len(list(health_source.get("warnings", []))),
-                "logical_slot_pending_changes": bool(logical_slot.get("pending_changes", False)),
-                "logical_slot_retained_wal_bytes": int(logical_slot.get("retained_wal_bytes", 0) or 0),
-                "logical_slot_flush_lag_bytes": int(logical_slot.get("flush_lag_bytes", 0) or 0),
-                "stream_effective_runtime_mode": runtime_summary.get("effective_runtime_mode"),
-                "stream_session_active": bool(runtime_summary.get("active", False)),
-                "stream_reconnect_count": int(runtime_summary.get("reconnect_count", 0) or 0),
-                "stream_failure_streak": int(runtime_summary.get("failure_streak", 0) or 0),
-                "stream_backoff_active": bool(runtime_summary.get("backoff_active", False)),
-                "stream_fallback_active": bool(runtime_summary.get("fallback_active", False)),
-                "stream_probation_active": bool(runtime_summary.get("probation_active", False)),
-            }
-            entry.update(cdc_metrics)
+            snapshot = self._collect_source_snapshot(runtime)
+            entry = self._build_metrics_view(snapshot)
+            severity = str(entry["severity"])
             sources.append(entry)
 
             totals["source_count"] += 1
@@ -804,17 +707,15 @@ class AgentEngine:
                 connectivity_ok = True
             except Exception as exc:  # noqa: BLE001
                 errors.append(str(exc))
-            if connectivity_ok:
-                try:
-                    inspect_payload = runtime.adapter.inspect()
-                except Exception as exc:  # noqa: BLE001
-                    errors.append(f"inspect failed: {exc}")
-            capture_mode = inspect_payload.get("capture_mode") if inspect_payload else runtime.config.options.get("capture_mode", "watermark")
+            snapshot = self._collect_source_snapshot(runtime) if connectivity_ok else self._base_source_snapshot(runtime)
+            inspect_payload = snapshot.get("inspect_payload") if isinstance(snapshot.get("inspect_payload"), dict) else {}
+            if connectivity_ok and snapshot.get("inspect_error"):
+                errors.append(f"inspect failed: {snapshot['inspect_error']}")
+            capture_mode = str(snapshot.get("capture_mode") or runtime.config.options.get("capture_mode", "watermark"))
             tracked_tables = inspect_payload.get("tracked_tables") if inspect_payload else []
             tracked_collections = inspect_payload.get("tracked_collections") if inspect_payload else []
-            cdc = inspect_payload.get("cdc") if inspect_payload else None
-            if isinstance(cdc, dict):
-                warnings.extend(self._build_source_health_warnings(runtime, cdc))
+            cdc = snapshot.get("cdc")
+            warnings.extend(list(snapshot.get("warnings", [])))
             severity = "healthy"
             if errors:
                 severity = "critical"
@@ -830,22 +731,147 @@ class AgentEngine:
                     "inspect_ok": connectivity_ok and not errors,
                     "tracked_table_count": len(tracked_tables) if isinstance(tracked_tables, list) else 0,
                     "tracked_collection_count": len(tracked_collections) if isinstance(tracked_collections, list) else 0,
-                    "cdc_contract": {
-                        "configured_capture_mode": cdc.get("configured_capture_mode"),
-                        "is_cdc_mode": cdc.get("is_cdc_mode"),
-                        "checkpoint_strategy": cdc.get("checkpoint_strategy"),
-                        "activity_model": cdc.get("activity_model"),
-                        "cdc_modes": cdc.get("cdc_modes", []),
-                    }
-                    if isinstance(cdc, dict)
-                    else None,
-                    "cdc_runtime": self._cdc_runtime_summary(cdc) if isinstance(cdc, dict) else None,
+                    "cdc_contract": snapshot.get("cdc_contract"),
+                    "cdc_runtime": snapshot.get("cdc_runtime"),
                     "severity": severity,
                     "warnings": warnings,
                     "errors": errors,
                 }
             )
         return results
+
+    def _base_source_snapshot(self, runtime: SourceRuntime) -> dict[str, object]:
+        source_id = runtime.config.id
+        return {
+            "source_id": source_id,
+            "adapter": runtime.config.adapter,
+            "paused": self._is_paused(source_id),
+            "runtime_signature_stored": self.store.get_runtime_signature(source_id) is not None,
+            "checkpoint": self._checkpoint_value(source_id),
+            "deliveries": len(self.store.list_deliveries(source_id)),
+            "proofs": len(self.store.list_proofs(source_id)),
+            "dlq": len(self.store.list_dlq(source_id)),
+        }
+
+    def _collect_source_snapshot(self, runtime: SourceRuntime) -> dict[str, object]:
+        snapshot = self._base_source_snapshot(runtime)
+        try:
+            inspect_payload = runtime.adapter.inspect()
+        except Exception as exc:  # noqa: BLE001
+            snapshot.update(
+                {
+                    "capture_mode": runtime.config.options.get("capture_mode", "watermark"),
+                    "inspect_payload": {
+                        "source_id": runtime.config.id,
+                        "adapter": runtime.config.adapter,
+                        "capture_mode": runtime.config.options.get("capture_mode", "watermark"),
+                        "inspect_error": str(exc),
+                    },
+                    "inspect_error": str(exc),
+                    "warnings": [str(exc)],
+                    "severity": "error",
+                    "ok": False,
+                    "cdc": None,
+                    "cdc_contract": None,
+                    "cdc_runtime": {},
+                    "stream": None,
+                    "logical_slot": None,
+                }
+            )
+            return snapshot
+
+        cdc = inspect_payload.get("cdc") if isinstance(inspect_payload.get("cdc"), dict) else None
+        warnings = self._build_source_health_warnings(runtime, cdc)
+        severity = self._classify_source_health_severity(cdc, warnings)
+        runtime_summary = self._cdc_runtime_summary(cdc) if cdc is not None else {}
+        snapshot.update(
+            {
+                "capture_mode": inspect_payload.get("capture_mode"),
+                "inspect_payload": inspect_payload,
+                "inspect_error": None,
+                "warnings": warnings,
+                "severity": severity,
+                "ok": severity == "healthy",
+                "cdc": cdc,
+                "cdc_contract": self._build_cdc_contract_view(cdc) if cdc is not None else None,
+                "cdc_runtime": runtime_summary,
+                "stream": self._build_stream_runtime_view(runtime_summary) if cdc is not None else None,
+                "logical_slot": self._build_logical_slot_view(cdc) if cdc is not None else None,
+            }
+        )
+        return snapshot
+
+    def _build_health_view(self, snapshot: dict[str, object]) -> dict[str, object]:
+        entry = {
+            "source_id": snapshot["source_id"],
+            "adapter": snapshot["adapter"],
+            "paused": snapshot["paused"],
+            "runtime_signature_stored": snapshot["runtime_signature_stored"],
+            "checkpoint": snapshot["checkpoint"],
+            "deliveries": snapshot["deliveries"],
+            "proofs": snapshot["proofs"],
+            "dlq": snapshot["dlq"],
+            "capture_mode": snapshot.get("capture_mode"),
+            "warnings": snapshot.get("warnings", []),
+            "severity": snapshot.get("severity", "unknown"),
+            "ok": snapshot.get("ok", False),
+        }
+        cdc = snapshot.get("cdc")
+        if isinstance(cdc, dict):
+            entry["cdc"] = cdc
+        return entry
+
+    def _build_diagnostics_view(self, snapshot: dict[str, object]) -> dict[str, object]:
+        entry: dict[str, object] = {
+            "source_id": snapshot["source_id"],
+            "adapter": snapshot["adapter"],
+            "capture_mode": snapshot.get("capture_mode"),
+            "severity": snapshot.get("severity", "unknown"),
+            "ok": snapshot.get("ok", False),
+            "warnings": snapshot.get("warnings", []),
+            "paused": snapshot.get("paused", False),
+        }
+        if snapshot.get("inspect_error"):
+            entry["inspect_error"] = snapshot["inspect_error"]
+        if snapshot.get("cdc_contract") is not None:
+            entry["cdc_contract"] = snapshot["cdc_contract"]
+        if snapshot.get("cdc_runtime"):
+            entry["cdc_runtime"] = snapshot["cdc_runtime"]
+        if snapshot.get("stream") is not None:
+            entry["stream"] = snapshot["stream"]
+        if snapshot.get("logical_slot") is not None:
+            entry["logical_slot"] = snapshot["logical_slot"]
+        return entry
+
+    def _build_metrics_view(self, snapshot: dict[str, object]) -> dict[str, object]:
+        runtime_summary = snapshot.get("cdc_runtime") if isinstance(snapshot.get("cdc_runtime"), dict) else {}
+        logical_slot = snapshot.get("logical_slot") if isinstance(snapshot.get("logical_slot"), dict) else {}
+        cdc_metrics = self._build_cdc_metrics_view(runtime_summary, logical_slot)
+        entry = {
+            "source_id": snapshot["source_id"],
+            "adapter": snapshot["adapter"],
+            "capture_mode": snapshot.get("capture_mode"),
+            "severity": str(snapshot.get("severity", "unknown")),
+            "ok": bool(snapshot.get("ok", False)),
+            "paused": bool(snapshot.get("paused", False)),
+            "runtime_signature_stored": bool(snapshot.get("runtime_signature_stored", False)),
+            "delivery_count": int(snapshot.get("deliveries", 0) or 0),
+            "proof_count": int(snapshot.get("proofs", 0) or 0),
+            "dlq_count": int(snapshot.get("dlq", 0) or 0),
+            "warning_count": len(list(snapshot.get("warnings", []))),
+            "logical_slot_pending_changes": bool(logical_slot.get("pending_changes", False)),
+            "logical_slot_retained_wal_bytes": int(logical_slot.get("retained_wal_bytes", 0) or 0),
+            "logical_slot_flush_lag_bytes": int(logical_slot.get("flush_lag_bytes", 0) or 0),
+            "stream_effective_runtime_mode": runtime_summary.get("effective_runtime_mode"),
+            "stream_session_active": bool(runtime_summary.get("active", False)),
+            "stream_reconnect_count": int(runtime_summary.get("reconnect_count", 0) or 0),
+            "stream_failure_streak": int(runtime_summary.get("failure_streak", 0) or 0),
+            "stream_backoff_active": bool(runtime_summary.get("backoff_active", False)),
+            "stream_fallback_active": bool(runtime_summary.get("fallback_active", False)),
+            "stream_probation_active": bool(runtime_summary.get("probation_active", False)),
+        }
+        entry.update(cdc_metrics)
+        return entry
 
     def _cdc_runtime_summary(self, cdc: dict[str, object]) -> dict[str, object]:
         runtime = cdc.get("runtime")
