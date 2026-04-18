@@ -1,0 +1,87 @@
+{
+  "agent_name": "denotary-db-agent-jungle4-soak",
+  "log_level": "INFO",
+  "denotary": {
+    "ingress_url": "http://127.0.0.1:8080",
+    "watcher_url": "http://127.0.0.1:8081",
+    "watcher_auth_token": "REPLACE_WITH_WATCHER_TOKEN",
+    "receipt_url": "http://127.0.0.1:8082",
+    "audit_url": "http://127.0.0.1:8083",
+    "chain_rpc_url": "https://REPLACE_WITH_JUNGLE4_RPC",
+    "submitter": "REPLACE_WITH_JUNGLE4_ENTERPRISE_ACCOUNT",
+    "submitter_permission": "dnanchor",
+    "broadcast_backend": "private_key_env",
+    "submitter_private_key_env": "DENOTARY_SUBMITTER_PRIVATE_KEY",
+    "env_file": "./data/jungle4-soak/agent.secrets.env",
+    "submitter_private_key": "",
+    "schema_id": 1776342316,
+    "policy_id": 1776343316,
+    "billing_account": "vadim1111111",
+    "wait_for_finality": true,
+    "finality_timeout_sec": 180,
+    "finality_poll_interval_sec": 3.0
+  },
+  "storage": {
+    "state_db": "./data/jungle4-soak/agent-state.sqlite3",
+    "proof_dir": "./data/jungle4-soak/proofs",
+    "proof_retention": 5000,
+    "delivery_retention": 20000,
+    "dlq_retention": 2000,
+    "diagnostics_snapshot_interval_sec": 900,
+    "diagnostics_snapshot_retention": 48,
+    "evidence_manifest_retention": 500
+  },
+  "sources": [
+    {
+      "id": "pg-jungle4-soak",
+      "adapter": "postgresql",
+      "enabled": true,
+      "source_instance": "jungle4-soak-lab",
+      "database_name": "ledger",
+      "include": {
+        "public": [
+          "invoices",
+          "payments"
+        ]
+      },
+      "exclude": {},
+      "checkpoint_policy": "after_ack",
+      "backfill_mode": "none",
+      "batch_enabled": true,
+      "batch_size": 50,
+      "flush_interval_ms": 1500,
+      "connection": {
+        "host": "127.0.0.1",
+        "port": 55432,
+        "username": "denotary",
+        "password": "REPLACE_WITH_POSTGRES_PASSWORD",
+        "database": "ledger",
+        "sslmode": "prefer",
+        "connect_timeout": 5
+      },
+      "options": {
+        "capture_mode": "logical",
+        "commit_timestamp_column": "updated_at",
+        "slot_name": "denotary_jungle4_soak_slot",
+        "output_plugin": "pgoutput",
+        "publication_name": "denotary_jungle4_soak_pub",
+        "logical_runtime_mode": "stream",
+        "auto_create_slot": true,
+        "auto_create_publication": true,
+        "replica_identity_full": true,
+        "row_limit": 250,
+        "logical_wait_poll_sec": 0.5,
+        "logical_stream_timeout_sec": 2.0,
+        "logical_stream_idle_timeout_sec": 0.5,
+        "logical_stream_reconnect_base_delay_sec": 0.5,
+        "logical_stream_reconnect_max_delay_sec": 10.0,
+        "logical_stream_error_history_size": 10,
+        "logical_stream_fallback_failure_threshold": 3,
+        "logical_stream_fallback_sec": 30.0,
+        "logical_stream_probation_sec": 30.0,
+        "logical_warn_retained_wal_bytes": 268435456,
+        "logical_warn_flush_lag_bytes": 67108864
+      }
+    }
+  ]
+}

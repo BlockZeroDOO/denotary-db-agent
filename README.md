@@ -88,6 +88,7 @@ See:
 - [docs/denotary-env-file-runbook.md](docs/denotary-env-file-runbook.md)
 - [docs/denotary-postgresql-validation-report.md](docs/denotary-postgresql-validation-report.md)
 - [docs/denotary-postgresql-rollout-checklist.md](docs/denotary-postgresql-rollout-checklist.md)
+- [docs/jungle4-postgresql-soak-runbook.md](docs/jungle4-postgresql-soak-runbook.md)
 - [docs/postgresql-hot-key-rotation.md](docs/postgresql-hot-key-rotation.md)
 - [docs/postgresql-recovery-scenarios.md](docs/postgresql-recovery-scenarios.md)
 - [docs/supported-databases.md](docs/supported-databases.md)
