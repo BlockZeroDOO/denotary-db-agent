@@ -15,6 +15,7 @@ authors = [
 dependencies = [
   "psycopg[binary]>=3.1,<4",
   "PyMySQL>=1,<2",
+  "python-tds>=1.16,<2",
   "eosapi==1.0.2"
 ]
 

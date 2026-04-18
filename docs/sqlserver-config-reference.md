@@ -4,12 +4,12 @@ This document describes SQL Server-specific configuration.
 
 ## Current Status
 
-SQL Server is still a scaffold adapter.
+SQL Server now has a live-ready watermark/snapshot baseline adapter.
 
 Declared target path:
 
-- snapshot support
-- CDC or Change Tracking runtime
+- watermark-based snapshot polling baseline
+- SQL Server CDC or Change Tracking runtime next
 
 ## `connection`
 
@@ -20,16 +20,29 @@ Expected keys:
 - `username`
 - `database`
 - optional `password`
+- optional `login_timeout`
+- optional `timeout`
 
 ## `options`
 
-Planned target path:
+Supported now:
 
-- `capture_mode`
-- CDC-specific tracking settings
-- checkpoint and table selection settings
+- `capture_mode = "watermark"`
+- `watermark_column`
+- `commit_timestamp_column`
+- `row_limit`
+
+Planned next:
+
+- `capture_mode = "cdc"`
+- `capture_mode = "change_tracking"`
+- SQL Server-specific tracking settings
 
 ## Notes
 
-- capability metadata currently declares:
-  - `capture_modes = ("snapshot", "cdc", "change_tracking")`
+- current baseline expects explicit tracked tables in `include`
+- tracked tables must have:
+  - a primary key
+  - the configured `watermark_column`
+  - the configured `commit_timestamp_column`
+- live runtime uses `python-tds` for SQL Server connectivity

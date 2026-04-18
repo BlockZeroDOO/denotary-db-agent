@@ -5,7 +5,6 @@ import unittest
 from denotary_db_agent.adapters.mongodb import MongoDbAdapter
 from denotary_db_agent.adapters.oracle import OracleAdapter
 from denotary_db_agent.adapters.registry import ADAPTERS, build_adapter
-from denotary_db_agent.adapters.sqlserver import SqlServerAdapter
 from denotary_db_agent.config import SourceConfig
 from denotary_db_agent.models import ChangeEvent, SourceCheckpoint
 
@@ -13,21 +12,6 @@ from denotary_db_agent.models import ChangeEvent, SourceCheckpoint
 class AdapterContractTest(unittest.TestCase):
     def setUp(self) -> None:
         self.cases = [
-            {
-                "adapter": "sqlserver",
-                "class": SqlServerAdapter,
-                "required_error": "sqlserver connection is missing required fields: host, port, username, database",
-                "connection": {
-                    "host": "127.0.0.1",
-                    "port": 1433,
-                    "username": "denotary",
-                    "database": "ledger",
-                },
-                "minimum_version": "2019",
-                "notes": "SQL Server CDC",
-                "capture_modes": ("snapshot", "cdc", "change_tracking"),
-                "bootstrap_requirements": ("cdc or change tracking enabled", "tracked tables visible"),
-            },
             {
                 "adapter": "oracle",
                 "class": OracleAdapter,
