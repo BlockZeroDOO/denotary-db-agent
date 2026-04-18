@@ -213,3 +213,11 @@ JSON envelopes over and over again.
 Those shared envelopes now also include a database-neutral `tracked_objects` list and
 `tracked_object_count`, so operator tooling can reason about source coverage without caring
 whether a given adapter exposes tables, collections, or other source-native object types.
+
+`AgentEngine` now also turns that into a shared `coverage` view in operator outputs, so
+`doctor`, `diagnostics`, and later rollout/report tooling can consume one stable coverage
+contract instead of branching on `tracked_tables` vs `tracked_collections`.
+
+`report` is now moving onto the same model as well through a shared `source_reports` view,
+so evidence bundles can carry one stable source snapshot instead of reassembling coverage,
+CDC contract, and runtime state independently in each report consumer.

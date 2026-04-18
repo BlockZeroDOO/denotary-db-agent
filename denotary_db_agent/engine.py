@@ -361,6 +361,11 @@ class AgentEngine:
         metrics = self.metrics(source_id)
         diagnostics = self.diagnostics(source_id)
         status = self.status()
+        source_reports = []
+        for runtime in self.runtimes():
+            if source_id and runtime.config.id != source_id:
+                continue
+            source_reports.append(self._build_source_report_view(self._collect_source_snapshot(runtime)))
         if source_id:
             status = {
                 "agent_name": status["agent_name"],
@@ -374,6 +379,7 @@ class AgentEngine:
             "metrics": metrics,
             "diagnostics": diagnostics,
             "status": status,
+            "source_reports": source_reports,
         }
 
     def _doctor_config_paths(self) -> dict[str, object]:
@@ -712,9 +718,7 @@ class AgentEngine:
             if connectivity_ok and snapshot.get("inspect_error"):
                 errors.append(f"inspect failed: {snapshot['inspect_error']}")
             capture_mode = str(snapshot.get("capture_mode") or runtime.config.options.get("capture_mode", "watermark"))
-            tracked_objects = inspect_payload.get("tracked_objects") if inspect_payload else []
-            tracked_tables = inspect_payload.get("tracked_tables") if inspect_payload else []
-            tracked_collections = inspect_payload.get("tracked_collections") if inspect_payload else []
+            coverage = snapshot.get("coverage") if isinstance(snapshot.get("coverage"), dict) else {}
             cdc = snapshot.get("cdc")
             warnings.extend(list(snapshot.get("warnings", [])))
             severity = "healthy"
@@ -730,9 +734,10 @@ class AgentEngine:
                     "capture_mode": capture_mode,
                     "connectivity_ok": connectivity_ok,
                     "inspect_ok": connectivity_ok and not errors,
-                    "tracked_object_count": len(tracked_objects) if isinstance(tracked_objects, list) else 0,
-                    "tracked_table_count": len(tracked_tables) if isinstance(tracked_tables, list) else 0,
-                    "tracked_collection_count": len(tracked_collections) if isinstance(tracked_collections, list) else 0,
+                    "coverage": coverage,
+                    "tracked_object_count": int(coverage.get("tracked_object_count", 0) or 0),
+                    "tracked_table_count": int(coverage.get("tracked_table_count", 0) or 0),
+                    "tracked_collection_count": int(coverage.get("tracked_collection_count", 0) or 0),
                     "cdc_contract": snapshot.get("cdc_contract"),
                     "cdc_runtime": snapshot.get("cdc_runtime"),
                     "severity": severity,
@@ -776,6 +781,7 @@ class AgentEngine:
                     "cdc": None,
                     "cdc_contract": None,
                     "cdc_runtime": {},
+                    "coverage": self._build_source_coverage_view({}),
                     "stream": None,
                     "logical_slot": None,
                 }
@@ -797,6 +803,7 @@ class AgentEngine:
                 "cdc": cdc,
                 "cdc_contract": self._build_cdc_contract_view(cdc) if cdc is not None else None,
                 "cdc_runtime": runtime_summary,
+                "coverage": self._build_source_coverage_view(inspect_payload),
                 "stream": self._build_stream_runtime_view(runtime_summary) if cdc is not None else None,
                 "logical_slot": self._build_logical_slot_view(cdc) if cdc is not None else None,
             }
@@ -839,6 +846,8 @@ class AgentEngine:
             entry["cdc_contract"] = snapshot["cdc_contract"]
         if snapshot.get("cdc_runtime"):
             entry["cdc_runtime"] = snapshot["cdc_runtime"]
+        if snapshot.get("coverage") is not None:
+            entry["coverage"] = snapshot["coverage"]
         if snapshot.get("stream") is not None:
             entry["stream"] = snapshot["stream"]
         if snapshot.get("logical_slot") is not None:
@@ -874,6 +883,28 @@ class AgentEngine:
         }
         entry.update(cdc_metrics)
         return entry
+
+    def _build_source_report_view(self, snapshot: dict[str, object]) -> dict[str, object]:
+        return {
+            "source_id": snapshot["source_id"],
+            "adapter": snapshot["adapter"],
+            "capture_mode": snapshot.get("capture_mode"),
+            "paused": bool(snapshot.get("paused", False)),
+            "severity": str(snapshot.get("severity", "unknown")),
+            "ok": bool(snapshot.get("ok", False)),
+            "runtime_signature_stored": bool(snapshot.get("runtime_signature_stored", False)),
+            "checkpoint": snapshot.get("checkpoint"),
+            "deliveries": int(snapshot.get("deliveries", 0) or 0),
+            "proofs": int(snapshot.get("proofs", 0) or 0),
+            "dlq": int(snapshot.get("dlq", 0) or 0),
+            "warnings": list(snapshot.get("warnings", [])),
+            "coverage": snapshot.get("coverage"),
+            "cdc_contract": snapshot.get("cdc_contract"),
+            "cdc_runtime": snapshot.get("cdc_runtime"),
+            "stream": snapshot.get("stream"),
+            "logical_slot": snapshot.get("logical_slot"),
+            "inspect_error": snapshot.get("inspect_error"),
+        }
 
     def _cdc_runtime_summary(self, cdc: dict[str, object]) -> dict[str, object]:
         runtime = cdc.get("runtime")
@@ -988,6 +1019,21 @@ class AgentEngine:
             "cdc_pending_changes": bool(logical_slot.get("pending_changes", False))
             if logical_slot
             else False,
+        }
+
+    def _build_source_coverage_view(self, inspect_payload: dict[str, object]) -> dict[str, object]:
+        tracked_objects = inspect_payload.get("tracked_objects") if isinstance(inspect_payload.get("tracked_objects"), list) else []
+        tracked_tables = inspect_payload.get("tracked_tables") if isinstance(inspect_payload.get("tracked_tables"), list) else []
+        tracked_collections = (
+            inspect_payload.get("tracked_collections")
+            if isinstance(inspect_payload.get("tracked_collections"), list)
+            else []
+        )
+        return {
+            "tracked_objects": tracked_objects,
+            "tracked_object_count": len(tracked_objects),
+            "tracked_table_count": len(tracked_tables),
+            "tracked_collection_count": len(tracked_collections),
         }
 
     def _severity_rank(self, severity: str) -> int:

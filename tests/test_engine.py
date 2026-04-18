@@ -921,6 +921,7 @@ class EngineTest(unittest.TestCase):
         self.assertTrue(diagnostics["sources"][0]["cdc_contract"]["is_cdc_mode"])
         self.assertEqual(diagnostics["sources"][0]["cdc_runtime"]["transport"], "stream")
         self.assertTrue(diagnostics["sources"][0]["stream"]["session_active"])
+        self.assertEqual(diagnostics["sources"][0]["coverage"]["tracked_object_count"], 0)
         self.assertEqual(doctor["sources"][0]["cdc_contract"]["checkpoint_strategy"], "binlog_cursor")
         self.assertEqual(doctor["sources"][0]["cdc_contract"]["activity_model"], "stream")
         self.assertEqual(doctor["sources"][0]["cdc_runtime"]["configured_runtime_mode"], "binlog")
@@ -964,6 +965,35 @@ class EngineTest(unittest.TestCase):
         self.assertEqual(doctor["sources"][0]["tracked_object_count"], 1)
         self.assertEqual(doctor["sources"][0]["tracked_collection_count"], 1)
         self.assertEqual(doctor["sources"][0]["tracked_table_count"], 0)
+        self.assertEqual(doctor["sources"][0]["coverage"]["tracked_object_count"], 1)
+        self.assertEqual(doctor["sources"][0]["coverage"]["tracked_objects"][0]["kind"], "collection")
+
+    def test_diagnostics_surfaces_shared_coverage_contract(self) -> None:
+        engine = AgentEngine(load_config(self.config_path))
+        source_config = engine.config.sources[0]
+
+        fake_adapter = SimpleNamespace(
+            inspect=lambda: {
+                "source_id": source_config.id,
+                "adapter": source_config.adapter,
+                "capture_mode": "watermark",
+                "tracked_tables": [{"schema": "public", "table": "invoices"}],
+                "tracked_objects": [{"kind": "table", "schema": "public", "table": "invoices"}],
+                "cdc": None,
+            },
+        )
+
+        with patch.object(
+            engine,
+            "runtimes",
+            return_value=[SourceRuntime(config=source_config, adapter=fake_adapter)],
+        ):
+            diagnostics = engine.diagnostics(source_config.id)
+
+        self.assertEqual(diagnostics["sources"][0]["coverage"]["tracked_object_count"], 1)
+        self.assertEqual(diagnostics["sources"][0]["coverage"]["tracked_table_count"], 1)
+        self.assertEqual(diagnostics["sources"][0]["coverage"]["tracked_collection_count"], 0)
+        self.assertEqual(diagnostics["sources"][0]["coverage"]["tracked_objects"][0]["kind"], "table")
 
     def test_report_combines_doctor_metrics_diagnostics_and_status(self) -> None:
         engine = AgentEngine(load_config(self.config_path))
@@ -976,8 +1006,52 @@ class EngineTest(unittest.TestCase):
         self.assertIn("metrics", report)
         self.assertIn("diagnostics", report)
         self.assertIn("status", report)
+        self.assertIn("source_reports", report)
         self.assertEqual(len(report["status"]["sources"]), 1)
         self.assertEqual(report["status"]["sources"][0]["source_id"], "pg-core-ledger")
+        self.assertEqual(len(report["source_reports"]), 1)
+        self.assertEqual(report["source_reports"][0]["source_id"], "pg-core-ledger")
+
+    def test_report_surfaces_shared_source_report_model(self) -> None:
+        engine = AgentEngine(load_config(self.config_path))
+        source_config = engine.config.sources[0]
+
+        fake_adapter = SimpleNamespace(
+            inspect=lambda: {
+                "source_id": source_config.id,
+                "adapter": source_config.adapter,
+                "capture_mode": "change_streams",
+                "tracked_collections": [{"database": "ledger", "collection": "invoices"}],
+                "tracked_objects": [{"kind": "collection", "database": "ledger", "collection": "invoices"}],
+                "cdc": {
+                    "configured_capture_mode": "change_streams",
+                    "is_cdc_mode": True,
+                    "checkpoint_strategy": "resume_token",
+                    "activity_model": "stream",
+                    "cdc_modes": ["change_streams"],
+                    "runtime": {
+                        "transport": "stream",
+                        "configured_runtime_mode": "change_streams",
+                        "effective_runtime_mode": "change_streams",
+                        "active": True,
+                        "cursor": {"resume_token": "token-1"},
+                    },
+                },
+            }
+        )
+
+        with patch.object(
+            engine,
+            "runtimes",
+            return_value=[SourceRuntime(config=source_config, adapter=fake_adapter)],
+        ):
+            report = engine.report(source_config.id)
+
+        source_report = report["source_reports"][0]
+        self.assertEqual(source_report["coverage"]["tracked_object_count"], 1)
+        self.assertEqual(source_report["coverage"]["tracked_objects"][0]["kind"], "collection")
+        self.assertEqual(source_report["cdc_contract"]["checkpoint_strategy"], "resume_token")
+        self.assertEqual(source_report["cdc_runtime"]["transport"], "stream")
 
     def test_doctor_reports_submitter_key_gap_and_service_probe(self) -> None:
         engine = AgentEngine(load_config(self.config_path))
