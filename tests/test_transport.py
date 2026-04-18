@@ -3,14 +3,23 @@ from __future__ import annotations
 import json
 import socket
 import threading
+import tempfile
 import unittest
+from pathlib import Path
 from types import SimpleNamespace
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 from unittest.mock import patch
 
-from denotary_db_agent.transport import ChainClient, CleosWalletChainClient, build_chain_client, resolve_private_key
+from denotary_db_agent.transport import (
+    ChainClient,
+    CleosWalletChainClient,
+    build_chain_client,
+    derive_public_key_candidates,
+    inspect_secret_file_permissions,
+    resolve_private_key,
+)
 
 
 def free_port() -> int:
@@ -223,6 +232,55 @@ class ChainClientLocalPackingTest(unittest.TestCase):
 
         self.assertIsInstance(client, ChainClient)
         init.assert_called_once_with("https://history.denotary.io", "dbagentstest", "dnanchor", "test-wif")
+
+    def test_inspect_secret_file_permissions_accepts_strict_posix_mode(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            env_file = Path(temp_dir) / "agent.env"
+            env_file.write_text("DENOTARY_SUBMITTER_PRIVATE_KEY=test-wif\n", encoding="utf-8")
+            with patch("denotary_db_agent.transport.os.name", "posix"), patch.object(
+                Path,
+                "stat",
+                return_value=SimpleNamespace(st_mode=0o100600),
+            ):
+                info = inspect_secret_file_permissions(env_file)
+
+        self.assertTrue(info["checked"])
+        self.assertTrue(info["ok"])
+        self.assertEqual(info["severity"], "healthy")
+        self.assertEqual(info["mode_octal"], "0600")
+        self.assertEqual(info["issues"], [])
+
+    def test_inspect_secret_file_permissions_flags_world_readable_mode(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            env_file = Path(temp_dir) / "agent.env"
+            env_file.write_text("DENOTARY_SUBMITTER_PRIVATE_KEY=test-wif\n", encoding="utf-8")
+            with patch("denotary_db_agent.transport.os.name", "posix"), patch.object(
+                Path,
+                "stat",
+                return_value=SimpleNamespace(st_mode=0o100644),
+            ):
+                info = inspect_secret_file_permissions(env_file)
+
+        self.assertTrue(info["checked"])
+        self.assertFalse(info["ok"])
+        self.assertEqual(info["severity"], "degraded")
+        self.assertEqual(info["mode_octal"], "0644")
+        self.assertIn("env_file is world-readable or executable", info["issues"])
+
+    def test_derive_public_key_candidates_returns_legacy_and_modern_formats(self) -> None:
+        with patch("denotary_db_agent.transport.privtopub", return_value=("pub-x", "pub-y")), patch(
+            "denotary_db_agent.transport.encode_pubkey",
+            return_value=b"\x02" + (b"\x11" * 32),
+        ), patch("denotary_db_agent.transport.changebase", side_effect=["legacy58", "modern58"]):
+            info = derive_public_key_candidates("test-wif")
+
+        self.assertEqual(
+            info,
+            {
+                "EOS": "EOSlegacy58",
+                "PUB_K1": "PUB_K1_modern58",
+            },
+        )
 
     def test_push_prepared_action_falls_back_to_local_submitroot_packing(self) -> None:
         prepared_action = {

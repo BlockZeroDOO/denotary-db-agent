@@ -619,7 +619,8 @@ class EngineTest(unittest.TestCase):
             get_account=lambda account: {"account_name": account, "permissions": [{"perm_name": "owner"}]},
         )
 
-        report = engine.doctor("pg-core-ledger")
+        with patch("denotary_db_agent.engine.derive_public_key_candidates", return_value={"EOS": "EOS_OWNER"}):
+            report = engine.doctor("pg-core-ledger")
 
         self.assertEqual(report["signer"]["severity"], "degraded")
         self.assertTrue(report["signer"]["broadcast_ready"])
@@ -665,14 +666,123 @@ class EngineTest(unittest.TestCase):
         engine = AgentEngine(load_config(self.config_path))
         engine.chain = SimpleNamespace(
             health=lambda: {"server_version_string": "v1", "chain_id": "abc"},
-            get_account=lambda account: {"account_name": account, "permissions": [{"perm_name": "dnanchor"}]},
+            get_account=lambda account: {
+                "account_name": account,
+                "permissions": [
+                    {
+                        "perm_name": "dnanchor",
+                        "required_auth": {"keys": [{"key": "EOS_MATCH", "weight": 1}]},
+                    }
+                ],
+            },
         )
 
-        report = engine.doctor("pg-core-ledger")
+        with patch("denotary_db_agent.engine.derive_public_key_candidates", return_value={"EOS": "EOS_MATCH"}), patch(
+            "denotary_db_agent.engine.inspect_secret_file_permissions",
+            return_value={
+                "path": str(env_path),
+                "exists": True,
+                "checked": True,
+                "ok": True,
+                "platform": "posix",
+                "mode_octal": "0600",
+                "severity": "healthy",
+                "issues": [],
+            },
+        ):
+            report = engine.doctor("pg-core-ledger")
 
-        self.assertEqual(report["signer"]["severity"], "degraded")
+        self.assertEqual(report["signer"]["severity"], "healthy")
         self.assertEqual(report["signer"]["effective_broadcast_backend"], "private_key_env")
         self.assertEqual(report["signer"]["private_key_source"], "env")
         self.assertTrue(report["signer"]["env_file_exists"])
+        self.assertTrue(report["signer"]["env_file_permissions_checked"])
+        self.assertTrue(report["signer"]["env_file_permissions_ok"])
+        self.assertEqual(report["signer"]["env_file_mode_octal"], "0600")
+        self.assertEqual(report["signer"]["permission_public_keys"], ["EOS_MATCH"])
+        self.assertEqual(report["signer"]["derived_public_keys"], {"EOS": "EOS_MATCH"})
+        self.assertTrue(report["signer"]["private_key_matches_permission"])
         self.assertTrue(report["signer"]["broadcast_ready"])
-        self.assertIn("hot key is loaded from env_file", " ".join(report["warnings"]))
+        self.assertEqual(report["signer"]["warnings"], [])
+
+    def test_doctor_flags_overly_permissive_env_file_permissions(self) -> None:
+        env_path = Path(self.temp_dir.name) / "agent.env"
+        env_path.write_text("DENOTARY_SUBMITTER_PRIVATE_KEY=test-wif\n", encoding="utf-8")
+        config = json.loads(self.config_path.read_text(encoding="utf-8"))
+        config["denotary"]["chain_rpc_url"] = "https://history.denotary.io"
+        config["denotary"]["broadcast_backend"] = "private_key_env"
+        config["denotary"]["env_file"] = "agent.env"
+        self.config_path.write_text(json.dumps(config), encoding="utf-8")
+
+        engine = AgentEngine(load_config(self.config_path))
+        engine.chain = SimpleNamespace(
+            health=lambda: {"server_version_string": "v1", "chain_id": "abc"},
+            get_account=lambda account: {"account_name": account, "permissions": [{"perm_name": "dnanchor"}]},
+        )
+
+        with patch(
+            "denotary_db_agent.engine.inspect_secret_file_permissions",
+            return_value={
+                "path": str(env_path),
+                "exists": True,
+                "checked": True,
+                "ok": False,
+                "platform": "posix",
+                "mode_octal": "0660",
+                "severity": "critical",
+                "issues": ["env_file is group-writable"],
+            },
+        ):
+            report = engine.doctor("pg-core-ledger")
+
+        self.assertEqual(report["signer"]["severity"], "critical")
+        self.assertFalse(report["signer"]["env_file_permissions_ok"])
+        self.assertEqual(report["signer"]["env_file_permission_severity"], "critical")
+        self.assertEqual(report["signer"]["env_file_permission_issues"], ["env_file is group-writable"])
+        self.assertFalse(report["signer"]["broadcast_ready"])
+        self.assertIn("env_file permissions are too broad (0660)", " ".join(report["errors"]))
+
+    def test_doctor_flags_hot_key_that_does_not_match_permission_keys(self) -> None:
+        env_path = Path(self.temp_dir.name) / "agent.env"
+        env_path.write_text("DENOTARY_SUBMITTER_PRIVATE_KEY=test-wif\n", encoding="utf-8")
+        config = json.loads(self.config_path.read_text(encoding="utf-8"))
+        config["denotary"]["chain_rpc_url"] = "https://history.denotary.io"
+        config["denotary"]["broadcast_backend"] = "private_key_env"
+        config["denotary"]["env_file"] = "agent.env"
+        self.config_path.write_text(json.dumps(config), encoding="utf-8")
+
+        engine = AgentEngine(load_config(self.config_path))
+        engine.chain = SimpleNamespace(
+            health=lambda: {"server_version_string": "v1", "chain_id": "abc"},
+            get_account=lambda account: {
+                "account_name": account,
+                "permissions": [
+                    {
+                        "perm_name": "dnanchor",
+                        "required_auth": {"keys": [{"key": "EOS_EXPECTED", "weight": 1}]},
+                    }
+                ],
+            },
+        )
+
+        with patch("denotary_db_agent.engine.derive_public_key_candidates", return_value={"EOS": "EOS_OTHER"}), patch(
+            "denotary_db_agent.engine.inspect_secret_file_permissions",
+            return_value={
+                "path": str(env_path),
+                "exists": True,
+                "checked": True,
+                "ok": True,
+                "platform": "posix",
+                "mode_octal": "0600",
+                "severity": "healthy",
+                "issues": [],
+            },
+        ):
+            report = engine.doctor("pg-core-ledger")
+
+        self.assertEqual(report["signer"]["severity"], "critical")
+        self.assertEqual(report["signer"]["permission_public_keys"], ["EOS_EXPECTED"])
+        self.assertEqual(report["signer"]["derived_public_keys"], {"EOS": "EOS_OTHER"})
+        self.assertFalse(report["signer"]["private_key_matches_permission"])
+        self.assertFalse(report["signer"]["broadcast_ready"])
+        self.assertIn("configured hot key does not match any key", " ".join(report["errors"]))

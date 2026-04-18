@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
+import stat
 import subprocess
 import time
 import urllib.error
@@ -14,6 +16,7 @@ from eosapi import EosApi
 from eosapi.exceptions import NodeException
 from eosapi.packer import Name, Uint32, Uint64
 from eosapi.transaction import Action, Authorization, Transaction
+from cryptos import changebase, encode_pubkey, privtopub
 
 from denotary_db_agent.models import CanonicalEnvelope
 
@@ -36,6 +39,69 @@ def _parse_env_file(path: str) -> dict[str, str]:
             value = value[1:-1]
         values[key] = value
     return values
+
+
+def inspect_secret_file_permissions(path: str | os.PathLike[str]) -> dict[str, Any]:
+    file_path = path if isinstance(path, Path) else Path(path)
+    result: dict[str, Any] = {
+        "path": str(file_path) if path else "",
+        "exists": bool(path and file_path.exists()),
+        "checked": False,
+        "ok": None,
+        "platform": os.name,
+        "mode_octal": None,
+        "severity": "unknown",
+        "issues": [],
+    }
+    if not path or not file_path.exists():
+        return result
+    if os.name != "posix":
+        return result
+
+    mode = stat.S_IMODE(file_path.stat().st_mode)
+    issues: list[str] = []
+    severity = "healthy"
+
+    if mode & 0o022:
+        severity = "critical"
+        if mode & 0o020:
+            issues.append("env_file is group-writable")
+        if mode & 0o002:
+            issues.append("env_file is world-writable")
+
+    if mode & 0o055:
+        if severity != "critical":
+            severity = "degraded"
+        if mode & 0o050:
+            issues.append("env_file is group-readable or executable")
+        if mode & 0o005:
+            issues.append("env_file is world-readable or executable")
+
+    result.update(
+        {
+            "checked": True,
+            "ok": severity == "healthy",
+            "mode_octal": f"{mode:04o}",
+            "severity": severity,
+            "issues": issues,
+        }
+    )
+    return result
+
+
+def derive_public_key_candidates(private_key: str) -> dict[str, str]:
+    wif = str(private_key or "").strip()
+    if not wif:
+        return {}
+
+    compressed = encode_pubkey(privtopub(wif), "bin_compressed")
+    legacy_checksum = hashlib.new("ripemd160", compressed).digest()[:4]
+    modern_checksum = hashlib.new("ripemd160", compressed + b"K1").digest()[:4]
+
+    return {
+        "EOS": "EOS" + changebase(compressed + legacy_checksum, 256, 58),
+        "PUB_K1": "PUB_K1_" + changebase(compressed + modern_checksum, 256, 58),
+    }
 
 
 def resolve_private_key(config: Any) -> dict[str, Any]:

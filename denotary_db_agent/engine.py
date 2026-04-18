@@ -21,8 +21,10 @@ from denotary_db_agent.transport import (
     ReceiptClient,
     WatcherClient,
     build_chain_client,
+    derive_public_key_candidates,
     export_batch_proof_bundle,
     export_proof_bundle,
+    inspect_secret_file_permissions,
     resolve_private_key,
 )
 
@@ -595,6 +597,17 @@ class AgentEngine:
         if backend == "auto":
             effective_backend = "private_key_env" if key_info["private_key"] else "private_key"
         private_key_present = bool(key_info["private_key"])
+        env_file = str(key_info.get("env_file") or "")
+        env_file_permissions = inspect_secret_file_permissions(env_file) if env_file else {
+            "path": "",
+            "exists": False,
+            "checked": False,
+            "ok": None,
+            "platform": os.name,
+            "mode_octal": None,
+            "severity": "unknown",
+            "issues": [],
+        }
         wallet_command = list(self.config.denotary.wallet_command or [])
         wallet_command_effective = wallet_command or ["cleos"]
         chain_ready = bool(self.config.denotary.chain_rpc_url)
@@ -609,7 +622,6 @@ class AgentEngine:
                 signer_material_ready = True
         elif effective_backend == "private_key_env":
             env_var = str(key_info.get("env_var") or "")
-            env_file = str(key_info.get("env_file") or "")
             if env_file and not bool(key_info.get("env_file_exists")):
                 errors.append(f"env_file does not exist: {env_file}")
             if not private_key_present:
@@ -620,7 +632,17 @@ class AgentEngine:
             else:
                 signer_material_ready = True
                 if env_file:
-                    warnings.append("hot key is loaded from env_file; keep file permissions restricted to the service user")
+                    if bool(env_file_permissions.get("checked")):
+                        permission_message = (
+                            f"env_file permissions are too broad ({env_file_permissions.get('mode_octal')}); "
+                            "expected 0600 or stricter for a hot key secret"
+                        )
+                        if env_file_permissions.get("severity") == "critical":
+                            errors.append(permission_message)
+                        elif env_file_permissions.get("severity") == "degraded":
+                            warnings.append(permission_message)
+                    elif not bool(env_file_permissions.get("exists")):
+                        errors.append(f"env_file does not exist: {env_file}")
                 else:
                     warnings.append("hot key is loaded from process environment; prefer an env_file or secret mount with restricted access")
         elif effective_backend == "cleos_wallet":
@@ -650,12 +672,23 @@ class AgentEngine:
         permission_exists = False
         billing_account_exists = False
         account_error = ""
+        permission_public_keys: list[str] = []
+        derived_public_keys: dict[str, str] = {}
+        private_key_matches_permission: bool | None = None
         if self.chain is not None:
             try:
                 account = self.chain.get_account(self.config.denotary.submitter)
                 account_exists = True
                 permissions = account.get("permissions") or []
-                permission_exists = any(str(item.get("perm_name") or "") == permission for item in permissions)
+                permission_auth = next((item for item in permissions if str(item.get("perm_name") or "") == permission), None)
+                permission_exists = permission_auth is not None
+                if permission_auth is not None:
+                    required_auth = permission_auth.get("required_auth") or permission_auth.get("auth") or {}
+                    permission_public_keys = [
+                        str(item.get("key") or "")
+                        for item in (required_auth.get("keys") or [])
+                        if str(item.get("key") or "")
+                    ]
                 if not permission_exists:
                     errors.append(f"submitter permission {self.config.denotary.submitter}@{permission} does not exist on chain")
             except Exception as exc:  # noqa: BLE001
@@ -666,6 +699,22 @@ class AgentEngine:
                 billing_account_exists = True
             except Exception as exc:  # noqa: BLE001
                 errors.append(f"unable to load billing account {self.config.denotary.billing_account}: {exc}")
+
+        if signer_material_ready and effective_backend in {"private_key", "private_key_env"} and private_key_present:
+            try:
+                derived_public_keys = derive_public_key_candidates(str(key_info.get("private_key") or ""))
+            except Exception as exc:  # noqa: BLE001
+                errors.append(f"unable to derive public key from configured hot key: {exc}")
+            else:
+                if account_exists and permission_exists and permission_public_keys:
+                    private_key_matches_permission = any(
+                        candidate in permission_public_keys for candidate in derived_public_keys.values()
+                    )
+                    if not private_key_matches_permission:
+                        errors.append(
+                            f"configured hot key does not match any key on submitter permission "
+                            f"{self.config.denotary.submitter}@{permission}"
+                        )
 
         severity = "healthy"
         if errors:
@@ -685,8 +734,13 @@ class AgentEngine:
             "private_key_present": private_key_present,
             "private_key_source": key_info.get("source") or None,
             "private_key_env": key_info.get("env_var") or None,
-            "env_file": key_info.get("env_file") or None,
+            "env_file": env_file or None,
             "env_file_exists": bool(key_info.get("env_file_exists")),
+            "env_file_permissions_checked": bool(env_file_permissions.get("checked")),
+            "env_file_permissions_ok": env_file_permissions.get("ok"),
+            "env_file_permission_severity": env_file_permissions.get("severity"),
+            "env_file_mode_octal": env_file_permissions.get("mode_octal"),
+            "env_file_permission_issues": list(env_file_permissions.get("issues") or []),
             "wallet_command": wallet_command_effective,
             "wallet_probe": wallet_probe,
             "chain_rpc_configured": chain_ready,
@@ -694,7 +748,13 @@ class AgentEngine:
             "account_exists": account_exists,
             "permission_exists": permission_exists,
             "billing_account_exists": billing_account_exists,
-            "broadcast_ready": chain_ready and signer_material_ready and (self.chain is None or (account_exists and permission_exists)),
+            "permission_public_keys": permission_public_keys,
+            "derived_public_keys": derived_public_keys,
+            "private_key_matches_permission": private_key_matches_permission,
+            "broadcast_ready": (not errors)
+            and chain_ready
+            and signer_material_ready
+            and (self.chain is None or (account_exists and permission_exists)),
             "account_error": account_error or None,
             "warnings": warnings,
             "errors": errors,

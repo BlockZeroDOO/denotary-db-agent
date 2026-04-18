@@ -81,6 +81,7 @@ Recommended placement:
 
 Recommended file permissions:
 
+- Linux / POSIX: `chmod 600 /path/to/agent.secrets.env`
 - readable only by the service user
 - not world-readable
 - not group-writable
@@ -126,15 +127,16 @@ Healthy preflight should include:
 - `effective_broadcast_backend = "private_key_env"`
 - `private_key_source = "env"`
 - `env_file_exists = true`
+- `env_file_permissions_checked = true` on Linux / POSIX
+- `env_file_permissions_ok = true`
+- `private_key_matches_permission = true`
 - `broadcast_ready = true`
 - `permission_exists = true`
 - `billing_account_exists = true`
 
-Expected warning:
-
-- `hot key is loaded from env_file; keep file permissions restricted to the service user`
-
-That warning is normal and should remain `degraded`, not `critical`.
+On Linux / POSIX, `doctor` should stay `healthy` when the secret file is `0600` or stricter.
+If the file is group/world-readable it should become `degraded`.
+If the file is group/world-writable it should become `critical`.
 
 ## On-Chain Verification
 

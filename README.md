@@ -127,6 +127,8 @@ Note:
   - per-source connectivity and tracked table visibility
 - `doctor --save-snapshot` stores the same preflight report under the local runtime directory for rollout evidence
 - `doctor --strict` exits nonzero only for `critical` / `error` overall severity, so it can be wired into CI/CD and service pre-start checks without failing on normal `degraded` warnings
+- on POSIX hosts, `doctor` also checks whether an env-file hot key is stored in a `0600`-style secret file and raises severity when permissions are too broad
+- for inline/env-backed hot keys, `doctor` also compares the derived public key with the keys on `submitter@submitter_permission`
 - `report --save-snapshot` exports one rollout evidence bundle that combines:
   - `doctor`
   - `metrics`

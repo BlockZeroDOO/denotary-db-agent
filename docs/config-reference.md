@@ -188,6 +188,7 @@ Example:
   - process environment wins over missing env file values only because both feed the same resolver; either source is acceptable
 - Recommendation:
   - store this file outside source control
+  - on Linux and other POSIX hosts, keep it at `0600` or stricter
   - keep permissions restricted to the service user
   - use it as the default production path for the hot key
 
