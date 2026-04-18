@@ -6,15 +6,20 @@ param(
     [string]$ServiceName = "deNotaryDbAgent",
     [string]$DisplayName = "deNotary DB Agent",
     [string]$Description = "deNotary DB Agent enterprise database notarization service",
-    [double]$IntervalSec = 5
+    [double]$IntervalSec = 5,
+    [string]$DoctorSource = ""
 )
 
 $projectRoot = Split-Path -Parent $PSScriptRoot
-$mainModule = Join-Path $projectRoot "denotary_db_agent\__main__.py"
+$runnerScript = Join-Path $projectRoot "scripts\run-windows-service.ps1"
 $quotedPython = '"' + $PythonExe + '"'
-$quotedMain = '"' + $mainModule + '"'
+$quotedRunner = '"' + $runnerScript + '"'
 $quotedConfig = '"' + $ConfigPath + '"'
-$binPath = "$quotedPython $quotedMain --config $quotedConfig run --interval-sec $IntervalSec"
+$binPath = "$quotedPython -ExecutionPolicy Bypass -File $quotedRunner -ConfigPath $quotedConfig -IntervalSec $IntervalSec"
+if ($DoctorSource) {
+    $quotedDoctorSource = '"' + $DoctorSource + '"'
+    $binPath = "$binPath -DoctorSource $quotedDoctorSource"
+}
 
 if (Get-Service -Name $ServiceName -ErrorAction SilentlyContinue) {
     Write-Host "Service $ServiceName already exists; updating binPath via sc.exe config"
@@ -24,4 +29,5 @@ if (Get-Service -Name $ServiceName -ErrorAction SilentlyContinue) {
 }
 
 Write-Host "Configured service $ServiceName"
+Write-Host "Pre-start gate: doctor --strict"
 Write-Host "Start with: Start-Service $ServiceName"

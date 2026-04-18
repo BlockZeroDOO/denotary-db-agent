@@ -190,6 +190,7 @@ See:
 - [deploy/systemd/denotary-db-agent.service.example](deploy/systemd/denotary-db-agent.service.example)
 - [deploy/docker-compose.example.yml](deploy/docker-compose.example.yml)
 - [scripts/install-windows-service.ps1](scripts/install-windows-service.ps1)
+- [scripts/run-windows-service.ps1](scripts/run-windows-service.ps1)
 - [deploy/config/linux-agent.example.json](deploy/config/linux-agent.example.json)
 - [deploy/config/windows-agent.example.json](deploy/config/windows-agent.example.json)
 - [deploy/config/docker-agent.example.json](deploy/config/docker-agent.example.json)

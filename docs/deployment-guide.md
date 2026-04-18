@@ -39,6 +39,12 @@ sudo systemctl enable denotary-db-agent
 sudo systemctl start denotary-db-agent
 ```
 
+The example unit already uses:
+
+- `ExecStartPre=... doctor --strict`
+
+so the daemon will not start if live preflight fails.
+
 Recommended operator checks:
 
 ```bash
@@ -52,6 +58,7 @@ Helper scripts:
 
 - [scripts/install-windows-service.ps1](../scripts/install-windows-service.ps1)
 - [scripts/remove-windows-service.ps1](../scripts/remove-windows-service.ps1)
+- [scripts/run-windows-service.ps1](../scripts/run-windows-service.ps1)
 - starter config pack:
   - [deploy/config/windows-agent.example.json](../deploy/config/windows-agent.example.json)
 
@@ -62,10 +69,16 @@ Install example:
   -ConfigPath C:\deNotary\denotary-db-agent\config\agent.json `
   -PythonExe C:\Python39\python.exe `
   -ServiceName deNotaryDbAgent `
+  -DoctorSource pg-core-ledger `
   -IntervalSec 5
 
 Start-Service deNotaryDbAgent
 ```
+
+The installer now points the service at `run-windows-service.ps1`, which:
+
+1. runs `doctor --strict`
+2. starts daemon mode only if preflight succeeds
 
 Remove example:
 
@@ -137,3 +150,5 @@ Optional startup gate:
 ```bash
 denotary-db-agent --config /etc/denotary-db-agent/agent.json doctor --source pg-core-ledger --strict
 ```
+
+For Windows services, this gate is already embedded in the wrapper used by `install-windows-service.ps1`.
