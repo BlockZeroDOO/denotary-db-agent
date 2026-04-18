@@ -16,7 +16,7 @@ from unittest.mock import patch
 
 from denotary_db_agent.config import load_config
 from denotary_db_agent.engine import AgentEngine, SourceRuntime
-from denotary_db_agent.models import DeliveryAttempt, ProofArtifact
+from denotary_db_agent.models import ChangeEvent, DeliveryAttempt, ProofArtifact
 
 
 def free_port() -> int:
@@ -194,6 +194,61 @@ class EngineTest(unittest.TestCase):
         result = engine.run_once()
         self.assertEqual(result["processed"], 1)
         self.assertIsNotNone(engine.store.get_runtime_signature("pg-core-ledger"))
+
+    def test_process_event_reuses_prepared_request_across_retries(self) -> None:
+        engine = AgentEngine(load_config(self.config_path))
+        runtime = engine.runtimes()[0]
+        event_payload = engine.config.sources[0].options["dry_run_events"][0]
+        event = ChangeEvent(
+            source_id=runtime.config.id,
+            source_type="postgresql",
+            source_instance=runtime.config.source_instance,
+            database_name=runtime.config.database_name,
+            **event_payload,
+        )
+
+        prepared = SimpleNamespace(
+            request_id="request-retry-1",
+            trace_id="trace-retry-1",
+            prepared_action={"contract": "verifbill", "action": "submit", "data": {"submitter": "enterpriseac1"}},
+        )
+        prepare_calls: list[dict[str, object]] = []
+        register_calls: list[tuple[str, str]] = []
+        included_calls: list[tuple[str, str, int]] = []
+        failed_calls: list[tuple[str, str]] = []
+
+        def prepare_single(payload):
+            prepare_calls.append(payload)
+            return prepared
+
+        class FlakyChain:
+            def __init__(self) -> None:
+                self.calls = 0
+
+            def push_prepared_action(self, prepared_action):
+                self.calls += 1
+                if self.calls == 1:
+                    raise RuntimeError("transient push failure")
+                return SimpleNamespace(tx_id="a" * 64, block_num=321)
+
+        chain = FlakyChain()
+        engine.ingress = SimpleNamespace(prepare_single=prepare_single)
+        engine.chain = chain
+        engine.watcher = SimpleNamespace(
+            register=lambda prepared_obj, envelope: register_calls.append((prepared_obj.request_id, prepared_obj.trace_id)),
+            mark_failed=lambda request_id, reason, details=None: failed_calls.append((request_id, reason)),
+            mark_included=lambda request_id, tx_id, block_num: included_calls.append((request_id, tx_id, block_num)),
+        )
+
+        engine._process_event(runtime, event)
+
+        self.assertEqual(len(prepare_calls), 1)
+        self.assertEqual(register_calls, [("request-retry-1", "trace-retry-1"), ("request-retry-1", "trace-retry-1")])
+        self.assertEqual(failed_calls, [("request-retry-1", "db_agent_delivery_failed")])
+        self.assertEqual(included_calls, [("request-retry-1", "a" * 64, 321)])
+        checkpoints = engine.checkpoint_summary()
+        self.assertEqual(len(checkpoints), 1)
+        self.assertEqual(checkpoints[0]["token"], "lsn:1")
 
     def test_health_reports_logical_runtime_warnings(self) -> None:
         engine = AgentEngine(load_config(self.config_path))

@@ -886,11 +886,13 @@ class AgentEngine:
         )
 
         last_error: str | None = None
+        prepared = None
         for delay in [0.0, *self.retry_policy.delays()]:
             if delay:
                 time.sleep(delay)
             try:
-                prepared = self.ingress.prepare_single(payload)
+                if prepared is None:
+                    prepared = self.ingress.prepare_single(payload)
                 self.watcher.register(prepared, envelope)
                 now = utc_now().isoformat()
                 self.store.upsert_delivery(
@@ -980,7 +982,7 @@ class AgentEngine:
             except Exception as exc:  # noqa: BLE001
                 last_error = str(exc)
                 try:
-                    if "prepared" in locals():
+                    if prepared is not None:
                         self.watcher.mark_failed(
                             prepared.request_id,
                             "db_agent_delivery_failed",
@@ -1031,7 +1033,8 @@ class AgentEngine:
             if delay:
                 time.sleep(delay)
             try:
-                prepared = self.ingress.prepare_batch(payload)
+                if prepared is None:
+                    prepared = self.ingress.prepare_batch(payload)
                 self.watcher.register(prepared, envelopes[0])
                 now = utc_now().isoformat()
                 self.store.upsert_delivery(
