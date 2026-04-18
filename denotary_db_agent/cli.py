@@ -281,6 +281,21 @@ def maybe_export_snapshot(
     return payload
 
 
+def build_command_result(
+    command_name: str,
+    payload: dict,
+    *,
+    exit_code: int = 0,
+    flush: bool = False,
+) -> dict:
+    return {
+        "command_name": command_name,
+        "payload": payload,
+        "exit_code": exit_code,
+        "flush": flush,
+    }
+
+
 def run_evidence_command(
     engine: AgentEngine,
     args,
@@ -288,7 +303,7 @@ def run_evidence_command(
     command_name: str,
     state_db: str,
     manifest_retention: int,
-) -> int:
+) -> dict:
     command = COMMAND_SPECS[command_name]
     behavior = COMMAND_BEHAVIORS[command_name]
     payload = getattr(engine, command["engine_method"])(args.source)
@@ -303,8 +318,7 @@ def run_evidence_command(
         manifest_retention=manifest_retention,
     )
     exit_code = evaluate_command_exit_policy(command_name, args, payload)
-    emit_command_output(command_name, payload)
-    return exit_code
+    return build_command_result(command_name, payload, exit_code=exit_code)
 
 
 def emit_command_output(command_name: str, payload: dict, *, flush: bool = False) -> int:
@@ -315,6 +329,11 @@ def emit_command_output(command_name: str, payload: dict, *, flush: bool = False
     raise ValueError(f"unsupported output mode for {command_name}: {behavior.get('output_mode')}")
 
 
+def emit_command_result(result: dict) -> int:
+    emit_command_output(result["command_name"], result["payload"], flush=bool(result.get("flush")))
+    return int(result.get("exit_code", 0))
+
+
 def evaluate_command_exit_policy(command_name: str, args, payload: dict) -> int:
     strict_on_severity = COMMAND_BEHAVIORS[command_name].get("strict_on_severity")
     if strict_on_severity and getattr(args, "strict", False):
@@ -323,22 +342,22 @@ def evaluate_command_exit_policy(command_name: str, args, payload: dict) -> int:
     return 0
 
 
-def run_json_engine_command(engine: AgentEngine, args, *, command_name: str, **_: object) -> int:
+def run_json_engine_command(engine: AgentEngine, args, *, command_name: str, **_: object) -> dict:
     command = COMMAND_SPECS[command_name]
     method = getattr(engine, command["engine_method"])
     payload = method(args.source) if command.get("source_arg") else method()
     if "wrap_key" in command:
         payload = {"ok": True, command["wrap_key"]: payload}
-    return emit_command_output(command_name, payload)
+    return build_command_result(command_name, payload)
 
 
-def run_source_action_command(engine: AgentEngine, args, *, command_name: str, **_: object) -> int:
+def run_source_action_command(engine: AgentEngine, args, *, command_name: str, **_: object) -> dict:
     command = COMMAND_SPECS[command_name]
     getattr(engine, command["engine_method"])(args.source)
-    return emit_command_output(command_name, {"ok": True, "source": args.source, "action": command["action"]})
+    return build_command_result(command_name, {"ok": True, "source": args.source, "action": command["action"]})
 
 
-def run_artifacts_command(args, *, state_db: str) -> int:
+def run_artifacts_command(args, *, state_db: str) -> dict:
     pruned_missing: list[dict] = []
     if args.prune_missing:
         _, pruned_missing = prune_missing_evidence_entries(state_db)
@@ -353,7 +372,7 @@ def run_artifacts_command(args, *, state_db: str) -> int:
         if args.latest < 1:
             raise SystemExit("--latest must be at least 1")
         artifacts = artifacts[: args.latest]
-    return emit_command_output(
+    return build_command_result(
         "artifacts",
         {
             "manifest_path": str(default_evidence_manifest_path(state_db)),
@@ -365,28 +384,34 @@ def run_artifacts_command(args, *, state_db: str) -> int:
     )
 
 
-def run_run_command(engine: AgentEngine, args, **_: object) -> int:
+def run_run_command(engine: AgentEngine, args, **_: object) -> dict:
     if args.once:
-        return emit_command_output("run", engine.run_once())
-    emit_command_output("run", {"status": "running", "interval_sec": args.interval_sec}, flush=True)
-    return emit_command_output("run", engine.run_forever(args.interval_sec))
+        return build_command_result("run", engine.run_once())
+    return build_command_result(
+        "run",
+        {
+            "status": "running",
+            "interval_sec": args.interval_sec,
+            "run_result": engine.run_forever(args.interval_sec),
+        },
+    )
 
 
-def run_checkpoint_command(engine: AgentEngine, args, **_: object) -> int:
+def run_checkpoint_command(engine: AgentEngine, args, **_: object) -> dict:
     if args.reset:
         if not args.source:
             raise SystemExit("--source is required with --reset")
         engine.reset_checkpoint(args.source)
-        return emit_command_output("checkpoint", {"ok": True, "source": args.source, "action": "checkpoint_reset"})
+        return build_command_result("checkpoint", {"ok": True, "source": args.source, "action": "checkpoint_reset"})
     checkpoints = engine.checkpoint_summary()
     if args.source:
         checkpoints = [item for item in checkpoints if item["source_id"] == args.source]
-    return emit_command_output("checkpoint", {"checkpoints": checkpoints})
+    return build_command_result("checkpoint", {"checkpoints": checkpoints})
 
 
-def run_proof_command(engine: AgentEngine, args, **_: object) -> int:
+def run_proof_command(engine: AgentEngine, args, **_: object) -> dict:
     proof = engine.store.get_proof(args.request_id)
-    return emit_command_output("proof", {"proof": proof})
+    return build_command_result("proof", {"proof": proof})
 
 
 def dispatch_engine_command(
@@ -395,7 +420,7 @@ def dispatch_engine_command(
     *,
     state_db: str,
     manifest_retention: int,
-) -> int:
+) -> dict:
     command = COMMAND_SPECS[args.command]
     handler_name = {
         "json_engine": "run_json_engine_command",
@@ -455,13 +480,15 @@ def main(argv: list[str] | None = None) -> int:
     config = load_config(args.config)
     manifest_retention = int(getattr(config.storage, "evidence_manifest_retention", 200))
     if COMMAND_SPECS[args.command]["kind"] == "artifacts":
-        return run_artifacts_command(args, state_db=config.storage.state_db)
+        return emit_command_result(run_artifacts_command(args, state_db=config.storage.state_db))
     engine = AgentEngine(config)
     if COMMAND_SPECS[args.command]["kind"] != "artifacts":
-        return dispatch_engine_command(
-            engine,
-            args,
-            state_db=config.storage.state_db,
-            manifest_retention=manifest_retention,
+        return emit_command_result(
+            dispatch_engine_command(
+                engine,
+                args,
+                state_db=config.storage.state_db,
+                manifest_retention=manifest_retention,
+            )
         )
     raise SystemExit("unsupported command")

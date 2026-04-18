@@ -7,7 +7,7 @@ from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
-from denotary_db_agent.cli import COMMAND_BEHAVIORS, COMMAND_SPECS, EVIDENCE_COMMANDS, ENGINE_DISPATCH_COMMANDS, JSON_ENGINE_COMMANDS, OPTION_SPECS, SOURCE_ACTION_COMMANDS, build_parser, evaluate_command_exit_policy, main, maybe_export_snapshot
+from denotary_db_agent.cli import COMMAND_BEHAVIORS, COMMAND_SPECS, EVIDENCE_COMMANDS, ENGINE_DISPATCH_COMMANDS, JSON_ENGINE_COMMANDS, OPTION_SPECS, SOURCE_ACTION_COMMANDS, build_command_result, build_parser, emit_command_result, evaluate_command_exit_policy, main, maybe_export_snapshot
 from denotary_db_agent.diagnostics_snapshots import (
     artifact_kind,
     build_snapshot_metadata,
@@ -55,6 +55,16 @@ class CliTest(unittest.TestCase):
 
         self.assertEqual(evaluate_command_exit_policy("doctor", args, payload), 1)
         self.assertEqual(evaluate_command_exit_policy("report", args, payload), 0)
+
+    def test_emit_command_result_uses_shared_output_contract(self) -> None:
+        stdout = StringIO()
+        result = build_command_result("metrics", {"ok": True}, exit_code=7)
+
+        with patch("sys.stdout", stdout):
+            exit_code = emit_command_result(result)
+
+        self.assertEqual(exit_code, 7)
+        self.assertEqual(json.loads(stdout.getvalue()), {"ok": True})
 
     def test_option_specs_cover_shared_cli_flags(self) -> None:
         self.assertEqual(OPTION_SPECS["source"]["flags"], ("--source",))
