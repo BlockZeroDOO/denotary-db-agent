@@ -105,6 +105,27 @@ def read_evidence_manifest(state_db: str) -> dict:
     return {"artifacts": artifacts}
 
 
+def prune_missing_evidence_entries(state_db: str) -> tuple[Path, list[dict]]:
+    manifest_path = default_evidence_manifest_path(state_db)
+    payload = read_evidence_manifest(state_db)
+    artifacts = payload.get("artifacts", [])
+    removed: list[dict] = []
+    retained: list[dict] = []
+    for item in artifacts:
+        if not isinstance(item, dict):
+            removed.append({"path": None})
+            continue
+        artifact_path = str(item.get("path") or "")
+        if artifact_path and Path(artifact_path).exists():
+            retained.append(item)
+        else:
+            removed.append(item)
+    if removed or not manifest_path.exists():
+        manifest_path.parent.mkdir(parents=True, exist_ok=True)
+        manifest_path.write_text(json.dumps({"artifacts": retained}, indent=2), encoding="utf-8")
+    return manifest_path, removed
+
+
 def prune_snapshot_files(
     snapshot_path: str | Path,
     keep_count: int,

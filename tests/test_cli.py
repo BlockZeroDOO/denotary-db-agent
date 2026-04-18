@@ -284,6 +284,54 @@ class CliTest(unittest.TestCase):
             self.assertEqual(payload["artifacts"][0]["kind"], "report")
             self.assertEqual(payload["artifacts"][0]["source_id"], "pg-core-ledger")
 
+    def test_artifacts_command_prunes_missing_entries(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            runtime_dir = Path(temp_dir) / "runtime" / "diagnostics"
+            runtime_dir.mkdir(parents=True, exist_ok=True)
+            existing_path = runtime_dir / "doctor-pg-core-ledger-20260417T225200Z.json"
+            existing_path.write_text("{}", encoding="utf-8")
+            missing_path = runtime_dir / "doctor-pg-core-ledger-20260417T225201Z.json"
+            manifest_path = runtime_dir / "evidence-manifest.json"
+            manifest_path.write_text(
+                json.dumps(
+                    {
+                        "artifacts": [
+                            {"kind": "doctor", "source_id": "pg-core-ledger", "path": str(existing_path)},
+                            {"kind": "doctor", "source_id": "pg-core-ledger", "path": str(missing_path)},
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            config_path = Path(temp_dir) / "config.json"
+            config_path.write_text("{}", encoding="utf-8")
+            fake_config = type(
+                "FakeConfig",
+                (),
+                {
+                    "storage": type("FakeStorage", (), {"state_db": str(Path(temp_dir) / "runtime" / "state.sqlite3")})(),
+                },
+            )()
+            stdout = StringIO()
+            with patch("denotary_db_agent.cli.load_config", return_value=fake_config), patch("sys.stdout", stdout):
+                exit_code = main(
+                    [
+                        "--config",
+                        str(config_path),
+                        "artifacts",
+                        "--prune-missing",
+                    ]
+                )
+
+            self.assertEqual(exit_code, 0)
+            payload = json.loads(stdout.getvalue())
+            self.assertEqual(payload["pruned_missing_count"], 1)
+            self.assertEqual(payload["pruned_missing_paths"], [str(missing_path)])
+            self.assertEqual(payload["artifact_count"], 1)
+            refreshed_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            self.assertEqual(len(refreshed_manifest["artifacts"]), 1)
+            self.assertEqual(refreshed_manifest["artifacts"][0]["path"], str(existing_path))
+
     def test_report_command_prints_engine_report(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             config_path = Path(temp_dir) / "config.json"

@@ -8,6 +8,7 @@ from denotary_db_agent.diagnostics_snapshots import (
     default_evidence_manifest_path,
     export_diagnostics_snapshot,
     export_named_snapshot,
+    prune_missing_evidence_entries,
     read_evidence_manifest,
 )
 from denotary_db_agent.engine import AgentEngine
@@ -49,6 +50,11 @@ def build_parser() -> argparse.ArgumentParser:
     artifacts_parser = subparsers.add_parser("artifacts", help="Show saved evidence artifacts from the local manifest")
     artifacts_parser.add_argument("--source", help="Source id")
     artifacts_parser.add_argument("--kind", choices=["diagnostics", "doctor", "report"], help="Artifact kind")
+    artifacts_parser.add_argument(
+        "--prune-missing",
+        action="store_true",
+        help="Remove manifest entries whose snapshot files no longer exist",
+    )
     report_parser = subparsers.add_parser("report", help="Export a compact rollout evidence bundle")
     report_parser.add_argument("--source", help="Source id")
     report_parser.add_argument("--output", help="Write report JSON to this file")
@@ -105,6 +111,9 @@ def main(argv: list[str] | None = None) -> int:
     config = load_config(args.config)
     manifest_retention = int(getattr(config.storage, "evidence_manifest_retention", 200))
     if args.command == "artifacts":
+        pruned_missing: list[dict] = []
+        if args.prune_missing:
+            _, pruned_missing = prune_missing_evidence_entries(config.storage.state_db)
         manifest = read_evidence_manifest(config.storage.state_db)
         artifacts = manifest.get("artifacts", [])
         if args.source:
@@ -115,6 +124,8 @@ def main(argv: list[str] | None = None) -> int:
             json.dumps(
                 {
                     "manifest_path": str(default_evidence_manifest_path(config.storage.state_db)),
+                    "pruned_missing_count": len(pruned_missing),
+                    "pruned_missing_paths": [str(item.get("path") or "") for item in pruned_missing],
                     "artifact_count": len(artifacts),
                     "artifacts": artifacts,
                 },
