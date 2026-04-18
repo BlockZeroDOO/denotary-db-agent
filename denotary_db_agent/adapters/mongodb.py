@@ -59,6 +59,8 @@ class MongoDbAdapter(BaseAdapter):
             capture_modes=("watermark", "change_streams"),
             cdc_modes=("change_streams",),
             default_capture_mode="watermark",
+            checkpoint_strategy="document_watermark" if self._capture_mode() == "watermark" else "resume_token",
+            activity_model="polling" if self._capture_mode() == "watermark" else "stream",
             bootstrap_requirements=("tracked collections visible", "watermark fields configured"),
             notes=self.adapter_notes,
         )

@@ -84,6 +84,8 @@ class MySqlAdapter(BaseAdapter):
             capture_modes=("watermark", "binlog"),
             cdc_modes=("binlog",),
             default_capture_mode="watermark",
+            checkpoint_strategy="table_watermark" if capture_mode == "watermark" else "binlog_cursor",
+            activity_model="polling" if capture_mode == "watermark" else "stream",
             bootstrap_requirements=(
                 ("tracked tables visible", "watermark columns configured")
                 if capture_mode == "watermark"

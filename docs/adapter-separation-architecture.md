@@ -169,10 +169,24 @@ Capabilities now also declare:
 - `default_capture_mode`
 - `cdc_modes`
 - `bootstrap_requirements`
+- `checkpoint_strategy`
+- `activity_model`
 
 This makes adapter behavior more declarative for operator tooling and for future adapter
 work, instead of forcing every new database integration to infer those expectations from
 implementation details alone.
+
+These two newer flags make CDC-capable adapters easier to reason about consistently:
+
+- `checkpoint_strategy`
+  - examples: `table_watermark`, `binlog_cursor`, `lsn_cursor`, `resume_token`, `logminer_scn`
+- `activity_model`
+  - examples: `polling`, `notification_polling`, `stream`
+
+That gives `inspect` and future operator automation a database-neutral way to answer:
+
+- what kind of cursor/checkpoint this source persists
+- whether the source waits on notifications/streams or is purely poll-based
 
 `BaseAdapter` now also owns the generic source-runtime choice between snapshot and CDC:
 

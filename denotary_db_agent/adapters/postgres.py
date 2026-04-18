@@ -88,6 +88,20 @@ class PostgresAdapter(BaseAdapter):
     def discover_capabilities(self) -> AdapterCapabilities:
         capture_mode = str(self.config.options.get("capture_mode", "watermark")).lower()
         logical_plugin = self._logical_output_plugin()
+        checkpoint_strategy = (
+            "table_watermark"
+            if capture_mode == "watermark"
+            else "trigger_sequence"
+            if capture_mode == "trigger"
+            else "lsn_cursor"
+        )
+        activity_model = (
+            "polling"
+            if capture_mode == "watermark"
+            else "notification_polling"
+            if capture_mode == "trigger"
+            else "stream"
+        )
         return AdapterCapabilities(
             source_type=self.source_type,
             minimum_version="14",
@@ -97,6 +111,8 @@ class PostgresAdapter(BaseAdapter):
             capture_modes=("watermark", "trigger", "logical"),
             cdc_modes=("trigger", "logical"),
             default_capture_mode="watermark",
+            checkpoint_strategy=checkpoint_strategy,
+            activity_model=activity_model,
             bootstrap_requirements=(
                 ("tracked tables visible", "watermark columns configured")
                 if capture_mode == "watermark"

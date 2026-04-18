@@ -75,6 +75,8 @@ class OracleAdapter(BaseAdapter):
             capture_modes=("watermark", "logminer"),
             cdc_modes=("logminer",),
             default_capture_mode="watermark",
+            checkpoint_strategy="table_watermark" if capture_mode == "watermark" else "logminer_scn",
+            activity_model="polling",
             bootstrap_requirements=(
                 ("tracked tables visible", "watermark columns configured")
                 if capture_mode == "watermark"

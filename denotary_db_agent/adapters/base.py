@@ -22,6 +22,8 @@ class AdapterCapabilities:
     cdc_modes: tuple[str, ...] = ()
     default_capture_mode: str = "watermark"
     bootstrap_requirements: tuple[str, ...] = ()
+    checkpoint_strategy: str = "opaque"
+    activity_model: str = "polling"
 
 
 class BaseAdapter(ABC):
@@ -93,6 +95,12 @@ class BaseAdapter(ABC):
     def after_checkpoint_advanced(self, token: str) -> None:
         return None
 
+    def checkpoint_strategy(self) -> str:
+        return self.discover_capabilities().checkpoint_strategy
+
+    def activity_model(self) -> str:
+        return self.discover_capabilities().activity_model
+
     def bootstrap(self) -> dict:
         self.validate_connection()
         return {
@@ -114,6 +122,9 @@ class BaseAdapter(ABC):
             "cdc_modes": list(capabilities.cdc_modes),
             "default_capture_mode": capabilities.default_capture_mode,
             "bootstrap_requirements": list(capabilities.bootstrap_requirements),
+            "checkpoint_strategy": capabilities.checkpoint_strategy,
+            "activity_model": capabilities.activity_model,
+            "is_cdc_mode": self.is_cdc_mode(),
             "notes": capabilities.notes,
         }
 
@@ -141,6 +152,8 @@ class ScaffoldCdcAdapter(BaseAdapter):
     scaffold_cdc_modes: tuple[str, ...] = ()
     scaffold_default_capture_mode: str = "watermark"
     scaffold_bootstrap_requirements: tuple[str, ...] = ()
+    scaffold_checkpoint_strategy: str = "opaque"
+    scaffold_activity_model: str = "polling"
     scaffold_notes: str = ""
 
     def discover_capabilities(self) -> AdapterCapabilities:
@@ -154,6 +167,8 @@ class ScaffoldCdcAdapter(BaseAdapter):
             cdc_modes=self.scaffold_cdc_modes,
             default_capture_mode=self.scaffold_default_capture_mode,
             bootstrap_requirements=self.scaffold_bootstrap_requirements,
+            checkpoint_strategy=self.scaffold_checkpoint_strategy,
+            activity_model=self.scaffold_activity_model,
             notes=self.scaffold_notes,
         )
 

@@ -72,6 +72,8 @@ class SqlServerAdapter(BaseAdapter):
             capture_modes=("watermark", "change_tracking"),
             cdc_modes=("change_tracking",),
             default_capture_mode="watermark",
+            checkpoint_strategy="table_watermark" if capture_mode == "watermark" else "change_tracking_version",
+            activity_model="polling",
             bootstrap_requirements=(
                 ("tracked tables visible", "watermark columns configured")
                 if capture_mode == "watermark"
