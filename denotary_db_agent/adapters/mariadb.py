@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from denotary_db_agent.adapters.base import ScaffoldCdcAdapter
+from denotary_db_agent.adapters.mysql import MySqlAdapter
 
 
-class MariaDbAdapter(ScaffoldCdcAdapter):
+class MariaDbAdapter(MySqlAdapter):
     source_type = "mariadb"
     minimum_version = "10.6"
-    required_connection_fields = ("host", "port", "username", "database")
-    scaffold_capture_modes = ("snapshot", "binlog")
-    scaffold_bootstrap_requirements = ("binlog access", "tracked tables visible")
-    scaffold_notes = "Expected CDC source is MariaDB binlog with adapter-specific profile."
+    adapter_notes = (
+        "Live baseline implementation uses MariaDB watermark-based snapshot polling. "
+        "MariaDB binlog CDC remains the next MariaDB-specific step."
+    )

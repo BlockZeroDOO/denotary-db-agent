@@ -34,30 +34,31 @@ class MySqlTableSpec:
 
 class MySqlAdapter(BaseAdapter):
     source_type = "mysql"
+    minimum_version = "8.0"
+    adapter_notes = (
+        "Live baseline implementation uses MySQL watermark-based snapshot polling. "
+        "Row-based binlog CDC remains the next MySQL-specific step."
+    )
 
     def discover_capabilities(self) -> AdapterCapabilities:
-        capture_mode = self._capture_mode()
         return AdapterCapabilities(
             source_type=self.source_type,
-            minimum_version="8.0",
+            minimum_version=self.minimum_version,
             supports_cdc=False,
             supports_snapshot=True,
             operations=("snapshot",),
             capture_modes=("watermark",),
             bootstrap_requirements=("tracked tables visible", "watermark columns configured"),
-            notes=(
-                "Live baseline implementation uses MySQL watermark-based snapshot polling. "
-                "Row-based binlog CDC remains the next MySQL-specific step."
-            ),
+            notes=self.adapter_notes,
         )
 
     def validate_connection(self) -> None:
         required = ("host", "port", "username", "database")
         missing = [name for name in required if not self.config.connection.get(name)]
         if missing:
-            raise ValueError(f"mysql connection is missing required fields: {', '.join(missing)}")
+            raise ValueError(f"{self.source_type} connection is missing required fields: {', '.join(missing)}")
         if pymysql is None:
-            raise RuntimeError("PyMySQL is required for live mysql adapter use")
+            raise RuntimeError(f"PyMySQL is required for live {self.source_type} adapter use")
         if self.config.options.get("dry_run_events"):
             return
         with self._connect() as connection:
@@ -135,7 +136,7 @@ class MySqlAdapter(BaseAdapter):
         return self.bootstrap()
 
     def start_stream(self, checkpoint: SourceCheckpoint | None):
-        raise NotImplementedError("mysql CDC streaming is not implemented yet; use watermark snapshot mode")
+        raise NotImplementedError(f"{self.source_type} CDC streaming is not implemented yet; use watermark snapshot mode")
 
     def stop_stream(self) -> None:
         return None
@@ -214,7 +215,7 @@ class MySqlAdapter(BaseAdapter):
     @contextmanager
     def _connect(self) -> Iterator[Any]:
         if pymysql is None:
-            raise RuntimeError("PyMySQL is required for live mysql adapter use")
+            raise RuntimeError(f"PyMySQL is required for live {self.source_type} adapter use")
         connection = pymysql.connect(
             host=str(self.config.connection["host"]),
             port=int(self.config.connection["port"]),
@@ -252,7 +253,7 @@ class MySqlAdapter(BaseAdapter):
             for schema_name, tables in include.items():
                 target_schema = schema_name or self.config.database_name
                 if not tables:
-                    raise ValueError("mysql include must list explicit tables for the current baseline")
+                    raise ValueError(f"{self.source_type} include must list explicit tables for the current baseline")
                 for table_name in tables:
                     cursor.execute(
                         """
@@ -269,7 +270,7 @@ class MySqlAdapter(BaseAdapter):
                     )
                     rows = cursor.fetchall()
                     if not rows:
-                        raise ValueError(f"mysql table {target_schema}.{table_name} was not found")
+                        raise ValueError(f"{self.source_type} table {target_schema}.{table_name} was not found")
                     columns = [str(self._row_get(row, "column_name")) for row in rows]
                     primary_key_columns = [
                         str(self._row_get(row, "column_name"))
@@ -277,14 +278,14 @@ class MySqlAdapter(BaseAdapter):
                         if self._row_get(row, "is_primary_key")
                     ]
                     if not primary_key_columns:
-                        raise ValueError(f"mysql table {target_schema}.{table_name} must have a primary key")
+                        raise ValueError(f"{self.source_type} table {target_schema}.{table_name} must have a primary key")
                     if watermark_column not in columns:
                         raise ValueError(
-                            f"mysql table {target_schema}.{table_name} does not contain watermark column {watermark_column}"
+                            f"{self.source_type} table {target_schema}.{table_name} does not contain watermark column {watermark_column}"
                         )
                     if commit_timestamp_column not in columns:
                         raise ValueError(
-                            f"mysql table {target_schema}.{table_name} does not contain commit timestamp column {commit_timestamp_column}"
+                            f"{self.source_type} table {target_schema}.{table_name} does not contain commit timestamp column {commit_timestamp_column}"
                         )
                     specs.append(
                         MySqlTableSpec(
@@ -311,7 +312,7 @@ class MySqlAdapter(BaseAdapter):
         if table_state:
             pk_values = list(table_state.get("pk") or [])
             if len(pk_values) != len(spec.primary_key_columns):
-                raise ValueError(f"mysql checkpoint for {spec.key} has invalid primary key state")
+                raise ValueError(f"{self.source_type} checkpoint for {spec.key} has invalid primary key state")
             watermark_value = table_state.get("watermark")
             comparisons = [
                 f"{self._quote_identifier(column)} > %s"
@@ -340,7 +341,7 @@ class MySqlAdapter(BaseAdapter):
             return {}
         payload = json.loads(checkpoint.token)
         if not isinstance(payload, dict):
-            raise ValueError("mysql checkpoint token must be a JSON object")
+            raise ValueError(f"{self.source_type} checkpoint token must be a JSON object")
         return payload
 
     def _sort_key(self, spec: MySqlTableSpec, row: dict[str, Any]) -> tuple[Any, ...]:
@@ -373,7 +374,7 @@ class MySqlAdapter(BaseAdapter):
     def _normalize_timestamp(self, value: Any) -> str:
         normalized = self._normalize_value(value)
         if not isinstance(normalized, str):
-            raise ValueError(f"mysql timestamp value must normalize to string, got {type(normalized)!r}")
+            raise ValueError(f"{self.source_type} timestamp value must normalize to string, got {type(normalized)!r}")
         return normalized
 
     def _pk_marker(self, primary_key: dict[str, Any], primary_key_columns: list[str]) -> str:
