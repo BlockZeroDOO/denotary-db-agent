@@ -163,9 +163,20 @@ OPTION_SPECS = {
     },
 }
 
+COMMAND_KIND_BEHAVIOR_DEFAULTS = {
+    "default": {
+        "output_mode": "json",
+    },
+    "evidence": {
+        "supports_snapshot_export": True,
+        "supports_output_path": True,
+    },
+}
+
 
 def build_command_behavior(command_name: str, command: dict) -> dict:
-    behavior = {"output_mode": "json"}
+    behavior = dict(COMMAND_KIND_BEHAVIOR_DEFAULTS["default"])
+    behavior.update(COMMAND_KIND_BEHAVIOR_DEFAULTS.get(command["kind"], {}))
     behavior.update(command.get("behavior", {}))
     if command["kind"] == "evidence":
         behavior.setdefault("supports_snapshot_export", True)

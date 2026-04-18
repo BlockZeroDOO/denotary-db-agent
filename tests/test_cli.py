@@ -7,7 +7,7 @@ from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
-from denotary_db_agent.cli import COMMAND_BEHAVIORS, COMMAND_KIND_HANDLERS, COMMAND_KIND_PARSER_BUILDERS, COMMAND_KIND_SPECS, COMMAND_SPECS, EVIDENCE_COMMANDS, ENGINE_DISPATCH_COMMANDS, JSON_ENGINE_COMMANDS, OPTION_SPECS, SOURCE_ACTION_COMMANDS, build_command_result, build_engine_dispatch_commands, build_kind_component_map, build_kind_registry, build_parser, command_uses_engine, emit_command_result, evaluate_command_exit_policy, execute_command, main, maybe_export_snapshot, select_commands
+from denotary_db_agent.cli import COMMAND_BEHAVIORS, COMMAND_KIND_BEHAVIOR_DEFAULTS, COMMAND_KIND_HANDLERS, COMMAND_KIND_PARSER_BUILDERS, COMMAND_KIND_SPECS, COMMAND_SPECS, EVIDENCE_COMMANDS, ENGINE_DISPATCH_COMMANDS, JSON_ENGINE_COMMANDS, OPTION_SPECS, SOURCE_ACTION_COMMANDS, build_command_result, build_engine_dispatch_commands, build_kind_component_map, build_kind_registry, build_parser, command_uses_engine, emit_command_result, evaluate_command_exit_policy, execute_command, main, maybe_export_snapshot, select_commands
 from denotary_db_agent.diagnostics_snapshots import (
     artifact_kind,
     build_snapshot_metadata,
@@ -44,12 +44,15 @@ class CliTest(unittest.TestCase):
         self.assertEqual(build_kind_registry(kind="evidence"), EVIDENCE_COMMANDS)
 
     def test_command_behaviors_cover_evidence_output_and_strict_policy(self) -> None:
+        self.assertEqual(COMMAND_KIND_BEHAVIOR_DEFAULTS["default"]["output_mode"], "json")
+        self.assertTrue(COMMAND_KIND_BEHAVIOR_DEFAULTS["evidence"]["supports_snapshot_export"])
         self.assertTrue(COMMAND_BEHAVIORS["doctor"]["supports_snapshot_export"])
         self.assertTrue(COMMAND_BEHAVIORS["doctor"]["supports_output_path"])
         self.assertTrue(COMMAND_BEHAVIORS["doctor"]["supports_strict"])
         self.assertEqual(COMMAND_BEHAVIORS["doctor"]["strict_on_severity"], {"critical", "error"})
         self.assertEqual(COMMAND_BEHAVIORS["report"]["snapshot_prefix"], "report")
         self.assertEqual(COMMAND_BEHAVIORS["metrics"]["output_mode"], "json")
+        self.assertTrue(COMMAND_BEHAVIORS["diagnostics"]["supports_output_path"])
 
     def test_evaluate_command_exit_policy_uses_behavior_contract(self) -> None:
         args = type("Args", (), {"strict": True})()
