@@ -57,6 +57,8 @@ class MongoDbAdapter(BaseAdapter):
             supports_snapshot=True,
             operations=("insert", "update", "delete", "snapshot"),
             capture_modes=("watermark", "change_streams"),
+            cdc_modes=("change_streams",),
+            default_capture_mode="watermark",
             bootstrap_requirements=("tracked collections visible", "watermark fields configured"),
             notes=self.adapter_notes,
         )
@@ -284,7 +286,7 @@ class MongoDbAdapter(BaseAdapter):
             client.close()
 
     def _capture_mode(self) -> str:
-        return str(self.config.options.get("capture_mode", "watermark")).lower()
+        return self.capture_mode()
 
     def _cdc_summary(self, client: Any) -> dict[str, Any] | None:
         if self._capture_mode() != "change_streams":

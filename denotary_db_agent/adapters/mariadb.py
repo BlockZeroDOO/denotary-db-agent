@@ -7,6 +7,6 @@ class MariaDbAdapter(MySqlAdapter):
     source_type = "mariadb"
     minimum_version = "10.6"
     adapter_notes = (
-        "Live baseline implementation uses MariaDB watermark-based snapshot polling. "
-        "MariaDB binlog CDC remains the next MariaDB-specific step."
+        "MariaDB supports both watermark-based snapshot polling and a shared binlog CDC baseline. "
+        "Live MariaDB binlog harness validation remains the next MariaDB-specific step."
     )

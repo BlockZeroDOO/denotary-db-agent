@@ -166,8 +166,21 @@ and future adapters without coupling those tests to PostgreSQL behavior.
 Capabilities now also declare:
 
 - `capture_modes`
+- `default_capture_mode`
+- `cdc_modes`
 - `bootstrap_requirements`
 
 This makes adapter behavior more declarative for operator tooling and for future adapter
 work, instead of forcing every new database integration to infer those expectations from
 implementation details alone.
+
+`BaseAdapter` now also owns the generic source-runtime choice between snapshot and CDC:
+
+- `capture_mode()`
+- `is_cdc_mode()`
+- `iter_events(checkpoint)`
+- `should_wait_for_activity()`
+
+That keeps `AgentEngine` out of source-specific mode branching such as
+`trigger/logical/change_streams`, so future CDC-capable adapters can plug in by declaring
+capabilities instead of extending orchestrator conditionals.

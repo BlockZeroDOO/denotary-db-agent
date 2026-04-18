@@ -195,6 +195,66 @@ class EngineTest(unittest.TestCase):
         self.assertEqual(result["processed"], 1)
         self.assertIsNotNone(engine.store.get_runtime_signature("pg-core-ledger"))
 
+    def test_run_once_uses_adapter_event_iteration_contract(self) -> None:
+        engine = AgentEngine(load_config(self.config_path))
+        source_config = engine.config.sources[0]
+        source_config.options = {}
+        captured = {"iter_calls": 0, "processed_events": []}
+        event = ChangeEvent(
+            source_id=source_config.id,
+            source_type="mongodb",
+            source_instance=source_config.source_instance,
+            database_name=source_config.database_name,
+            schema_or_namespace="ledger",
+            table_or_collection="invoices",
+            operation="insert",
+            primary_key={"id": 1},
+            change_version="change-1",
+            commit_timestamp="2026-04-18T10:00:00Z",
+            before=None,
+            after={"id": 1, "status": "issued"},
+            metadata={"capture_mode": "change_streams"},
+            checkpoint_token="change-1",
+        )
+        fake_adapter = SimpleNamespace(
+            runtime_signature=lambda: "runtime-signature",
+            refresh_runtime=lambda: {"source_id": source_config.id},
+            resume_from_checkpoint=lambda checkpoint: None,
+            iter_events=lambda checkpoint: captured.__setitem__("iter_calls", captured["iter_calls"] + 1) or iter([event]),
+            should_wait_for_activity=lambda: True,
+            stop_stream=lambda: None,
+        )
+        runtime = SourceRuntime(config=source_config, adapter=fake_adapter)
+
+        with patch.object(engine, "_ensure_runtime_ready", return_value=None), patch.object(
+            engine,
+            "_process_event",
+            side_effect=lambda runtime_obj, current_event: captured["processed_events"].append(current_event.change_version),
+        ):
+            result = engine._run_runtimes_once([runtime])
+
+        self.assertEqual(result["processed"], 1)
+        self.assertEqual(result["failed"], 0)
+        self.assertEqual(captured["iter_calls"], 1)
+        self.assertEqual(captured["processed_events"], ["change-1"])
+
+    def test_wait_for_activity_uses_adapter_wait_contract(self) -> None:
+        engine = AgentEngine(load_config(self.config_path))
+        source_config = engine.config.sources[0]
+        source_config.options = {}
+        wait_calls: list[float] = []
+        fake_adapter = SimpleNamespace(
+            should_wait_for_activity=lambda: True,
+            wait_for_changes=lambda timeout_sec: wait_calls.append(timeout_sec) or True,
+            stop_stream=lambda: None,
+        )
+        runtime = SourceRuntime(config=source_config, adapter=fake_adapter)
+
+        engine._wait_for_activity([runtime], interval_sec=0.25)
+
+        self.assertEqual(len(wait_calls), 1)
+        self.assertGreater(wait_calls[0], 0.0)
+
     def test_process_event_reuses_prepared_request_across_retries(self) -> None:
         engine = AgentEngine(load_config(self.config_path))
         runtime = engine.runtimes()[0]

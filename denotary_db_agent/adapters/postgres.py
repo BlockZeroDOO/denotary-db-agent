@@ -95,6 +95,8 @@ class PostgresAdapter(BaseAdapter):
             supports_snapshot=True,
             operations=("snapshot",) if capture_mode == "watermark" else ("insert", "update", "delete"),
             capture_modes=("watermark", "trigger", "logical"),
+            cdc_modes=("trigger", "logical"),
+            default_capture_mode="watermark",
             bootstrap_requirements=(
                 ("tracked tables visible", "watermark columns configured")
                 if capture_mode == "watermark"
@@ -1834,7 +1836,7 @@ class PostgresAdapter(BaseAdapter):
         return (int(upper, 16) << 32) + int(lower, 16)
 
     def _capture_mode(self) -> str:
-        return str(self.config.options.get("capture_mode", "watermark")).lower()
+        return self.capture_mode()
 
     def _spec_summary(self, spec: PostgresTableSpec) -> dict[str, Any]:
         return {

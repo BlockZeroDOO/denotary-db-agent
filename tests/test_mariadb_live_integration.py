@@ -291,7 +291,7 @@ class MariaDbLiveIntegrationTest(unittest.TestCase):
         validation = engine.validate()
         self.assertEqual(validation[0]["source_type"], "mariadb")
         self.assertEqual(validation[0]["supports_snapshot"], "true")
-        self.assertEqual(validation[0]["capture_modes"], ["watermark"])
+        self.assertEqual(validation[0]["capture_modes"], ["watermark", "binlog"])
 
         bootstrap = engine.bootstrap("mariadb-core-ledger")
         self.assertEqual(bootstrap["sources"][0]["capture_mode"], "watermark")

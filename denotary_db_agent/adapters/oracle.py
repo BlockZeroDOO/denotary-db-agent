@@ -46,6 +46,8 @@ class OracleAdapter(BaseAdapter):
             supports_snapshot=True,
             operations=("snapshot",),
             capture_modes=("watermark",),
+            cdc_modes=(),
+            default_capture_mode="watermark",
             bootstrap_requirements=("tracked tables visible", "watermark columns configured"),
             notes=self.adapter_notes,
         )
@@ -228,7 +230,7 @@ class OracleAdapter(BaseAdapter):
             connection.close()
 
     def _capture_mode(self) -> str:
-        return str(self.config.options.get("capture_mode", "watermark")).lower()
+        return self.capture_mode()
 
     def _row_get(self, row: dict[str, Any], key: str) -> Any:
         if key in row:

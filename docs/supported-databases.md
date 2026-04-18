@@ -5,8 +5,8 @@
 | Adapter | Target path | Minimum version | CDC path | Current scaffold status |
 | --- | --- | --- | --- | --- |
 | PostgreSQL | enterprise | 14 | watermark polling baseline now; logical decoding / WAL next | live baseline with signing, finality, and proof export |
-| MySQL | enterprise | 8.0 | watermark polling baseline now; row-based binlog next | live watermark snapshot baseline with local full-cycle proof export |
-| MariaDB | enterprise | 10.6 | watermark polling baseline now; MariaDB binlog profile next | live watermark snapshot baseline with local full-cycle proof export |
+| MySQL | enterprise | 8.0 | watermark polling baseline plus shared row-based binlog CDC baseline | live watermark snapshot baseline with local full-cycle proof export; unit-covered binlog CDC path |
+| MariaDB | enterprise | 10.6 | watermark polling baseline plus shared row-based binlog CDC baseline | live watermark snapshot baseline with local full-cycle proof export; unit-covered shared binlog CDC path |
 | SQL Server | enterprise | 2019 | watermark polling baseline now; CDC / Change Tracking next | live Docker-backed watermark snapshot baseline with local full-cycle proof export |
 | Oracle | enterprise | 19c | watermark polling baseline now; redo / LogMiner next | live Docker-backed watermark snapshot baseline with local full-cycle proof export |
 | MongoDB | enterprise | 6.0 | watermark polling baseline and change streams | live Docker-backed watermark snapshot baseline plus change-stream CDC with local full-cycle proof export |

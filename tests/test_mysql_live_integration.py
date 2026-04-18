@@ -309,7 +309,7 @@ class MySqlLiveIntegrationTest(unittest.TestCase):
         validation = engine.validate()
         self.assertEqual(validation[0]["source_type"], "mysql")
         self.assertEqual(validation[0]["supports_snapshot"], "true")
-        self.assertEqual(validation[0]["capture_modes"], ["watermark"])
+        self.assertEqual(validation[0]["capture_modes"], ["watermark", "binlog"])
 
         bootstrap = engine.bootstrap("mysql-core-ledger")
         self.assertEqual(bootstrap["sources"][0]["capture_mode"], "watermark")

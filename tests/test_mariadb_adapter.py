@@ -74,15 +74,31 @@ class MariaDbAdapterTest(unittest.TestCase):
 
         self.assertEqual(capabilities.source_type, "mariadb")
         self.assertEqual(capabilities.minimum_version, "10.6")
-        self.assertFalse(capabilities.supports_cdc)
+        self.assertTrue(capabilities.supports_cdc)
         self.assertTrue(capabilities.supports_snapshot)
         self.assertEqual(capabilities.operations, ("snapshot",))
-        self.assertEqual(capabilities.capture_modes, ("watermark",))
+        self.assertEqual(capabilities.capture_modes, ("watermark", "binlog"))
+        self.assertEqual(capabilities.cdc_modes, ("binlog",))
         self.assertEqual(
             capabilities.bootstrap_requirements,
             ("tracked tables visible", "watermark columns configured"),
         )
-        self.assertIn("MariaDB watermark-based snapshot polling", capabilities.notes)
+        self.assertIn("watermark-based snapshot polling", capabilities.notes)
+
+    def test_discover_capabilities_describes_binlog_mode(self) -> None:
+        self.config.options["capture_mode"] = "binlog"
+        adapter = MariaDbAdapter(self.config)
+        capabilities = adapter.discover_capabilities()
+
+        self.assertTrue(capabilities.supports_cdc)
+        self.assertEqual(capabilities.operations, ("insert", "update", "delete"))
+        self.assertEqual(capabilities.capture_modes, ("watermark", "binlog"))
+        self.assertEqual(capabilities.cdc_modes, ("binlog",))
+        self.assertEqual(
+            capabilities.bootstrap_requirements,
+            ("tracked tables visible", "row-based binlog enabled", "replication privileges configured"),
+        )
+        self.assertIn("binlog CDC baseline", capabilities.notes)
 
     def test_validate_connection_rejects_missing_fields(self) -> None:
         config = SourceConfig(
@@ -158,7 +174,7 @@ class MariaDbAdapterTest(unittest.TestCase):
         self.assertEqual(len(bootstrap["tracked_tables"]), 1)
         self.assertEqual(bootstrap["tracked_tables"][0]["table_name"], "invoices")
 
-    def test_start_stream_raises_until_binlog_cdc_is_added(self) -> None:
+    def test_start_stream_raises_when_capture_mode_is_not_binlog(self) -> None:
         adapter = MariaDbAdapter(self.config)
-        with self.assertRaisesRegex(NotImplementedError, "mariadb CDC streaming is not implemented yet"):
+        with self.assertRaisesRegex(NotImplementedError, "mariadb CDC streaming is only available when capture_mode is set to binlog"):
             list(adapter.start_stream(SourceCheckpoint(source_id=self.config.id, token="token-1", updated_at="2026-04-18T10:00:00Z")))

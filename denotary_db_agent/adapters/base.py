@@ -19,6 +19,8 @@ class AdapterCapabilities:
     operations: tuple[str, ...]
     notes: str
     capture_modes: tuple[str, ...] = ()
+    cdc_modes: tuple[str, ...] = ()
+    default_capture_mode: str = "watermark"
     bootstrap_requirements: tuple[str, ...] = ()
 
 
@@ -56,6 +58,33 @@ class BaseAdapter(ABC):
     def resume_from_checkpoint(self, checkpoint: SourceCheckpoint | None) -> None:
         raise NotImplementedError
 
+    def capture_mode(self) -> str:
+        configured = self.config.options.get("capture_mode")
+        if isinstance(configured, str) and configured.strip():
+            return configured.strip().lower()
+        capabilities = self.discover_capabilities()
+        if capabilities.default_capture_mode:
+            return capabilities.default_capture_mode
+        if capabilities.capture_modes:
+            return str(capabilities.capture_modes[0]).lower()
+        return "watermark"
+
+    def is_cdc_mode(self) -> bool:
+        capabilities = self.discover_capabilities()
+        if capabilities.cdc_modes:
+            return self.capture_mode() in capabilities.cdc_modes
+        if not capabilities.supports_cdc:
+            return False
+        return self.capture_mode() != capabilities.default_capture_mode
+
+    def iter_events(self, checkpoint: SourceCheckpoint | None) -> Iterable[ChangeEvent]:
+        if self.is_cdc_mode():
+            return self.start_stream(checkpoint)
+        return self.read_snapshot(checkpoint)
+
+    def should_wait_for_activity(self) -> bool:
+        return self.is_cdc_mode()
+
     def wait_for_changes(self, timeout_sec: float) -> bool:
         if timeout_sec > 0:
             time.sleep(timeout_sec)
@@ -82,6 +111,8 @@ class BaseAdapter(ABC):
             "supports_snapshot": capabilities.supports_snapshot,
             "operations": list(capabilities.operations),
             "capture_modes": list(capabilities.capture_modes),
+            "cdc_modes": list(capabilities.cdc_modes),
+            "default_capture_mode": capabilities.default_capture_mode,
             "bootstrap_requirements": list(capabilities.bootstrap_requirements),
             "notes": capabilities.notes,
         }
@@ -107,6 +138,8 @@ class ScaffoldCdcAdapter(BaseAdapter):
     scaffold_supports_snapshot: bool = True
     scaffold_operations: tuple[str, ...] = ("insert", "update", "delete")
     scaffold_capture_modes: tuple[str, ...] = ()
+    scaffold_cdc_modes: tuple[str, ...] = ()
+    scaffold_default_capture_mode: str = "watermark"
     scaffold_bootstrap_requirements: tuple[str, ...] = ()
     scaffold_notes: str = ""
 
@@ -118,6 +151,8 @@ class ScaffoldCdcAdapter(BaseAdapter):
             supports_snapshot=self.scaffold_supports_snapshot,
             operations=self.scaffold_operations,
             capture_modes=self.scaffold_capture_modes,
+            cdc_modes=self.scaffold_cdc_modes,
+            default_capture_mode=self.scaffold_default_capture_mode,
             bootstrap_requirements=self.scaffold_bootstrap_requirements,
             notes=self.scaffold_notes,
         )

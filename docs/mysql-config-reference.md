@@ -4,19 +4,20 @@ This document describes MySQL-specific `connection` and `options` fields.
 
 ## Current Status
 
-MySQL currently supports a live watermark/snapshot baseline.
+MySQL currently supports a live watermark/snapshot baseline and a shared row-based binlog CDC baseline.
 
 Implemented now:
 
 - live connection validation
 - tracked table introspection
 - watermark-based snapshot polling
+- row-based binlog CDC baseline
 - deterministic checkpoint resume
 - bootstrap / inspect / runtime signature
 
-Not implemented yet:
+Still next:
 
-- row-based binlog CDC
+- live Docker-backed binlog validation
 
 ## `connection`
 
@@ -42,12 +43,20 @@ Not implemented yet:
 ### Supported now
 
 - `capture_mode`
-  - current practical value: `"watermark"`
+  - supported values: `"watermark"` and `"binlog"`
 - `watermark_column`
   - default: `"updated_at"`
 - `commit_timestamp_column`
   - default: same as `watermark_column`
 - `row_limit`
+- `binlog_server_id`
+  - default: `1001`
+- `binlog_blocking`
+  - default: `false`
+- `binlog_start_file`
+  - optional explicit starting log file
+- `binlog_start_pos`
+  - optional explicit starting log position, default: `4`
 
 ## Recommended Starting Point
 
@@ -83,4 +92,8 @@ Not implemented yet:
 
 - tables must have a primary key
 - tracked tables must contain the configured watermark column
-- binlog CDC is the next MySQL-specific step after this baseline
+- `capture_mode = "binlog"` expects:
+  - `log_bin = ON`
+  - `binlog_format = ROW`
+  - `binlog_row_image = FULL`
+- the current binlog path is a shared native CDC baseline for both `MySQL` and `MariaDB`

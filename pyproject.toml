@@ -15,6 +15,7 @@ authors = [
 dependencies = [
   "psycopg[binary]>=3.1,<4",
   "PyMySQL>=1,<2",
+  "mysql-replication>=1,<2",
   "pymongo>=4,<5",
   "python-tds>=1.16,<2",
   "oracledb>=2,<3",

@@ -42,6 +42,24 @@ class AdapterRegistryContractTest(unittest.TestCase):
                 adapter = build_adapter(self._source_config(adapter_name, connection))
                 self.assertIsInstance(adapter, adapter_class)
 
+    def test_adapters_declare_capture_defaults_and_cdc_modes(self) -> None:
+        expected = {
+            "postgresql": {"default_capture_mode": "watermark", "cdc_modes": ("trigger", "logical")},
+            "mysql": {"default_capture_mode": "watermark", "cdc_modes": ("binlog",)},
+            "mariadb": {"default_capture_mode": "watermark", "cdc_modes": ("binlog",)},
+            "sqlserver": {"default_capture_mode": "watermark", "cdc_modes": ()},
+            "oracle": {"default_capture_mode": "watermark", "cdc_modes": ()},
+            "mongodb": {"default_capture_mode": "watermark", "cdc_modes": ("change_streams",)},
+        }
+        for adapter_name, _adapter_class, connection in self.cases:
+            with self.subTest(adapter=adapter_name):
+                adapter = build_adapter(self._source_config(adapter_name, connection))
+                capabilities = adapter.discover_capabilities()
+                self.assertEqual(capabilities.default_capture_mode, expected[adapter_name]["default_capture_mode"])
+                self.assertEqual(capabilities.cdc_modes, expected[adapter_name]["cdc_modes"])
+                self.assertEqual(adapter.capture_mode(), capabilities.default_capture_mode)
+                self.assertEqual(adapter.is_cdc_mode(), adapter.capture_mode() in capabilities.cdc_modes)
+
 
 if __name__ == "__main__":
     unittest.main()

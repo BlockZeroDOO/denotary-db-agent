@@ -54,7 +54,8 @@ Current MySQL status:
 - live `watermark` / snapshot baseline is implemented
 - deterministic checkpoint resume is implemented
 - source bootstrap / inspect / runtime signature are implemented
-- MySQL binlog CDC remains the next MySQL-specific step
+- shared `MySQL/MariaDB` row-based binlog CDC baseline is implemented at unit level
+- live Docker-backed binlog validation remains the next MySQL/MariaDB step
 
 ## Quick Start
 

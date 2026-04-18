@@ -4,12 +4,13 @@ This document describes MariaDB-specific configuration.
 
 ## Current Status
 
-MariaDB now has a live watermark/snapshot baseline.
+MariaDB now has a live watermark/snapshot baseline and a shared binlog CDC baseline.
 
 Declared target path:
 
 - watermark-based snapshot polling baseline
-- MariaDB binlog CDC profile next
+- shared binlog CDC baseline
+- live MariaDB-specific binlog validation next
 
 ## `connection`
 
@@ -25,20 +26,24 @@ Expected keys:
 
 Supported now:
 
-- `capture_mode = "watermark"`
+- `capture_mode = "watermark"` or `"binlog"`
 - `watermark_column`
 - `commit_timestamp_column`
 - `row_limit`
-
-Planned next:
-
-- MariaDB-specific binlog settings
+- `binlog_server_id`
+- `binlog_blocking`
+- `binlog_start_file`
+- `binlog_start_pos`
 
 ## Notes
 
-- MariaDB currently shares the same watermark baseline shape as MySQL
+- MariaDB currently shares the same watermark and binlog baseline shape as MySQL
 - `include` should list explicit tracked tables
 - each tracked table must expose:
   - a primary key
   - the configured `watermark_column`
   - the configured `commit_timestamp_column`
+- `capture_mode = "binlog"` expects row-based binlog settings equivalent to the MySQL baseline:
+  - `log_bin = ON`
+  - `binlog_format = ROW`
+  - `binlog_row_image = FULL`
