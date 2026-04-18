@@ -576,6 +576,20 @@ class EngineTest(unittest.TestCase):
         self.assertEqual(source["stream_reconnect_count"], 2)
         self.assertTrue(source["stream_backoff_active"])
 
+    def test_report_combines_doctor_metrics_diagnostics_and_status(self) -> None:
+        engine = AgentEngine(load_config(self.config_path))
+
+        report = engine.report("pg-core-ledger")
+
+        self.assertEqual(report["agent_name"], "test-agent")
+        self.assertEqual(report["source_filter"], "pg-core-ledger")
+        self.assertIn("doctor", report)
+        self.assertIn("metrics", report)
+        self.assertIn("diagnostics", report)
+        self.assertIn("status", report)
+        self.assertEqual(len(report["status"]["sources"]), 1)
+        self.assertEqual(report["status"]["sources"][0]["source_id"], "pg-core-ledger")
+
     def test_doctor_reports_submitter_key_gap_and_service_probe(self) -> None:
         engine = AgentEngine(load_config(self.config_path))
 

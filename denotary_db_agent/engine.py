@@ -477,6 +477,26 @@ class AgentEngine:
             "sources": sources,
         }
 
+    def report(self, source_id: str | None = None) -> dict:
+        doctor = self.doctor(source_id)
+        metrics = self.metrics(source_id)
+        diagnostics = self.diagnostics(source_id)
+        status = self.status()
+        if source_id:
+            status = {
+                "agent_name": status["agent_name"],
+                "sources": [item for item in status["sources"] if str(item.get("source_id")) == source_id],
+            }
+        return {
+            "agent_name": self.config.agent_name,
+            "generated_at": utc_now().isoformat(),
+            "source_filter": source_id,
+            "doctor": doctor,
+            "metrics": metrics,
+            "diagnostics": diagnostics,
+            "status": status,
+        }
+
     def _doctor_config_paths(self) -> dict[str, object]:
         state_db = Path(self.config.storage.state_db).expanduser()
         proof_dir = Path(self.config.storage.proof_dir).expanduser()

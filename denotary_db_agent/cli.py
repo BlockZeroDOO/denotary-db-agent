@@ -44,6 +44,20 @@ def build_parser() -> argparse.ArgumentParser:
     )
     metrics_parser = subparsers.add_parser("metrics", help="Show compact export-friendly metrics")
     metrics_parser.add_argument("--source", help="Source id")
+    report_parser = subparsers.add_parser("report", help="Export a compact rollout evidence bundle")
+    report_parser.add_argument("--source", help="Source id")
+    report_parser.add_argument("--output", help="Write report JSON to this file")
+    report_parser.add_argument(
+        "--save-snapshot",
+        action="store_true",
+        help="Save report snapshot to a timestamped JSON file under the local runtime directory",
+    )
+    report_parser.add_argument(
+        "--snapshot-retention",
+        type=int,
+        default=20,
+        help="When saving report snapshots, keep only the newest N matching files (default: 20)",
+    )
     diagnostics_parser = subparsers.add_parser("diagnostics", help="Show compact stream/runtime diagnostics")
     diagnostics_parser.add_argument("--source", help="Source id")
     diagnostics_parser.add_argument("--output", help="Write diagnostics JSON to this file")
@@ -124,6 +138,31 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "metrics":
         print(json.dumps(engine.metrics(args.source), indent=2))
+        return 0
+    if args.command == "report":
+        report = engine.report(args.source)
+        if args.output:
+            snapshot_path, removed = export_named_snapshot(
+                report,
+                state_db=config.storage.state_db,
+                source_id=args.source,
+                prefix="report",
+                output_path=args.output,
+                retention=args.snapshot_retention,
+            )
+            report["snapshot_path"] = str(snapshot_path)
+            report["pruned_snapshot_paths"] = [str(item) for item in removed]
+        elif args.save_snapshot:
+            snapshot_path, removed = export_named_snapshot(
+                report,
+                state_db=config.storage.state_db,
+                source_id=args.source,
+                prefix="report",
+                retention=args.snapshot_retention,
+            )
+            report["snapshot_path"] = str(snapshot_path)
+            report["pruned_snapshot_paths"] = [str(item) for item in removed]
+        print(json.dumps(report, indent=2))
         return 0
     if args.command == "diagnostics":
         diagnostics = engine.diagnostics(args.source)

@@ -126,6 +126,21 @@ Returns a compact export-friendly JSON view with:
 
 Use this when an external scheduler, log shipper, or monitoring sidecar wants a small stable payload instead of full `inspect` or `diagnostics`.
 
+### Report
+
+```bash
+denotary-db-agent --config examples/agent.example.json report --source pg-core-ledger --save-snapshot
+```
+
+Returns and optionally saves one compact rollout evidence bundle with:
+
+- `doctor`
+- `metrics`
+- `diagnostics`
+- `status`
+
+Use this when operators want one file per rollout or change window instead of several separate JSON artifacts.
+
 ### Diagnostics
 
 ```bash

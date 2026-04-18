@@ -195,6 +195,107 @@ class CliTest(unittest.TestCase):
             self.assertEqual(payload["totals"]["source_count"], 1)
             self.assertEqual(payload["sources"][0]["source_id"], "pg-core-ledger")
 
+    def test_report_command_prints_engine_report(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "config.json"
+            config_path.write_text("{}", encoding="utf-8")
+            fake_config = type(
+                "FakeConfig",
+                (),
+                {
+                    "storage": type("FakeStorage", (), {"state_db": str(Path(temp_dir) / "runtime" / "state.sqlite3")})(),
+                },
+            )()
+            fake_engine = type(
+                "FakeEngine",
+                (),
+                {
+                    "report": lambda self, source: {
+                        "agent_name": "denotary-db-agent",
+                        "source_filter": source,
+                        "doctor": {"overall": {"severity": "healthy"}},
+                        "metrics": {"totals": {"source_count": 1}},
+                    },
+                },
+            )()
+
+            stdout = StringIO()
+            with patch("denotary_db_agent.cli.load_config", return_value=fake_config), patch(
+                "denotary_db_agent.cli.AgentEngine",
+                return_value=fake_engine,
+            ), patch("sys.stdout", stdout):
+                exit_code = main(
+                    [
+                        "--config",
+                        str(config_path),
+                        "report",
+                        "--source",
+                        "pg-core-ledger",
+                    ]
+                )
+
+            self.assertEqual(exit_code, 0)
+            payload = json.loads(stdout.getvalue())
+            self.assertEqual(payload["source_filter"], "pg-core-ledger")
+            self.assertEqual(payload["doctor"]["overall"]["severity"], "healthy")
+
+    def test_report_save_snapshot_prunes_older_matching_files(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "config.json"
+            config_path.write_text("{}", encoding="utf-8")
+            diagnostics_dir = Path(temp_dir) / "runtime" / "diagnostics"
+            diagnostics_dir.mkdir(parents=True, exist_ok=True)
+            old_paths = [
+                diagnostics_dir / "report-pg-core-ledger-20260417T225200Z.json",
+                diagnostics_dir / "report-pg-core-ledger-20260417T225201Z.json",
+            ]
+            for path in old_paths:
+                path.write_text("{}", encoding="utf-8")
+            fake_config = type(
+                "FakeConfig",
+                (),
+                {
+                    "storage": type("FakeStorage", (), {"state_db": str(Path(temp_dir) / "runtime" / "state.sqlite3")})(),
+                },
+            )()
+            fake_engine = type(
+                "FakeEngine",
+                (),
+                {
+                    "report": lambda self, source: {
+                        "agent_name": "denotary-db-agent",
+                        "source_filter": source,
+                        "doctor": {"overall": {"severity": "healthy"}},
+                        "metrics": {"totals": {"source_count": 1}},
+                    },
+                },
+            )()
+
+            stdout = StringIO()
+            with patch("denotary_db_agent.cli.load_config", return_value=fake_config), patch(
+                "denotary_db_agent.cli.AgentEngine",
+                return_value=fake_engine,
+            ), patch("sys.stdout", stdout):
+                exit_code = main(
+                    [
+                        "--config",
+                        str(config_path),
+                        "report",
+                        "--source",
+                        "pg-core-ledger",
+                        "--save-snapshot",
+                        "--snapshot-retention",
+                        "2",
+                    ]
+                )
+
+            self.assertEqual(exit_code, 0)
+            payload = json.loads(stdout.getvalue())
+            self.assertIn("snapshot_path", payload)
+            self.assertEqual(len(payload["pruned_snapshot_paths"]), 1)
+            remaining = sorted(diagnostics_dir.glob("report-pg-core-ledger-*.json"))
+            self.assertEqual(len(remaining), 2)
+
     def test_doctor_command_prints_engine_doctor_report(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             config_path = Path(temp_dir) / "config.json"

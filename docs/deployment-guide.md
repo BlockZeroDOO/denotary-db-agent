@@ -143,6 +143,7 @@ Optional rollout evidence:
 
 ```bash
 denotary-db-agent --config /etc/denotary-db-agent/agent.json doctor --source pg-core-ledger --save-snapshot
+denotary-db-agent --config /etc/denotary-db-agent/agent.json report --source pg-core-ledger --save-snapshot
 ```
 
 Optional startup gate:
