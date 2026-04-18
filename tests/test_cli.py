@@ -79,7 +79,7 @@ class CliTest(unittest.TestCase):
                 {
                     "diagnostics": lambda self, source: {
                         "agent_name": "denotary-db-agent",
-                        "diagnostics_contract": {"version": 1, "source_entry_version": 1},
+                        "diagnostics_contract": {"artifact": "diagnostics", "version": 1, "source_entry_version": 1},
                         "sources": [{"source_id": source}],
                     },
                 },
@@ -415,7 +415,7 @@ class CliTest(unittest.TestCase):
                     "report": lambda self, source: {
                         "agent_name": "denotary-db-agent",
                         "source_filter": source,
-                        "report_contract": {"version": 1, "source_report_version": 1},
+                        "report_contract": {"artifact": "report", "version": 1, "source_report_version": 1},
                         "doctor": {"overall": {"severity": "healthy"}},
                         "metrics": {"totals": {"source_count": 1}},
                         "source_reports": [],
@@ -469,7 +469,7 @@ class CliTest(unittest.TestCase):
                     "report": lambda self, source: {
                         "agent_name": "denotary-db-agent",
                         "source_filter": source,
-                        "report_contract": {"version": 1, "source_report_version": 1},
+                        "report_contract": {"artifact": "report", "version": 1, "source_report_version": 1},
                         "doctor": {"overall": {"severity": "healthy"}},
                         "metrics": {"totals": {"source_count": 1}},
                         "source_reports": [],
@@ -523,7 +523,7 @@ class CliTest(unittest.TestCase):
                 {
                     "doctor": lambda self, source: {
                         "agent_name": "denotary-db-agent",
-                        "doctor_contract": {"version": 1, "source_entry_version": 1},
+                        "doctor_contract": {"artifact": "doctor", "version": 1, "source_entry_version": 1},
                         "overall": {"severity": "healthy", "ok": True},
                         "sources": [{"source_id": source}],
                     },
@@ -567,7 +567,7 @@ class CliTest(unittest.TestCase):
                 {
                     "doctor": lambda self, source: {
                         "agent_name": "denotary-db-agent",
-                        "doctor_contract": {"version": 1, "source_entry_version": 1},
+                        "doctor_contract": {"artifact": "doctor", "version": 1, "source_entry_version": 1},
                         "overall": {"severity": "healthy", "ok": True},
                         "sources": [{"source_id": source}],
                     },

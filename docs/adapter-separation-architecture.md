@@ -229,3 +229,6 @@ inferring schema changes from arbitrary JSON shape differences.
 The same direction now applies to `doctor` and `diagnostics` through matching
 `doctor_contract` and `diagnostics_contract` blocks, so all evidence artifacts exported by
 the agent can be indexed and consumed through one consistent contract-version mechanism.
+
+The contract metadata itself is now built from one shared helper rather than duplicated
+inline, which keeps artifact versioning aligned as the evidence/export surface grows.

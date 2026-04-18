@@ -28,6 +28,15 @@ def write_json_snapshot(payload: dict, output_path: str | Path) -> Path:
     return path
 
 
+def artifact_contract_version(payload: dict) -> int | None:
+    for contract_key in ("report_contract", "doctor_contract", "diagnostics_contract"):
+        contract = payload.get(contract_key)
+        if isinstance(contract, dict):
+            version = contract.get("version")
+            return int(version) if isinstance(version, int) else None
+    return None
+
+
 def update_evidence_manifest(
     *,
     state_db: str,
@@ -61,17 +70,13 @@ def update_evidence_manifest(
 
     path = Path(snapshot_path).resolve()
     severity = None
-    contract_version = None
+    contract_version = artifact_contract_version(payload)
     if isinstance(payload.get("overall"), dict):
         severity = payload["overall"].get("severity")
     elif isinstance(payload.get("doctor"), dict):
         doctor_overall = payload["doctor"].get("overall")
         if isinstance(doctor_overall, dict):
             severity = doctor_overall.get("severity")
-    for contract_key in ("report_contract", "doctor_contract", "diagnostics_contract"):
-        if isinstance(payload.get(contract_key), dict):
-            contract_version = payload[contract_key].get("version")
-            break
 
     entry = {
         "kind": prefix,

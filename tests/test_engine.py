@@ -616,6 +616,7 @@ class EngineTest(unittest.TestCase):
 
         self.assertEqual(len(diagnostics["sources"]), 1)
         self.assertEqual(diagnostics["diagnostics_contract"]["version"], 1)
+        self.assertEqual(diagnostics["diagnostics_contract"]["artifact"], "diagnostics")
         self.assertEqual(diagnostics["diagnostics_contract"]["source_entry_version"], 1)
         source = diagnostics["sources"][0]
         self.assertEqual(source["severity"], "degraded")
@@ -925,6 +926,7 @@ class EngineTest(unittest.TestCase):
         self.assertTrue(diagnostics["sources"][0]["stream"]["session_active"])
         self.assertEqual(diagnostics["sources"][0]["coverage"]["tracked_object_count"], 0)
         self.assertEqual(doctor["doctor_contract"]["version"], 1)
+        self.assertEqual(doctor["doctor_contract"]["artifact"], "doctor")
         self.assertEqual(doctor["doctor_contract"]["source_entry_version"], 1)
         self.assertEqual(doctor["sources"][0]["cdc_contract"]["checkpoint_strategy"], "binlog_cursor")
         self.assertEqual(doctor["sources"][0]["cdc_contract"]["activity_model"], "stream")
@@ -1007,6 +1009,7 @@ class EngineTest(unittest.TestCase):
         self.assertEqual(report["agent_name"], "test-agent")
         self.assertEqual(report["source_filter"], "pg-core-ledger")
         self.assertEqual(report["report_contract"]["version"], 1)
+        self.assertEqual(report["report_contract"]["artifact"], "report")
         self.assertEqual(report["report_contract"]["source_report_version"], 1)
         self.assertIn("doctor", report)
         self.assertIn("metrics", report)

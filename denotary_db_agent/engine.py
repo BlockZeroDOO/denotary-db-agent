@@ -205,11 +205,11 @@ class AgentEngine:
 
         return {
             "agent_name": self.config.agent_name,
-            "doctor_contract": {
-                "version": 1,
-                "source_entry_version": 1,
-                "sections": ["overall", "config", "services", "signer", "sources", "warnings", "errors"],
-            },
+            "doctor_contract": self._artifact_contract(
+                "doctor",
+                source_entry_version=1,
+                sections=["overall", "config", "services", "signer", "sources", "warnings", "errors"],
+            ),
             "overall": {
                 "severity": overall_severity,
                 "ok": overall_severity == "healthy",
@@ -320,11 +320,11 @@ class AgentEngine:
             results.append(self._build_diagnostics_view(self._collect_source_snapshot(runtime)))
         return {
             "agent_name": self.config.agent_name,
-            "diagnostics_contract": {
-                "version": 1,
-                "source_entry_version": 1,
-                "sections": ["sources"],
-            },
+            "diagnostics_contract": self._artifact_contract(
+                "diagnostics",
+                source_entry_version=1,
+                sections=["sources"],
+            ),
             "sources": results,
         }
 
@@ -388,11 +388,11 @@ class AgentEngine:
             "agent_name": self.config.agent_name,
             "generated_at": utc_now().isoformat(),
             "source_filter": source_id,
-            "report_contract": {
-                "version": 1,
-                "source_report_version": 1,
-                "sections": ["doctor", "metrics", "diagnostics", "status", "source_reports"],
-            },
+            "report_contract": self._artifact_contract(
+                "report",
+                source_report_version=1,
+                sections=["doctor", "metrics", "diagnostics", "status", "source_reports"],
+            ),
             "doctor": doctor,
             "metrics": metrics,
             "diagnostics": diagnostics,
@@ -1039,6 +1039,25 @@ class AgentEngine:
             if logical_slot
             else False,
         }
+
+    def _artifact_contract(
+        self,
+        artifact: str,
+        *,
+        source_entry_version: int | None = None,
+        source_report_version: int | None = None,
+        sections: list[str] | None = None,
+    ) -> dict[str, object]:
+        contract: dict[str, object] = {
+            "artifact": artifact,
+            "version": 1,
+            "sections": list(sections or []),
+        }
+        if source_entry_version is not None:
+            contract["source_entry_version"] = source_entry_version
+        if source_report_version is not None:
+            contract["source_report_version"] = source_report_version
+        return contract
 
     def _build_source_coverage_view(self, inspect_payload: dict[str, object]) -> dict[str, object]:
         tracked_objects = inspect_payload.get("tracked_objects") if isinstance(inspect_payload.get("tracked_objects"), list) else []
