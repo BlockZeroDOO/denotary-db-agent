@@ -225,3 +225,7 @@ CDC contract, and runtime state independently in each report consumer.
 That report bundle is now explicitly versioned through `report_contract`, so snapshot
 export and downstream evidence tooling can key off a stable contract version instead of
 inferring schema changes from arbitrary JSON shape differences.
+
+The same direction now applies to `doctor` and `diagnostics` through matching
+`doctor_contract` and `diagnostics_contract` blocks, so all evidence artifacts exported by
+the agent can be indexed and consumed through one consistent contract-version mechanism.

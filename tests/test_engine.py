@@ -615,6 +615,8 @@ class EngineTest(unittest.TestCase):
             diagnostics = engine.diagnostics(source_config.id)
 
         self.assertEqual(len(diagnostics["sources"]), 1)
+        self.assertEqual(diagnostics["diagnostics_contract"]["version"], 1)
+        self.assertEqual(diagnostics["diagnostics_contract"]["source_entry_version"], 1)
         source = diagnostics["sources"][0]
         self.assertEqual(source["severity"], "degraded")
         self.assertEqual(source["stream"]["configured_runtime_mode"], "stream")
@@ -922,6 +924,8 @@ class EngineTest(unittest.TestCase):
         self.assertEqual(diagnostics["sources"][0]["cdc_runtime"]["transport"], "stream")
         self.assertTrue(diagnostics["sources"][0]["stream"]["session_active"])
         self.assertEqual(diagnostics["sources"][0]["coverage"]["tracked_object_count"], 0)
+        self.assertEqual(doctor["doctor_contract"]["version"], 1)
+        self.assertEqual(doctor["doctor_contract"]["source_entry_version"], 1)
         self.assertEqual(doctor["sources"][0]["cdc_contract"]["checkpoint_strategy"], "binlog_cursor")
         self.assertEqual(doctor["sources"][0]["cdc_contract"]["activity_model"], "stream")
         self.assertEqual(doctor["sources"][0]["cdc_runtime"]["configured_runtime_mode"], "binlog")

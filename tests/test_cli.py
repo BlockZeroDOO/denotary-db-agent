@@ -77,7 +77,11 @@ class CliTest(unittest.TestCase):
                 "FakeEngine",
                 (),
                 {
-                    "diagnostics": lambda self, source: {"agent_name": "denotary-db-agent", "sources": [{"source_id": source}]},
+                    "diagnostics": lambda self, source: {
+                        "agent_name": "denotary-db-agent",
+                        "diagnostics_contract": {"version": 1, "source_entry_version": 1},
+                        "sources": [{"source_id": source}],
+                    },
                 },
             )()
 
@@ -107,6 +111,7 @@ class CliTest(unittest.TestCase):
             self.assertIn("manifest_path", payload)
             manifest_payload = json.loads(Path(payload["manifest_path"]).read_text(encoding="utf-8"))
             self.assertEqual(manifest_payload["artifacts"][-1]["kind"], "diagnostics")
+            self.assertEqual(manifest_payload["artifacts"][-1]["contract_version"], 1)
 
     def test_diagnostics_save_snapshot_prunes_older_matching_files(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -518,6 +523,7 @@ class CliTest(unittest.TestCase):
                 {
                     "doctor": lambda self, source: {
                         "agent_name": "denotary-db-agent",
+                        "doctor_contract": {"version": 1, "source_entry_version": 1},
                         "overall": {"severity": "healthy", "ok": True},
                         "sources": [{"source_id": source}],
                     },
@@ -561,6 +567,7 @@ class CliTest(unittest.TestCase):
                 {
                     "doctor": lambda self, source: {
                         "agent_name": "denotary-db-agent",
+                        "doctor_contract": {"version": 1, "source_entry_version": 1},
                         "overall": {"severity": "healthy", "ok": True},
                         "sources": [{"source_id": source}],
                     },
@@ -593,6 +600,7 @@ class CliTest(unittest.TestCase):
             self.assertIn("manifest_path", payload)
             manifest_payload = json.loads(Path(payload["manifest_path"]).read_text(encoding="utf-8"))
             self.assertEqual(manifest_payload["artifacts"][-1]["kind"], "doctor")
+            self.assertEqual(manifest_payload["artifacts"][-1]["contract_version"], 1)
 
     def test_doctor_save_snapshot_prunes_older_matching_files(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

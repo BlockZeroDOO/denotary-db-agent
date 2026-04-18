@@ -68,8 +68,10 @@ def update_evidence_manifest(
         doctor_overall = payload["doctor"].get("overall")
         if isinstance(doctor_overall, dict):
             severity = doctor_overall.get("severity")
-    if isinstance(payload.get("report_contract"), dict):
-        contract_version = payload["report_contract"].get("version")
+    for contract_key in ("report_contract", "doctor_contract", "diagnostics_contract"):
+        if isinstance(payload.get(contract_key), dict):
+            contract_version = payload[contract_key].get("version")
+            break
 
     entry = {
         "kind": prefix,

@@ -205,6 +205,11 @@ class AgentEngine:
 
         return {
             "agent_name": self.config.agent_name,
+            "doctor_contract": {
+                "version": 1,
+                "source_entry_version": 1,
+                "sections": ["overall", "config", "services", "signer", "sources", "warnings", "errors"],
+            },
             "overall": {
                 "severity": overall_severity,
                 "ok": overall_severity == "healthy",
@@ -313,7 +318,15 @@ class AgentEngine:
             if source_id and runtime.config.id != source_id:
                 continue
             results.append(self._build_diagnostics_view(self._collect_source_snapshot(runtime)))
-        return {"agent_name": self.config.agent_name, "sources": results}
+        return {
+            "agent_name": self.config.agent_name,
+            "diagnostics_contract": {
+                "version": 1,
+                "source_entry_version": 1,
+                "sections": ["sources"],
+            },
+            "sources": results,
+        }
 
     def metrics(self, source_id: str | None = None) -> dict:
         sources: list[dict[str, object]] = []
