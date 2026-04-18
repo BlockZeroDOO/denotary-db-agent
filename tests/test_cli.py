@@ -7,7 +7,7 @@ from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
-from denotary_db_agent.cli import COMMAND_ALIAS_SPECS, COMMAND_GROUPS, COMMAND_GROUP_ALIASES, COMMAND_GROUP_BUILDERS, COMMAND_GROUP_SPECS, COMMAND_KIND_BEHAVIOR_DEFAULTS, COMMAND_KIND_COMMAND_DEFAULTS, COMMAND_KIND_HANDLERS, COMMAND_KIND_OPTION_LAYOUTS, COMMAND_KIND_PARSER_BUILDERS, COMMAND_KIND_SPECS, COMMAND_SPECS, ENGINE_DISPATCH_COMMANDS, EVIDENCE_COMMANDS, JSON_ENGINE_COMMANDS, LEGACY_EXPORTS, LEGACY_EXPORT_SPECS, OPTION_SPECS, RESOLVED_COMMAND_SPECS, SOURCE_ACTION_COMMANDS, build_command_alias, build_command_group, build_command_group_aliases, build_command_group_builders, build_command_groups, build_command_result, build_compatibility_alias_snapshot, build_engine_dispatch_commands, build_exported_legacy_globals, build_kind_component_map, build_kind_registry, build_legacy_export_snapshot, build_legacy_export_surface, build_legacy_exports, build_parser, command_uses_engine, emit_command_result, evaluate_command_exit_policy, execute_command, get_command_alias, get_command_behavior, get_command_group, get_command_kind_spec, get_command_spec, get_legacy_export, main, maybe_export_snapshot, select_commands
+from denotary_db_agent.cli import COMMAND_ALIAS_SPECS, COMMAND_GROUPS, COMMAND_GROUP_ALIASES, COMMAND_GROUP_BUILDERS, COMMAND_GROUP_SPECS, COMMAND_KIND_BEHAVIOR_DEFAULTS, COMMAND_KIND_COMMAND_DEFAULTS, COMMAND_KIND_HANDLERS, COMMAND_KIND_OPTION_LAYOUTS, COMMAND_KIND_PARSER_BUILDERS, COMMAND_KIND_SPECS, COMMAND_SPECS, ENGINE_DISPATCH_COMMANDS, EVIDENCE_COMMANDS, JSON_ENGINE_COMMANDS, LEGACY_EXPORTS, LEGACY_EXPORT_NAMES, LEGACY_EXPORT_SPECS, OPTION_SPECS, RESOLVED_COMMAND_SPECS, SOURCE_ACTION_COMMANDS, build_command_alias, build_command_group, build_command_group_aliases, build_command_group_builders, build_command_groups, build_command_result, build_compatibility_alias_snapshot, build_engine_dispatch_commands, build_exported_legacy_globals, build_kind_component_map, build_kind_registry, build_legacy_export_snapshot, build_legacy_export_surface, build_legacy_exports, build_named_snapshot, build_parser, command_uses_engine, emit_command_result, evaluate_command_exit_policy, execute_command, get_command_alias, get_command_behavior, get_command_group, get_command_kind_spec, get_command_spec, get_legacy_export, main, maybe_export_snapshot, select_commands
 from denotary_db_agent.diagnostics_snapshots import (
     artifact_kind,
     build_snapshot_metadata,
@@ -36,6 +36,20 @@ class CliTest(unittest.TestCase):
         self.assertIs(result, payload)
         self.assertNotIn("snapshot_path", result)
 
+    def test_build_named_snapshot_builds_dict_from_specs(self) -> None:
+        result = build_named_snapshot(
+            {"alpha": {"value": 1}, "beta": {"value": 2}},
+            lambda name, spec: {"name": name, "value": spec["value"]},
+        )
+
+        self.assertEqual(
+            result,
+            {
+                "alpha": {"name": "alpha", "value": 1},
+                "beta": {"name": "beta", "value": 2},
+            },
+        )
+
     def test_evidence_commands_registry_declares_engine_methods(self) -> None:
         self.assertEqual(EVIDENCE_COMMANDS["doctor"]["engine_method"], "doctor")
         self.assertEqual(EVIDENCE_COMMANDS["report"]["engine_method"], "report")
@@ -46,6 +60,7 @@ class CliTest(unittest.TestCase):
         self.assertIn("evidence", COMMAND_GROUP_BUILDERS)
         self.assertIn("EVIDENCE_COMMANDS", COMMAND_ALIAS_SPECS)
         self.assertIn("EVIDENCE_COMMANDS", LEGACY_EXPORT_SPECS)
+        self.assertEqual(set(LEGACY_EXPORT_NAMES), set(LEGACY_EXPORT_SPECS))
         self.assertEqual(set(build_command_group_builders()), set(COMMAND_GROUP_SPECS))
         self.assertEqual(build_command_group("evidence"), EVIDENCE_COMMANDS)
         self.assertEqual(build_command_groups()["evidence"], EVIDENCE_COMMANDS)

@@ -268,6 +268,13 @@ def map_commands(command_names: dict[str, dict], mapper) -> dict[str, dict]:
     }
 
 
+def build_named_snapshot(specs: dict[str, dict], builder) -> dict[str, dict]:
+    return {
+        name: builder(name, spec)
+        for name, spec in specs.items()
+    }
+
+
 def build_engine_dispatch_commands() -> dict[str, dict]:
     return {
         name: {"kind": command["kind"]}
@@ -343,10 +350,10 @@ def build_command_alias(alias_name: str) -> dict[str, dict]:
 
 
 def build_command_group_aliases() -> dict[str, dict[str, dict]]:
-    return {
-        alias_name: build_command_alias(alias_name)
-        for alias_name in COMMAND_ALIAS_SPECS
-    }
+    return build_named_snapshot(
+        COMMAND_ALIAS_SPECS,
+        lambda alias_name, _spec: build_command_alias(alias_name),
+    )
 
 
 def build_compatibility_alias_snapshot() -> dict[str, dict[str, dict]]:
@@ -359,13 +366,14 @@ LEGACY_EXPORT_SPECS = {
     "SOURCE_ACTION_COMMANDS": {"alias": "SOURCE_ACTION_COMMANDS"},
     "ENGINE_DISPATCH_COMMANDS": {"alias": "ENGINE_DISPATCH_COMMANDS"},
 }
+LEGACY_EXPORT_NAMES = tuple(LEGACY_EXPORT_SPECS)
 
 
 def build_legacy_export_snapshot() -> dict[str, dict[str, dict]]:
-    return {
-        export_name: build_command_alias(export["alias"])
-        for export_name, export in LEGACY_EXPORT_SPECS.items()
-    }
+    return build_named_snapshot(
+        LEGACY_EXPORT_SPECS,
+        lambda _export_name, export: build_command_alias(export["alias"]),
+    )
 
 
 def build_legacy_exports() -> dict[str, dict[str, dict]]:
@@ -381,10 +389,10 @@ def get_legacy_export(export_name: str) -> dict[str, dict]:
 
 
 def build_exported_legacy_globals() -> dict[str, dict[str, dict]]:
-    return {
-        export_name: get_legacy_export(export_name)
-        for export_name in LEGACY_EXPORT_SPECS
-    }
+    return build_named_snapshot(
+        {export_name: LEGACY_EXPORT_SPECS[export_name] for export_name in LEGACY_EXPORT_NAMES},
+        lambda export_name, _spec: get_legacy_export(export_name),
+    )
 
 
 def build_legacy_export_surface() -> dict[str, dict[str, dict]]:
