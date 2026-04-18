@@ -44,8 +44,10 @@ class CliTest(unittest.TestCase):
     def test_non_evidence_command_registries_declare_engine_methods(self) -> None:
         self.assertEqual(JSON_ENGINE_COMMANDS["validate"]["engine_method"], "validate")
         self.assertEqual(JSON_ENGINE_COMMANDS["refresh"]["engine_method"], "refresh_source")
+        self.assertEqual(JSON_ENGINE_COMMANDS["metrics"]["help"], "Show compact export-friendly metrics")
         self.assertEqual(SOURCE_ACTION_COMMANDS["pause"]["engine_method"], "pause_source")
         self.assertEqual(SOURCE_ACTION_COMMANDS["replay"]["engine_method"], "reset_checkpoint")
+        self.assertEqual(SOURCE_ACTION_COMMANDS["resume"]["help"], "Resume a paused source")
         self.assertEqual(ENGINE_DISPATCH_COMMANDS["run"]["handler"], "run_run_command")
         self.assertEqual(ENGINE_DISPATCH_COMMANDS["checkpoint"]["handler"], "run_checkpoint_command")
         self.assertEqual(ENGINE_DISPATCH_COMMANDS["proof"]["handler"], "run_proof_command")
@@ -66,6 +68,12 @@ class CliTest(unittest.TestCase):
 
         pause_args = parser.parse_args(["--config", "cfg.json", "pause", "--source", "pg-core-ledger"])
         self.assertEqual(pause_args.source, "pg-core-ledger")
+
+        metrics_args = parser.parse_args(["--config", "cfg.json", "metrics", "--source", "pg-core-ledger"])
+        self.assertEqual(metrics_args.source, "pg-core-ledger")
+
+        refresh_args = parser.parse_args(["--config", "cfg.json", "refresh", "--source", "pg-core-ledger"])
+        self.assertEqual(refresh_args.source, "pg-core-ledger")
 
     def test_build_snapshot_metadata_populates_standard_fields(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

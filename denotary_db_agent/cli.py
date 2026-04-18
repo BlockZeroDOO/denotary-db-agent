@@ -31,19 +31,19 @@ EVIDENCE_COMMANDS = {
 }
 
 JSON_ENGINE_COMMANDS = {
-    "validate": {"engine_method": "validate", "wrap_key": "sources"},
-    "status": {"engine_method": "status"},
-    "health": {"engine_method": "health"},
-    "metrics": {"engine_method": "metrics", "source_arg": True},
-    "bootstrap": {"engine_method": "bootstrap", "source_arg": True},
-    "inspect": {"engine_method": "inspect", "source_arg": True},
-    "refresh": {"engine_method": "refresh_source", "source_arg": True},
+    "validate": {"engine_method": "validate", "wrap_key": "sources", "help": "Validate config and adapter connectivity"},
+    "status": {"engine_method": "status", "help": "Show source status"},
+    "health": {"engine_method": "health", "help": "Show service and source health"},
+    "metrics": {"engine_method": "metrics", "source_arg": True, "help": "Show compact export-friendly metrics"},
+    "bootstrap": {"engine_method": "bootstrap", "source_arg": True, "help": "Install or refresh source-side runtime artifacts"},
+    "inspect": {"engine_method": "inspect", "source_arg": True, "help": "Inspect source configuration and live runtime state"},
+    "refresh": {"engine_method": "refresh_source", "source_arg": True, "help": "Refresh source runtime artifacts and store runtime signature"},
 }
 
 SOURCE_ACTION_COMMANDS = {
-    "pause": {"engine_method": "pause_source", "action": "paused"},
-    "resume": {"engine_method": "resume_source", "action": "resumed"},
-    "replay": {"engine_method": "reset_checkpoint", "action": "checkpoint_reset"},
+    "pause": {"engine_method": "pause_source", "action": "paused", "help": "Pause a source without editing config"},
+    "resume": {"engine_method": "resume_source", "action": "resumed", "help": "Resume a paused source"},
+    "replay": {"engine_method": "reset_checkpoint", "action": "checkpoint_reset", "help": "Reset checkpoint for a source"},
 }
 
 ENGINE_DISPATCH_COMMANDS = {
@@ -77,6 +77,21 @@ def add_evidence_parser(subparsers, command_name: str, command: dict) -> None:
         default=20,
         help=f"When saving {command_name} snapshots, keep only the newest N matching files (default: 20)",
     )
+
+
+def add_source_option(parser, *, required: bool = False) -> None:
+    parser.add_argument("--source", required=required, help="Source id")
+
+
+def add_json_engine_parser(subparsers, command_name: str, command: dict) -> None:
+    parser = subparsers.add_parser(command_name, help=command["help"])
+    if command.get("source_arg"):
+        add_source_option(parser)
+
+
+def add_source_action_parser(subparsers, command_name: str, command: dict) -> None:
+    parser = subparsers.add_parser(command_name, help=command["help"])
+    add_source_option(parser, required=True)
 
 
 def maybe_export_snapshot(
@@ -230,13 +245,10 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--once", action="store_true", help="Run one snapshot/backfill pass and exit")
     run_parser.add_argument("--interval-sec", type=float, default=5.0, help="Polling interval for continuous run mode")
 
-    subparsers.add_parser("validate", help="Validate config and adapter connectivity")
-    subparsers.add_parser("status", help="Show source status")
-    subparsers.add_parser("health", help="Show service and source health")
-    metrics_parser = subparsers.add_parser("metrics", help="Show compact export-friendly metrics")
-    metrics_parser.add_argument("--source", help="Source id")
+    for command_name, command in JSON_ENGINE_COMMANDS.items():
+        add_json_engine_parser(subparsers, command_name, command)
     artifacts_parser = subparsers.add_parser("artifacts", help="Show saved evidence artifacts from the local manifest")
-    artifacts_parser.add_argument("--source", help="Source id")
+    add_source_option(artifacts_parser)
     artifacts_parser.add_argument("--kind", choices=["diagnostics", "doctor", "report"], help="Artifact kind")
     artifacts_parser.add_argument(
         "--latest",
@@ -250,22 +262,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     for command_name, command in EVIDENCE_COMMANDS.items():
         add_evidence_parser(subparsers, command_name, command)
-    bootstrap_parser = subparsers.add_parser("bootstrap", help="Install or refresh source-side runtime artifacts")
-    bootstrap_parser.add_argument("--source", help="Source id")
-    inspect_parser = subparsers.add_parser("inspect", help="Inspect source configuration and live runtime state")
-    inspect_parser.add_argument("--source", help="Source id")
-    refresh_parser = subparsers.add_parser("refresh", help="Refresh source runtime artifacts and store runtime signature")
-    refresh_parser.add_argument("--source", help="Source id")
-    pause_parser = subparsers.add_parser("pause", help="Pause a source without editing config")
-    pause_parser.add_argument("--source", required=True, help="Source id")
-    resume_parser = subparsers.add_parser("resume", help="Resume a paused source")
-    resume_parser.add_argument("--source", required=True, help="Source id")
-
-    replay_parser = subparsers.add_parser("replay", help="Reset checkpoint for a source")
-    replay_parser.add_argument("--source", required=True, help="Source id")
+    for command_name, command in SOURCE_ACTION_COMMANDS.items():
+        add_source_action_parser(subparsers, command_name, command)
 
     checkpoint_parser = subparsers.add_parser("checkpoint", help="List or reset checkpoints")
-    checkpoint_parser.add_argument("--source", help="Source id")
+    add_source_option(checkpoint_parser)
     checkpoint_parser.add_argument("--reset", action="store_true", help="Reset the source checkpoint")
 
     proof_parser = subparsers.add_parser("proof", help="Show stored proof bundle metadata")
