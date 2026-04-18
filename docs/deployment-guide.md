@@ -4,9 +4,14 @@ This guide describes the supported production packaging patterns for `denotary-d
 
 For a `denotary` mainnet deployment with an env-file-backed hot key, use:
 
+- [config-reference.md](config-reference.md)
+- [denotary-service-config-reference.md](denotary-service-config-reference.md)
+- [storage-config-reference.md](storage-config-reference.md)
+- [postgresql-config-reference.md](postgresql-config-reference.md)
 - [denotary-env-file-runbook.md](denotary-env-file-runbook.md)
 - [denotary-postgresql-rollout-checklist.md](denotary-postgresql-rollout-checklist.md)
 - [denotary-postgresql-validation-report.md](denotary-postgresql-validation-report.md)
+- [jungle4-postgresql-short-soak-report.md](jungle4-postgresql-short-soak-report.md)
 - [jungle4-postgresql-soak-runbook.md](jungle4-postgresql-soak-runbook.md)
 - [postgresql-hot-key-rotation.md](postgresql-hot-key-rotation.md)
 - [postgresql-recovery-scenarios.md](postgresql-recovery-scenarios.md)

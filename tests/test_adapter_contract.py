@@ -4,7 +4,6 @@ import unittest
 
 from denotary_db_agent.adapters.mariadb import MariaDbAdapter
 from denotary_db_agent.adapters.mongodb import MongoDbAdapter
-from denotary_db_agent.adapters.mysql import MySqlAdapter
 from denotary_db_agent.adapters.oracle import OracleAdapter
 from denotary_db_agent.adapters.registry import ADAPTERS, build_adapter
 from denotary_db_agent.adapters.sqlserver import SqlServerAdapter
@@ -15,21 +14,6 @@ from denotary_db_agent.models import ChangeEvent, SourceCheckpoint
 class AdapterContractTest(unittest.TestCase):
     def setUp(self) -> None:
         self.cases = [
-            {
-                "adapter": "mysql",
-                "class": MySqlAdapter,
-                "required_error": "mysql connection is missing required fields: host, port, username, database",
-                "connection": {
-                    "host": "127.0.0.1",
-                    "port": 3306,
-                    "username": "denotary",
-                    "database": "ledger",
-                },
-                "minimum_version": "8.0",
-                "notes": "row-based binlog",
-                "capture_modes": ("snapshot", "binlog"),
-                "bootstrap_requirements": ("row-based binlog enabled", "tracked tables visible"),
-            },
             {
                 "adapter": "mariadb",
                 "class": MariaDbAdapter,

@@ -49,6 +49,13 @@ Current PostgreSQL status:
 - bounded streaming now includes standby-status feedback using the last safe acknowledged LSN
 - in stream mode, post-delivery checkpoint advancement now updates the active replication session ack before close
 
+Current MySQL status:
+
+- live `watermark` / snapshot baseline is implemented
+- deterministic checkpoint resume is implemented
+- source bootstrap / inspect / runtime signature are implemented
+- MySQL binlog CDC remains the next MySQL-specific step
+
 ## Quick Start
 
 ```bash
@@ -82,6 +89,14 @@ See:
 - [examples/agent.example.json](examples/agent.example.json)
 - [examples/agent.secrets.env.example](examples/agent.secrets.env.example)
 - [docs/config-reference.md](docs/config-reference.md)
+- [docs/denotary-service-config-reference.md](docs/denotary-service-config-reference.md)
+- [docs/storage-config-reference.md](docs/storage-config-reference.md)
+- [docs/postgresql-config-reference.md](docs/postgresql-config-reference.md)
+- [docs/mysql-config-reference.md](docs/mysql-config-reference.md)
+- [docs/mariadb-config-reference.md](docs/mariadb-config-reference.md)
+- [docs/sqlserver-config-reference.md](docs/sqlserver-config-reference.md)
+- [docs/oracle-config-reference.md](docs/oracle-config-reference.md)
+- [docs/mongodb-config-reference.md](docs/mongodb-config-reference.md)
 - [docs/architecture.md](docs/architecture.md)
 - [docs/adapter-separation-architecture.md](docs/adapter-separation-architecture.md)
 - [docs/operator-guide.md](docs/operator-guide.md)

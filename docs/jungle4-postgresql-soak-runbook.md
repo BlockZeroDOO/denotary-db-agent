@@ -32,6 +32,14 @@ If you are reusing the currently validated Jungle4 contract layout from prior wo
 If your Jungle4 deployment differs, replace those values in the config and
 verification commands below.
 
+Current stable short-soak signing baseline:
+
+- `broadcast_backend = "private_key_env"`
+- `submitter = "newtestactio"`
+- `submitter_permission = "owner"`
+
+That is a testnet validation shortcut, not a production recommendation.
+
 ## Files
 
 Starter files:
@@ -87,6 +95,13 @@ Recommended unique runtime identity:
 - `slot_name = denotary_jungle4_soak_slot`
 - `publication_name = denotary_jungle4_soak_pub`
 
+Important policy rule:
+
+- if `batch_enabled = false`, use a policy with `allow_single = 1`
+- if `batch_enabled = true`, use a policy with `allow_batch = 1`
+
+Do not reuse a single-only policy for batch soak or a batch-only policy for single soak.
+
 ### 3. Prepare Hot Key
 
 Create a local secret file outside git, for example:
@@ -100,6 +115,11 @@ On POSIX:
 ```bash
 chmod 600 data/jungle4-soak/agent.secrets.env
 ```
+
+For the current validated Jungle4 baseline, using `owner` is acceptable for
+testnet validation if no dedicated hot permission exists yet. For mainnet or
+customer-facing production rollout, prefer a dedicated hot permission such as
+`dnanchor`.
 
 ### 4. Confirm Entitlement
 

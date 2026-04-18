@@ -5,7 +5,7 @@
 | Adapter | Target path | Minimum version | CDC path | Current scaffold status |
 | --- | --- | --- | --- | --- |
 | PostgreSQL | enterprise | 14 | watermark polling baseline now; logical decoding / WAL next | live baseline with signing, finality, and proof export |
-| MySQL | enterprise | 8.0 | row-based binlog | capability scaffold |
+| MySQL | enterprise | 8.0 | watermark polling baseline now; row-based binlog next | live watermark snapshot baseline |
 | MariaDB | enterprise | 10.6 | MariaDB binlog profile | capability scaffold |
 | SQL Server | enterprise | 2019 | CDC / Change Tracking | capability scaffold |
 | Oracle | enterprise | 19c | redo / LogMiner compatible | capability scaffold |
