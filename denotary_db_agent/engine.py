@@ -375,6 +375,11 @@ class AgentEngine:
             "agent_name": self.config.agent_name,
             "generated_at": utc_now().isoformat(),
             "source_filter": source_id,
+            "report_contract": {
+                "version": 1,
+                "source_report_version": 1,
+                "sections": ["doctor", "metrics", "diagnostics", "status", "source_reports"],
+            },
             "doctor": doctor,
             "metrics": metrics,
             "diagnostics": diagnostics,
@@ -886,6 +891,7 @@ class AgentEngine:
 
     def _build_source_report_view(self, snapshot: dict[str, object]) -> dict[str, object]:
         return {
+            "version": 1,
             "source_id": snapshot["source_id"],
             "adapter": snapshot["adapter"],
             "capture_mode": snapshot.get("capture_mode"),

@@ -61,12 +61,15 @@ def update_evidence_manifest(
 
     path = Path(snapshot_path).resolve()
     severity = None
+    contract_version = None
     if isinstance(payload.get("overall"), dict):
         severity = payload["overall"].get("severity")
     elif isinstance(payload.get("doctor"), dict):
         doctor_overall = payload["doctor"].get("overall")
         if isinstance(doctor_overall, dict):
             severity = doctor_overall.get("severity")
+    if isinstance(payload.get("report_contract"), dict):
+        contract_version = payload["report_contract"].get("version")
 
     entry = {
         "kind": prefix,
@@ -76,6 +79,7 @@ def update_evidence_manifest(
         "agent_name": payload.get("agent_name"),
         "size_bytes": path.stat().st_size if path.exists() else 0,
         "severity": severity,
+        "contract_version": contract_version,
     }
     artifacts.append(entry)
     if retention > 0:

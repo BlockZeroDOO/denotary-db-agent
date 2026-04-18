@@ -1002,6 +1002,8 @@ class EngineTest(unittest.TestCase):
 
         self.assertEqual(report["agent_name"], "test-agent")
         self.assertEqual(report["source_filter"], "pg-core-ledger")
+        self.assertEqual(report["report_contract"]["version"], 1)
+        self.assertEqual(report["report_contract"]["source_report_version"], 1)
         self.assertIn("doctor", report)
         self.assertIn("metrics", report)
         self.assertIn("diagnostics", report)
@@ -1048,6 +1050,7 @@ class EngineTest(unittest.TestCase):
             report = engine.report(source_config.id)
 
         source_report = report["source_reports"][0]
+        self.assertEqual(source_report["version"], 1)
         self.assertEqual(source_report["coverage"]["tracked_object_count"], 1)
         self.assertEqual(source_report["coverage"]["tracked_objects"][0]["kind"], "collection")
         self.assertEqual(source_report["cdc_contract"]["checkpoint_strategy"], "resume_token")

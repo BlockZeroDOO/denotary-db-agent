@@ -410,8 +410,10 @@ class CliTest(unittest.TestCase):
                     "report": lambda self, source: {
                         "agent_name": "denotary-db-agent",
                         "source_filter": source,
+                        "report_contract": {"version": 1, "source_report_version": 1},
                         "doctor": {"overall": {"severity": "healthy"}},
                         "metrics": {"totals": {"source_count": 1}},
+                        "source_reports": [],
                     },
                 },
             )()
@@ -462,8 +464,10 @@ class CliTest(unittest.TestCase):
                     "report": lambda self, source: {
                         "agent_name": "denotary-db-agent",
                         "source_filter": source,
+                        "report_contract": {"version": 1, "source_report_version": 1},
                         "doctor": {"overall": {"severity": "healthy"}},
                         "metrics": {"totals": {"source_count": 1}},
+                        "source_reports": [],
                     },
                 },
             )()
@@ -495,6 +499,7 @@ class CliTest(unittest.TestCase):
             self.assertEqual(len(remaining), 2)
             manifest_payload = json.loads(Path(payload["manifest_path"]).read_text(encoding="utf-8"))
             self.assertEqual(manifest_payload["artifacts"][-1]["kind"], "report")
+            self.assertEqual(manifest_payload["artifacts"][-1]["contract_version"], 1)
 
     def test_doctor_command_prints_engine_doctor_report(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

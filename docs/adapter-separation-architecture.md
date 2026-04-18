@@ -221,3 +221,7 @@ contract instead of branching on `tracked_tables` vs `tracked_collections`.
 `report` is now moving onto the same model as well through a shared `source_reports` view,
 so evidence bundles can carry one stable source snapshot instead of reassembling coverage,
 CDC contract, and runtime state independently in each report consumer.
+
+That report bundle is now explicitly versioned through `report_contract`, so snapshot
+export and downstream evidence tooling can key off a stable contract version instead of
+inferring schema changes from arbitrary JSON shape differences.
