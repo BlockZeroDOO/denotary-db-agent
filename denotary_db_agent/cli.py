@@ -283,14 +283,18 @@ def build_kind_registry(*, kind: str, mapper=None) -> dict[str, dict]:
 
 
 RESOLVED_COMMAND_SPECS = map_commands(COMMAND_SPECS, build_resolved_command_spec)
+COMMAND_GROUP_BUILDERS = {
+    "evidence": lambda: build_kind_registry(kind="evidence"),
+    "json_engine": lambda: build_kind_registry(kind="json_engine"),
+    "source_action": lambda: build_kind_registry(kind="source_action"),
+    "engine_dispatch": build_engine_dispatch_commands,
+}
 
 
 def build_command_groups() -> dict[str, dict[str, dict]]:
     return {
-        "evidence": build_kind_registry(kind="evidence"),
-        "json_engine": build_kind_registry(kind="json_engine"),
-        "source_action": build_kind_registry(kind="source_action"),
-        "engine_dispatch": build_engine_dispatch_commands(),
+        group_name: builder()
+        for group_name, builder in COMMAND_GROUP_BUILDERS.items()
     }
 
 
@@ -307,6 +311,10 @@ def get_command_spec(command_name: str) -> dict:
 
 def get_command_behavior(command_name: str) -> dict:
     return get_command_spec(command_name)["behavior"]
+
+
+def get_command_group(group_name: str) -> dict[str, dict]:
+    return COMMAND_GROUPS[group_name]
 
 
 def add_option(parser, name: str, **overrides: object) -> None:
