@@ -7,7 +7,7 @@ from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
-from denotary_db_agent.cli import COMMAND_BEHAVIORS, COMMAND_KIND_BEHAVIOR_DEFAULTS, COMMAND_KIND_HANDLERS, COMMAND_KIND_PARSER_BUILDERS, COMMAND_KIND_SPECS, COMMAND_SPECS, EVIDENCE_COMMANDS, ENGINE_DISPATCH_COMMANDS, JSON_ENGINE_COMMANDS, OPTION_SPECS, SOURCE_ACTION_COMMANDS, build_command_result, build_engine_dispatch_commands, build_kind_component_map, build_kind_registry, build_parser, command_uses_engine, emit_command_result, evaluate_command_exit_policy, execute_command, main, maybe_export_snapshot, select_commands
+from denotary_db_agent.cli import COMMAND_BEHAVIORS, COMMAND_KIND_BEHAVIOR_DEFAULTS, COMMAND_KIND_HANDLERS, COMMAND_KIND_OPTION_LAYOUTS, COMMAND_KIND_PARSER_BUILDERS, COMMAND_KIND_SPECS, COMMAND_SPECS, EVIDENCE_COMMANDS, ENGINE_DISPATCH_COMMANDS, JSON_ENGINE_COMMANDS, OPTION_SPECS, SOURCE_ACTION_COMMANDS, build_command_result, build_engine_dispatch_commands, build_kind_component_map, build_kind_registry, build_parser, command_uses_engine, emit_command_result, evaluate_command_exit_policy, execute_command, main, maybe_export_snapshot, select_commands
 from denotary_db_agent.diagnostics_snapshots import (
     artifact_kind,
     build_snapshot_metadata,
@@ -109,6 +109,8 @@ class CliTest(unittest.TestCase):
         self.assertTrue(COMMAND_KIND_SPECS["json_engine"]["uses_engine"])
         self.assertFalse(COMMAND_KIND_SPECS["artifacts"]["uses_engine"])
         self.assertEqual(build_kind_component_map("handler", include_engineless=False), COMMAND_KIND_HANDLERS)
+        self.assertEqual(COMMAND_KIND_OPTION_LAYOUTS["proof"][0]["name"], "request_id")
+        self.assertEqual(COMMAND_KIND_OPTION_LAYOUTS["run"][1]["name"], "interval_sec")
 
     def test_evidence_parser_specs_are_built_from_registry(self) -> None:
         parser = build_parser()

@@ -173,6 +173,55 @@ COMMAND_KIND_BEHAVIOR_DEFAULTS = {
     },
 }
 
+COMMAND_KIND_OPTION_LAYOUTS = {
+    "json_engine": (
+        {"name": "source", "predicate": lambda command_name, command: bool(command.get("source_arg"))},
+    ),
+    "evidence": (
+        {"name": "source"},
+        {
+            "name": "strict",
+            "predicate": lambda command_name, command: bool(COMMAND_BEHAVIORS[command_name].get("supports_strict")),
+            "help": lambda command_name: f"Exit with status 1 when {command_name} reports critical or error severity",
+        },
+        {
+            "name": "output",
+            "predicate": lambda command_name, command: bool(COMMAND_BEHAVIORS[command_name].get("supports_output_path")),
+            "help": lambda command_name: f"Write {command_name} JSON to this file",
+        },
+        {
+            "name": "save_snapshot",
+            "predicate": lambda command_name, command: bool(COMMAND_BEHAVIORS[command_name].get("supports_snapshot_export")),
+            "help": lambda command_name: f"Save {command_name} snapshot to a timestamped JSON file under the local runtime directory",
+        },
+        {
+            "name": "snapshot_retention",
+            "predicate": lambda command_name, command: bool(COMMAND_BEHAVIORS[command_name].get("supports_snapshot_export")),
+            "help": lambda command_name: f"When saving {command_name} snapshots, keep only the newest N matching files (default: 20)",
+        },
+    ),
+    "source_action": (
+        {"name": "source", "required": lambda command_name, command: bool(command.get("source_required"))},
+    ),
+    "run": (
+        {"name": "once"},
+        {"name": "interval_sec"},
+    ),
+    "checkpoint": (
+        {"name": "source"},
+        {"name": "reset"},
+    ),
+    "proof": (
+        {"name": "request_id"},
+    ),
+    "artifacts": (
+        {"name": "source"},
+        {"name": "kind"},
+        {"name": "latest"},
+        {"name": "prune_missing"},
+    ),
+}
+
 
 def build_command_behavior(command_name: str, command: dict) -> dict:
     behavior = dict(COMMAND_KIND_BEHAVIOR_DEFAULTS["default"])
@@ -229,27 +278,7 @@ COMMAND_BEHAVIORS = build_command_behaviors()
 
 def add_evidence_parser(subparsers, command_name: str, command: dict) -> None:
     parser = subparsers.add_parser(command_name, help=command["help"])
-    behavior = COMMAND_BEHAVIORS[command_name]
-    add_option(parser, "source")
-    if behavior.get("supports_strict"):
-        add_option(
-            parser,
-            "strict",
-            help=f"Exit with status 1 when {command_name} reports critical or error severity",
-        )
-    if behavior.get("supports_output_path"):
-        add_option(parser, "output", help=f"Write {command_name} JSON to this file")
-    if behavior.get("supports_snapshot_export"):
-        add_option(
-            parser,
-            "save_snapshot",
-            help=f"Save {command_name} snapshot to a timestamped JSON file under the local runtime directory",
-        )
-        add_option(
-            parser,
-            "snapshot_retention",
-            help=f"When saving {command_name} snapshots, keep only the newest N matching files (default: 20)",
-        )
+    add_kind_parser_options(parser, command_name, command)
 
 
 def add_option(parser, name: str, **overrides: object) -> None:
@@ -259,40 +288,49 @@ def add_option(parser, name: str, **overrides: object) -> None:
     parser.add_argument(*option["flags"], **kwargs)
 
 
+def add_kind_parser_options(parser, command_name: str, command: dict) -> None:
+    for option in COMMAND_KIND_OPTION_LAYOUTS.get(command["kind"], ()):
+        predicate = option.get("predicate")
+        if predicate is not None and not predicate(command_name, command):
+            continue
+        overrides: dict[str, object] = {}
+        if "required" in option:
+            required = option["required"]
+            overrides["required"] = required(command_name, command) if callable(required) else required
+        if "help" in option:
+            help_text = option["help"]
+            overrides["help"] = help_text(command_name) if callable(help_text) else help_text
+        add_option(parser, option["name"], **overrides)
+
+
 def add_json_engine_parser(subparsers, command_name: str, command: dict) -> None:
     parser = subparsers.add_parser(command_name, help=command["help"])
-    if command.get("source_arg"):
-        add_option(parser, "source")
+    add_kind_parser_options(parser, command_name, command)
 
 
 def add_source_action_parser(subparsers, command_name: str, command: dict) -> None:
     parser = subparsers.add_parser(command_name, help=command["help"])
-    add_option(parser, "source", required=bool(command.get("source_required")))
+    add_kind_parser_options(parser, command_name, command)
 
 
 def add_run_parser(subparsers, command_name: str, command: dict) -> None:
     parser = subparsers.add_parser(command_name, help=command["help"])
-    add_option(parser, "once")
-    add_option(parser, "interval_sec")
+    add_kind_parser_options(parser, command_name, command)
 
 
 def add_checkpoint_parser(subparsers, command_name: str, command: dict) -> None:
     parser = subparsers.add_parser(command_name, help=command["help"])
-    add_option(parser, "source")
-    add_option(parser, "reset")
+    add_kind_parser_options(parser, command_name, command)
 
 
 def add_proof_parser(subparsers, command_name: str, command: dict) -> None:
     parser = subparsers.add_parser(command_name, help=command["help"])
-    add_option(parser, "request_id")
+    add_kind_parser_options(parser, command_name, command)
 
 
 def add_artifacts_parser(subparsers, command_name: str, command: dict) -> None:
     parser = subparsers.add_parser(command_name, help=command["help"])
-    add_option(parser, "source")
-    add_option(parser, "kind")
-    add_option(parser, "latest")
-    add_option(parser, "prune_missing")
+    add_kind_parser_options(parser, command_name, command)
 
 
 def maybe_export_snapshot(
