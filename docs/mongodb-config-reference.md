@@ -9,7 +9,7 @@ MongoDB now has a live Docker-backed watermark/snapshot baseline adapter with lo
 Declared target path:
 
 - watermark-based snapshot polling baseline
-- MongoDB change streams next
+- MongoDB change streams
 
 ## `connection`
 
@@ -24,14 +24,15 @@ Expected keys:
 Supported now:
 
 - `capture_mode = "watermark"`
+- `capture_mode = "change_streams"`
 - `watermark_column`
 - `commit_timestamp_column`
 - `primary_key_field`
 - `row_limit`
+- optional `change_stream_max_await_ms`
 
 Planned next:
 
-- `capture_mode = "change_streams"`
 - MongoDB-specific change stream settings
 
 ## Notes
@@ -44,3 +45,5 @@ Planned next:
   - the configured `watermark_column`
   - the configured `commit_timestamp_column`
 - current baseline emits full normalized documents in `after`
+- `change_streams` mode requires a replica set or sharded deployment
+- current change-stream implementation keeps source-side cursors alive across runtime loops for continuous daemon mode

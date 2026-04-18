@@ -17,7 +17,7 @@ from pymongo import MongoClient
 
 from denotary_db_agent.config import load_config
 from denotary_db_agent.engine import AgentEngine
-from mongodb_live_support import MONGODB_COMPOSE_FILE, MONGODB_PORT, PROJECT_ROOT, free_port
+from mongodb_live_support import MONGODB_COMPOSE_FILE, MONGODB_PORT, MONGODB_URI, PROJECT_ROOT, free_port, wait_for_mongodb_replica_set
 
 
 class MockIngressHandler(BaseHTTPRequestHandler):
@@ -89,7 +89,7 @@ class MongoDbLiveIntegrationTest(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls._docker_compose("down", "-v")
         cls._docker_compose("up", "-d")
-        cls._wait_for_mongodb()
+        wait_for_mongodb_replica_set()
 
     @classmethod
     def tearDownClass(cls) -> None:
@@ -104,22 +104,6 @@ class MongoDbLiveIntegrationTest(unittest.TestCase):
             capture_output=True,
             text=True,
         )
-
-    @classmethod
-    def _wait_for_mongodb(cls) -> None:
-        deadline = time.time() + 90
-        while time.time() < deadline:
-            client = None
-            try:
-                client = MongoClient(f"mongodb://127.0.0.1:{MONGODB_PORT}", serverSelectionTimeoutMS=2000)
-                client.admin.command("ping")
-                return
-            except Exception:
-                time.sleep(1)
-            finally:
-                if client is not None:
-                    client.close()
-        raise RuntimeError("mongodb live container did not become ready in time")
 
     def setUp(self) -> None:
         MockIngressHandler.counter = 0
@@ -149,13 +133,19 @@ class MongoDbLiveIntegrationTest(unittest.TestCase):
         self.temp_dir.cleanup()
 
     def _connect(self) -> MongoClient:
-        return MongoClient(f"mongodb://127.0.0.1:{MONGODB_PORT}", serverSelectionTimeoutMS=5000)
+        return MongoClient(MONGODB_URI, serverSelectionTimeoutMS=5000)
 
     def _truncate_collections(self) -> None:
         client = self._connect()
         try:
-            client["ledger"]["payments"].delete_many({})
-            client["ledger"]["invoices"].delete_many({})
+            database = client["ledger"]
+            existing = set(database.list_collection_names())
+            if "invoices" not in existing:
+                database.create_collection("invoices")
+            if "payments" not in existing:
+                database.create_collection("payments")
+            database["payments"].delete_many({})
+            database["invoices"].delete_many({})
         finally:
             client.close()
 
@@ -183,7 +173,7 @@ class MongoDbLiveIntegrationTest(unittest.TestCase):
                     "database_name": "ledger",
                     "include": {"ledger": ["invoices", "payments"]},
                     "connection": {
-                        "uri": f"mongodb://127.0.0.1:{MONGODB_PORT}",
+                        "uri": MONGODB_URI,
                     },
                     "backfill_mode": backfill_mode,
                     "batch_size": 100,
@@ -256,7 +246,7 @@ class MongoDbLiveIntegrationTest(unittest.TestCase):
         validation = engine.validate()
         self.assertEqual(validation[0]["source_type"], "mongodb")
         self.assertEqual(validation[0]["supports_snapshot"], "true")
-        self.assertEqual(validation[0]["capture_modes"], ["watermark"])
+        self.assertEqual(validation[0]["capture_modes"], ["watermark", "change_streams"])
 
         bootstrap = engine.bootstrap("mongodb-core-ledger")
         self.assertEqual(bootstrap["sources"][0]["capture_mode"], "watermark")
@@ -300,6 +290,38 @@ class MongoDbLiveIntegrationTest(unittest.TestCase):
         self.assertEqual(len(deliveries), 1)
         event_checkpoint = json.loads(engine.checkpoint_summary()[0]["token"])
         self.assertEqual(event_checkpoint["ledger.invoices"]["pk"], str(inserted_id))
+
+    def test_live_mongodb_change_streams_capture_insert_update_delete(self) -> None:
+        self._write_config()
+        raw = json.loads(self.config_path.read_text(encoding="utf-8"))
+        raw["sources"][0]["backfill_mode"] = "none"
+        raw["sources"][0]["options"]["capture_mode"] = "change_streams"
+        self.config_path.write_text(json.dumps(raw), encoding="utf-8")
+        engine = AgentEngine(load_config(self.config_path))
+
+        empty_result = engine.run_once()
+        self.assertEqual(empty_result["processed"], 0)
+        self.assertEqual(empty_result["failed"], 0)
+
+        client = self._connect()
+        try:
+            inserted_id = client["ledger"]["invoices"].insert_one(
+                {"status": "draft", "amount": 10.0, "updated_at": datetime(2026, 4, 18, 12, 0, 0, tzinfo=timezone.utc)}
+            ).inserted_id
+            client["ledger"]["invoices"].update_one(
+                {"_id": inserted_id},
+                {"$set": {"status": "issued", "updated_at": datetime(2026, 4, 18, 12, 0, 1, tzinfo=timezone.utc)}},
+            )
+            client["ledger"]["invoices"].delete_one({"_id": inserted_id})
+        finally:
+            client.close()
+
+        time.sleep(1)
+        result = engine.run_once()
+        self.assertEqual(result["processed"], 3)
+        self.assertEqual(result["failed"], 0)
+        deliveries = engine.store.list_deliveries("mongodb-core-ledger")
+        self.assertEqual(len(deliveries), 3)
 
 
 if __name__ == "__main__":

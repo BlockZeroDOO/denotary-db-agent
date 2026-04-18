@@ -3,6 +3,8 @@ services:
     image: mongo:7.0
     container_name: denotary-db-agent-mongodb-live
     command:
+      - --replSet
+      - rs0
       - --bind_ip_all
     ports:
       - "27018:27017"
@@ -11,5 +13,3 @@ services:
       interval: 3s
       timeout: 5s
       retries: 30
-    volumes:
-      - ./init.js:/docker-entrypoint-initdb.d/01-init.js:ro

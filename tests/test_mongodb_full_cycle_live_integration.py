@@ -16,7 +16,7 @@ from pymongo import MongoClient
 
 from denotary_db_agent.config import load_config
 from denotary_db_agent.engine import AgentEngine
-from mongodb_live_support import MONGODB_COMPOSE_FILE, MONGODB_PORT, PROJECT_ROOT, free_port
+from mongodb_live_support import MONGODB_COMPOSE_FILE, MONGODB_PORT, MONGODB_URI, PROJECT_ROOT, free_port, wait_for_mongodb_replica_set
 
 
 class MockState:
@@ -308,7 +308,7 @@ class MongoDbFullCycleLiveIntegrationTest(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls._docker_compose("down", "-v")
         cls._docker_compose("up", "-d")
-        cls._wait_for_mongodb()
+        wait_for_mongodb_replica_set()
 
     @classmethod
     def tearDownClass(cls) -> None:
@@ -323,22 +323,6 @@ class MongoDbFullCycleLiveIntegrationTest(unittest.TestCase):
             capture_output=True,
             text=True,
         )
-
-    @classmethod
-    def _wait_for_mongodb(cls) -> None:
-        deadline = time.time() + 90
-        while time.time() < deadline:
-            client = None
-            try:
-                client = MongoClient(f"mongodb://127.0.0.1:{MONGODB_PORT}", serverSelectionTimeoutMS=2000)
-                client.admin.command("ping")
-                return
-            except Exception:
-                time.sleep(1)
-            finally:
-                if client is not None:
-                    client.close()
-        raise RuntimeError("mongodb live container did not become ready in time")
 
     def setUp(self) -> None:
         MockState.requests = {}
@@ -378,13 +362,19 @@ class MongoDbFullCycleLiveIntegrationTest(unittest.TestCase):
         self.temp_dir.cleanup()
 
     def _connect(self) -> MongoClient:
-        return MongoClient(f"mongodb://127.0.0.1:{MONGODB_PORT}", serverSelectionTimeoutMS=5000)
+        return MongoClient(MONGODB_URI, serverSelectionTimeoutMS=5000)
 
     def _truncate_collections(self) -> None:
         client = self._connect()
         try:
-            client["ledger"]["payments"].delete_many({})
-            client["ledger"]["invoices"].delete_many({})
+            database = client["ledger"]
+            existing = set(database.list_collection_names())
+            if "invoices" not in existing:
+                database.create_collection("invoices")
+            if "payments" not in existing:
+                database.create_collection("payments")
+            database["payments"].delete_many({})
+            database["invoices"].delete_many({})
         finally:
             client.close()
 
@@ -430,7 +420,7 @@ class MongoDbFullCycleLiveIntegrationTest(unittest.TestCase):
                     "database_name": "ledger",
                     "include": {"ledger": ["invoices", "payments"]},
                     "connection": {
-                        "uri": f"mongodb://127.0.0.1:{MONGODB_PORT}",
+                        "uri": MONGODB_URI,
                     },
                     "backfill_mode": "full",
                     "batch_enabled": batch_enabled,
@@ -521,6 +511,34 @@ class MongoDbFullCycleLiveIntegrationTest(unittest.TestCase):
         self.assertEqual(proof_payload["request_id"], "mongodb-batch-request-1")
         self.assertEqual(proof_payload["mode"], "batch")
         self.assertEqual(len(proof_payload["members"]), 2)
+
+    def test_live_mongodb_change_streams_full_cycle_exports_proof_bundle(self) -> None:
+        raw = json.loads(self.config_path.read_text(encoding="utf-8"))
+        raw["sources"][0]["backfill_mode"] = "none"
+        raw["sources"][0]["options"]["capture_mode"] = "change_streams"
+        self.config_path.write_text(json.dumps(raw), encoding="utf-8")
+        engine = AgentEngine(load_config(self.config_path))
+
+        first = engine.run_once()
+        self.assertEqual(first["processed"], 0)
+        self.assertEqual(first["failed"], 0)
+
+        self._seed_single_document()
+        time.sleep(1)
+        result = engine.run_once()
+
+        self.assertEqual(result["processed"], 1)
+        self.assertEqual(result["failed"], 0)
+        deliveries = engine.store.list_deliveries("mongodb-core-ledger")
+        self.assertEqual(len(deliveries), 1)
+        self.assertEqual(deliveries[0]["status"], "finalized_exported")
+
+        proofs = engine.store.list_proofs("mongodb-core-ledger")
+        self.assertEqual(len(proofs), 1)
+        export_path = proofs[0]["export_path"]
+        self.assertTrue(export_path)
+        proof_payload = json.loads(Path(str(export_path)).read_text(encoding="utf-8"))
+        self.assertEqual(proof_payload["request_id"], "mongodb-request-1")
 
 
 if __name__ == "__main__":

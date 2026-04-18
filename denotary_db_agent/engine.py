@@ -872,7 +872,7 @@ class AgentEngine:
             checkpoint = self.store.get_checkpoint(runtime.config.id)
             runtime.adapter.resume_from_checkpoint(checkpoint)
             event_iter = runtime.adapter.read_snapshot(checkpoint)
-            if runtime.config.options.get("capture_mode") in {"trigger", "logical"}:
+            if runtime.config.options.get("capture_mode") in {"trigger", "logical", "change_streams"}:
                 event_iter = runtime.adapter.start_stream(checkpoint)
             events = list(event_iter)
             if runtime.config.batch_enabled and events:
@@ -988,7 +988,7 @@ class AgentEngine:
 
     def _wait_for_activity(self, runtimes: list[SourceRuntime], interval_sec: float) -> None:
         waiting_runtimes = [
-            runtime for runtime in runtimes if runtime.config.options.get("capture_mode") in {"trigger", "logical"}
+            runtime for runtime in runtimes if runtime.config.options.get("capture_mode") in {"trigger", "logical", "change_streams"}
         ]
         if not waiting_runtimes:
             time.sleep(interval_sec)
