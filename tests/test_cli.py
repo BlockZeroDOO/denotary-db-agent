@@ -7,7 +7,7 @@ from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
-from denotary_db_agent.cli import EVIDENCE_COMMANDS, ENGINE_DISPATCH_COMMANDS, JSON_ENGINE_COMMANDS, SOURCE_ACTION_COMMANDS, build_parser, main, maybe_export_snapshot
+from denotary_db_agent.cli import COMMAND_SPECS, EVIDENCE_COMMANDS, ENGINE_DISPATCH_COMMANDS, JSON_ENGINE_COMMANDS, OPTION_SPECS, SOURCE_ACTION_COMMANDS, build_parser, main, maybe_export_snapshot
 from denotary_db_agent.diagnostics_snapshots import (
     artifact_kind,
     build_snapshot_metadata,
@@ -40,6 +40,11 @@ class CliTest(unittest.TestCase):
         self.assertEqual(EVIDENCE_COMMANDS["doctor"]["engine_method"], "doctor")
         self.assertEqual(EVIDENCE_COMMANDS["report"]["engine_method"], "report")
         self.assertEqual(EVIDENCE_COMMANDS["diagnostics"]["engine_method"], "diagnostics")
+
+    def test_option_specs_cover_shared_cli_flags(self) -> None:
+        self.assertEqual(OPTION_SPECS["source"]["flags"], ("--source",))
+        self.assertEqual(OPTION_SPECS["request_id"]["flags"], ("--request-id",))
+        self.assertEqual(COMMAND_SPECS["artifacts"]["kind"], "artifacts")
 
     def test_non_evidence_command_registries_declare_engine_methods(self) -> None:
         self.assertEqual(JSON_ENGINE_COMMANDS["validate"]["engine_method"], "validate")

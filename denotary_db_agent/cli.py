@@ -110,6 +110,57 @@ COMMAND_SPECS = {
     },
 }
 
+OPTION_SPECS = {
+    "source": {
+        "flags": ("--source",),
+        "kwargs": {"help": "Source id"},
+    },
+    "output": {
+        "flags": ("--output",),
+        "kwargs": {"help": None},
+    },
+    "save_snapshot": {
+        "flags": ("--save-snapshot",),
+        "kwargs": {"action": "store_true", "help": None},
+    },
+    "snapshot_retention": {
+        "flags": ("--snapshot-retention",),
+        "kwargs": {"type": int, "default": 20, "help": None},
+    },
+    "strict": {
+        "flags": ("--strict",),
+        "kwargs": {"action": "store_true", "help": None},
+    },
+    "latest": {
+        "flags": ("--latest",),
+        "kwargs": {"type": int, "help": "Return only the newest N artifacts after filters are applied"},
+    },
+    "prune_missing": {
+        "flags": ("--prune-missing",),
+        "kwargs": {"action": "store_true", "help": "Remove manifest entries whose snapshot files no longer exist"},
+    },
+    "kind": {
+        "flags": ("--kind",),
+        "kwargs": {"choices": ["diagnostics", "doctor", "report"], "help": "Artifact kind"},
+    },
+    "once": {
+        "flags": ("--once",),
+        "kwargs": {"action": "store_true", "help": "Run one snapshot/backfill pass and exit"},
+    },
+    "interval_sec": {
+        "flags": ("--interval-sec",),
+        "kwargs": {"type": float, "default": 5.0, "help": "Polling interval for continuous run mode"},
+    },
+    "reset": {
+        "flags": ("--reset",),
+        "kwargs": {"action": "store_true", "help": "Reset the source checkpoint"},
+    },
+    "request_id": {
+        "flags": ("--request-id",),
+        "kwargs": {"required": True, "help": "Request id"},
+    },
+}
+
 EVIDENCE_COMMANDS = {name: command for name, command in COMMAND_SPECS.items() if command["kind"] == "evidence"}
 JSON_ENGINE_COMMANDS = {name: command for name, command in COMMAND_SPECS.items() if command["kind"] == "json_engine"}
 SOURCE_ACTION_COMMANDS = {name: command for name, command in COMMAND_SPECS.items() if command["kind"] == "source_action"}
@@ -122,73 +173,67 @@ ENGINE_DISPATCH_COMMANDS = {
 
 def add_evidence_parser(subparsers, command_name: str, command: dict) -> None:
     parser = subparsers.add_parser(command_name, help=command["help"])
-    parser.add_argument("--source", help="Source id")
+    add_option(parser, "source")
     if command.get("supports_strict"):
-        parser.add_argument(
-            "--strict",
-            action="store_true",
+        add_option(
+            parser,
+            "strict",
             help=f"Exit with status 1 when {command_name} reports critical or error severity",
         )
-    parser.add_argument("--output", help=f"Write {command_name} JSON to this file")
-    parser.add_argument(
-        "--save-snapshot",
-        action="store_true",
+    add_option(parser, "output", help=f"Write {command_name} JSON to this file")
+    add_option(
+        parser,
+        "save_snapshot",
         help=f"Save {command_name} snapshot to a timestamped JSON file under the local runtime directory",
     )
-    parser.add_argument(
-        "--snapshot-retention",
-        type=int,
-        default=20,
+    add_option(
+        parser,
+        "snapshot_retention",
         help=f"When saving {command_name} snapshots, keep only the newest N matching files (default: 20)",
     )
 
 
-def add_source_option(parser, *, required: bool = False) -> None:
-    parser.add_argument("--source", required=required, help="Source id")
+def add_option(parser, name: str, **overrides: object) -> None:
+    option = OPTION_SPECS[name]
+    kwargs = dict(option["kwargs"])
+    kwargs.update(overrides)
+    parser.add_argument(*option["flags"], **kwargs)
 
 
 def add_json_engine_parser(subparsers, command_name: str, command: dict) -> None:
     parser = subparsers.add_parser(command_name, help=command["help"])
     if command.get("source_arg"):
-        add_source_option(parser)
+        add_option(parser, "source")
 
 
 def add_source_action_parser(subparsers, command_name: str, command: dict) -> None:
     parser = subparsers.add_parser(command_name, help=command["help"])
-    add_source_option(parser, required=bool(command.get("source_required")))
+    add_option(parser, "source", required=bool(command.get("source_required")))
 
 
 def add_run_parser(subparsers, command_name: str, command: dict) -> None:
     parser = subparsers.add_parser(command_name, help=command["help"])
-    parser.add_argument("--once", action="store_true", help="Run one snapshot/backfill pass and exit")
-    parser.add_argument("--interval-sec", type=float, default=5.0, help="Polling interval for continuous run mode")
+    add_option(parser, "once")
+    add_option(parser, "interval_sec")
 
 
 def add_checkpoint_parser(subparsers, command_name: str, command: dict) -> None:
     parser = subparsers.add_parser(command_name, help=command["help"])
-    add_source_option(parser)
-    parser.add_argument("--reset", action="store_true", help="Reset the source checkpoint")
+    add_option(parser, "source")
+    add_option(parser, "reset")
 
 
 def add_proof_parser(subparsers, command_name: str, command: dict) -> None:
     parser = subparsers.add_parser(command_name, help=command["help"])
-    parser.add_argument("--request-id", required=True, help="Request id")
+    add_option(parser, "request_id")
 
 
 def add_artifacts_parser(subparsers, command_name: str, command: dict) -> None:
     parser = subparsers.add_parser(command_name, help=command["help"])
-    add_source_option(parser)
-    parser.add_argument("--kind", choices=["diagnostics", "doctor", "report"], help="Artifact kind")
-    parser.add_argument(
-        "--latest",
-        type=int,
-        help="Return only the newest N artifacts after filters are applied",
-    )
-    parser.add_argument(
-        "--prune-missing",
-        action="store_true",
-        help="Remove manifest entries whose snapshot files no longer exist",
-    )
+    add_option(parser, "source")
+    add_option(parser, "kind")
+    add_option(parser, "latest")
+    add_option(parser, "prune_missing")
 
 
 def maybe_export_snapshot(
