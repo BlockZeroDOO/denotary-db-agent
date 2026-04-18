@@ -105,7 +105,7 @@ class CliTest(unittest.TestCase):
         self.assertEqual(ENGINE_DISPATCH_COMMANDS["checkpoint"]["kind"], "checkpoint")
         self.assertEqual(ENGINE_DISPATCH_COMMANDS["proof"]["kind"], "proof")
         self.assertEqual(COMMAND_KIND_HANDLERS["proof"].__name__, "run_proof_command")
-        self.assertEqual(COMMAND_KIND_PARSER_BUILDERS["artifacts"].__name__, "add_artifacts_parser")
+        self.assertEqual(COMMAND_KIND_PARSER_BUILDERS["artifacts"].__name__, "add_generic_parser")
         self.assertEqual(build_engine_dispatch_commands(), ENGINE_DISPATCH_COMMANDS)
         self.assertTrue(COMMAND_KIND_SPECS["json_engine"]["uses_engine"])
         self.assertFalse(COMMAND_KIND_SPECS["artifacts"]["uses_engine"])

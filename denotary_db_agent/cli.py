@@ -297,11 +297,6 @@ ENGINE_DISPATCH_COMMANDS = build_engine_dispatch_commands()
 COMMAND_BEHAVIORS = build_command_behaviors()
 
 
-def add_evidence_parser(subparsers, command_name: str, command: dict) -> None:
-    parser = subparsers.add_parser(command_name, help=command["help"])
-    add_kind_parser_options(parser, command_name, command)
-
-
 def add_option(parser, name: str, **overrides: object) -> None:
     option = OPTION_SPECS[name]
     kwargs = dict(option["kwargs"])
@@ -324,32 +319,7 @@ def add_kind_parser_options(parser, command_name: str, command: dict) -> None:
         add_option(parser, option["name"], **overrides)
 
 
-def add_json_engine_parser(subparsers, command_name: str, command: dict) -> None:
-    parser = subparsers.add_parser(command_name, help=command["help"])
-    add_kind_parser_options(parser, command_name, command)
-
-
-def add_source_action_parser(subparsers, command_name: str, command: dict) -> None:
-    parser = subparsers.add_parser(command_name, help=command["help"])
-    add_kind_parser_options(parser, command_name, command)
-
-
-def add_run_parser(subparsers, command_name: str, command: dict) -> None:
-    parser = subparsers.add_parser(command_name, help=command["help"])
-    add_kind_parser_options(parser, command_name, command)
-
-
-def add_checkpoint_parser(subparsers, command_name: str, command: dict) -> None:
-    parser = subparsers.add_parser(command_name, help=command["help"])
-    add_kind_parser_options(parser, command_name, command)
-
-
-def add_proof_parser(subparsers, command_name: str, command: dict) -> None:
-    parser = subparsers.add_parser(command_name, help=command["help"])
-    add_kind_parser_options(parser, command_name, command)
-
-
-def add_artifacts_parser(subparsers, command_name: str, command: dict) -> None:
+def add_generic_parser(subparsers, command_name: str, command: dict) -> None:
     parser = subparsers.add_parser(command_name, help=command["help"])
     add_kind_parser_options(parser, command_name, command)
 
@@ -516,37 +486,37 @@ def run_proof_command(engine: AgentEngine, args, **_: object) -> dict:
 def build_kind_specs() -> dict[str, dict]:
     return {
         "json_engine": {
-            "parser_builder": add_json_engine_parser,
+            "parser_builder": add_generic_parser,
             "handler": run_json_engine_command,
             "uses_engine": True,
         },
         "evidence": {
-            "parser_builder": add_evidence_parser,
+            "parser_builder": add_generic_parser,
             "handler": run_evidence_command,
             "uses_engine": True,
         },
         "source_action": {
-            "parser_builder": add_source_action_parser,
+            "parser_builder": add_generic_parser,
             "handler": run_source_action_command,
             "uses_engine": True,
         },
         "run": {
-            "parser_builder": add_run_parser,
+            "parser_builder": add_generic_parser,
             "handler": run_run_command,
             "uses_engine": True,
         },
         "checkpoint": {
-            "parser_builder": add_checkpoint_parser,
+            "parser_builder": add_generic_parser,
             "handler": run_checkpoint_command,
             "uses_engine": True,
         },
         "proof": {
-            "parser_builder": add_proof_parser,
+            "parser_builder": add_generic_parser,
             "handler": run_proof_command,
             "uses_engine": True,
         },
         "artifacts": {
-            "parser_builder": add_artifacts_parser,
+            "parser_builder": add_generic_parser,
             "uses_engine": False,
         },
     }
