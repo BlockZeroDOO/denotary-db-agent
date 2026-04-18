@@ -255,6 +255,17 @@ def add_artifacts_parser(subparsers, command_name: str, command: dict) -> None:
     add_option(parser, "prune_missing")
 
 
+COMMAND_KIND_PARSER_BUILDERS = {
+    "json_engine": add_json_engine_parser,
+    "evidence": add_evidence_parser,
+    "source_action": add_source_action_parser,
+    "run": add_run_parser,
+    "checkpoint": add_checkpoint_parser,
+    "proof": add_proof_parser,
+    "artifacts": add_artifacts_parser,
+}
+
+
 def maybe_export_snapshot(
     payload: dict,
     *,
@@ -461,28 +472,11 @@ def execute_command(args, config) -> dict:
 
 def add_command_parser(subparsers, command_name: str, command: dict) -> None:
     kind = command["kind"]
-    if kind == "json_engine":
-        add_json_engine_parser(subparsers, command_name, command)
-        return
-    if kind == "evidence":
-        add_evidence_parser(subparsers, command_name, command)
-        return
-    if kind == "source_action":
-        add_source_action_parser(subparsers, command_name, command)
-        return
-    if kind == "run":
-        add_run_parser(subparsers, command_name, command)
-        return
-    if kind == "checkpoint":
-        add_checkpoint_parser(subparsers, command_name, command)
-        return
-    if kind == "proof":
-        add_proof_parser(subparsers, command_name, command)
-        return
-    if kind == "artifacts":
-        add_artifacts_parser(subparsers, command_name, command)
-        return
-    raise ValueError(f"unsupported command kind: {kind}")
+    try:
+        builder = COMMAND_KIND_PARSER_BUILDERS[kind]
+    except KeyError as exc:
+        raise ValueError(f"unsupported command kind: {kind}") from exc
+    builder(subparsers, command_name, command)
 
 
 def build_parser() -> argparse.ArgumentParser:
