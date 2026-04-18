@@ -841,3 +841,70 @@ class EngineTest(unittest.TestCase):
         self.assertFalse(report["signer"]["private_key_matches_permission"])
         self.assertFalse(report["signer"]["broadcast_ready"])
         self.assertIn("configured hot key does not match any key", " ".join(report["errors"]))
+
+    def test_doctor_marks_broad_hot_permission_as_degraded(self) -> None:
+        env_path = Path(self.temp_dir.name) / "agent.env"
+        env_path.write_text("DENOTARY_SUBMITTER_PRIVATE_KEY=test-wif\n", encoding="utf-8")
+        config = json.loads(self.config_path.read_text(encoding="utf-8"))
+        config["denotary"]["chain_rpc_url"] = "https://history.denotary.io"
+        config["denotary"]["broadcast_backend"] = "private_key_env"
+        config["denotary"]["env_file"] = "agent.env"
+        self.config_path.write_text(json.dumps(config), encoding="utf-8")
+
+        engine = AgentEngine(load_config(self.config_path))
+        engine.chain = SimpleNamespace(
+            health=lambda: {"server_version_string": "v1", "chain_id": "abc"},
+            get_account=lambda account: {
+                "account_name": account,
+                "permissions": [
+                    {
+                        "perm_name": "dnanchor",
+                        "required_auth": {
+                            "threshold": 2,
+                            "keys": [
+                                {"key": "EOS_MATCH", "weight": 1},
+                                {"key": "EOS_EXTRA", "weight": 1},
+                            ],
+                            "accounts": [
+                                {
+                                    "permission": {
+                                        "actor": "opsaccount",
+                                        "permission": "active",
+                                    },
+                                    "weight": 1,
+                                }
+                            ],
+                            "waits": [{"wait_sec": 30, "weight": 1}],
+                        },
+                    }
+                ],
+            },
+        )
+
+        with patch("denotary_db_agent.engine.derive_public_key_candidates", return_value={"EOS": "EOS_MATCH"}), patch(
+            "denotary_db_agent.engine.inspect_secret_file_permissions",
+            return_value={
+                "path": str(env_path),
+                "exists": True,
+                "checked": True,
+                "ok": True,
+                "platform": "posix",
+                "mode_octal": "0600",
+                "severity": "healthy",
+                "issues": [],
+            },
+        ):
+            report = engine.doctor("pg-core-ledger")
+
+        self.assertEqual(report["signer"]["severity"], "degraded")
+        self.assertEqual(report["signer"]["permission_threshold"], 2)
+        self.assertEqual(report["signer"]["permission_public_keys"], ["EOS_MATCH", "EOS_EXTRA"])
+        self.assertEqual(report["signer"]["permission_account_links"], ["opsaccount@active"])
+        self.assertEqual(report["signer"]["permission_waits"], [30])
+        self.assertFalse(report["signer"]["permission_is_minimal_hot_key"])
+        self.assertTrue(report["signer"]["private_key_matches_permission"])
+        self.assertTrue(report["signer"]["broadcast_ready"])
+        self.assertIn("uses threshold 2", " ".join(report["signer"]["warnings"]))
+        self.assertIn("has 2 keys", " ".join(report["signer"]["warnings"]))
+        self.assertIn("linked account permission", " ".join(report["signer"]["warnings"]))
+        self.assertIn("delayed wait entries", " ".join(report["signer"]["warnings"]))

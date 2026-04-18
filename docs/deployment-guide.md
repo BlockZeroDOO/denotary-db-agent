@@ -7,6 +7,7 @@ For a `denotary` mainnet deployment with an env-file-backed hot key, use:
 - [denotary-env-file-runbook.md](denotary-env-file-runbook.md)
 - [denotary-postgresql-rollout-checklist.md](denotary-postgresql-rollout-checklist.md)
 - [denotary-postgresql-validation-report.md](denotary-postgresql-validation-report.md)
+- [postgresql-hot-key-rotation.md](postgresql-hot-key-rotation.md)
 - [postgresql-recovery-scenarios.md](postgresql-recovery-scenarios.md)
 
 ## Recommended Modes

@@ -673,6 +673,10 @@ class AgentEngine:
         billing_account_exists = False
         account_error = ""
         permission_public_keys: list[str] = []
+        permission_accounts: list[str] = []
+        permission_waits: list[int] = []
+        permission_threshold: int | None = None
+        permission_is_minimal_hot_key: bool | None = None
         derived_public_keys: dict[str, str] = {}
         private_key_matches_permission: bool | None = None
         if self.chain is not None:
@@ -684,11 +688,51 @@ class AgentEngine:
                 permission_exists = permission_auth is not None
                 if permission_auth is not None:
                     required_auth = permission_auth.get("required_auth") or permission_auth.get("auth") or {}
+                    permission_threshold = int(required_auth.get("threshold") or 1)
                     permission_public_keys = [
                         str(item.get("key") or "")
                         for item in (required_auth.get("keys") or [])
                         if str(item.get("key") or "")
                     ]
+                    permission_accounts = [
+                        str((item.get("permission") or {}).get("actor") or "")
+                        + "@"
+                        + str((item.get("permission") or {}).get("permission") or "")
+                        for item in (required_auth.get("accounts") or [])
+                        if str((item.get("permission") or {}).get("actor") or "")
+                        and str((item.get("permission") or {}).get("permission") or "")
+                    ]
+                    permission_waits = [
+                        int(item.get("wait_sec") or 0)
+                        for item in (required_auth.get("waits") or [])
+                        if int(item.get("wait_sec") or 0) > 0
+                    ]
+                    permission_is_minimal_hot_key = (
+                        permission_threshold == 1
+                        and len(permission_public_keys) == 1
+                        and not permission_accounts
+                        and not permission_waits
+                    )
+                    if permission_threshold != 1:
+                        warnings.append(
+                            f"submitter permission {self.config.denotary.submitter}@{permission} uses threshold "
+                            f"{permission_threshold}; threshold 1 is recommended for a dedicated hot permission"
+                        )
+                    if len(permission_public_keys) > 1:
+                        warnings.append(
+                            f"submitter permission {self.config.denotary.submitter}@{permission} has "
+                            f"{len(permission_public_keys)} keys; a single dedicated hot key is recommended"
+                        )
+                    if permission_accounts:
+                        warnings.append(
+                            f"submitter permission {self.config.denotary.submitter}@{permission} delegates through "
+                            f"{len(permission_accounts)} linked account permission(s); avoid linked accounts on the hot runtime permission"
+                        )
+                    if permission_waits:
+                        warnings.append(
+                            f"submitter permission {self.config.denotary.submitter}@{permission} has delayed wait entries; "
+                            "a direct single-key hot permission is recommended"
+                        )
                 if not permission_exists:
                     errors.append(f"submitter permission {self.config.denotary.submitter}@{permission} does not exist on chain")
             except Exception as exc:  # noqa: BLE001
@@ -748,7 +792,11 @@ class AgentEngine:
             "account_exists": account_exists,
             "permission_exists": permission_exists,
             "billing_account_exists": billing_account_exists,
+            "permission_threshold": permission_threshold,
             "permission_public_keys": permission_public_keys,
+            "permission_account_links": permission_accounts,
+            "permission_waits": permission_waits,
+            "permission_is_minimal_hot_key": permission_is_minimal_hot_key,
             "derived_public_keys": derived_public_keys,
             "private_key_matches_permission": private_key_matches_permission,
             "broadcast_ready": (not errors)

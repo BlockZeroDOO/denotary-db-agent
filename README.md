@@ -88,6 +88,7 @@ See:
 - [docs/denotary-env-file-runbook.md](docs/denotary-env-file-runbook.md)
 - [docs/denotary-postgresql-validation-report.md](docs/denotary-postgresql-validation-report.md)
 - [docs/denotary-postgresql-rollout-checklist.md](docs/denotary-postgresql-rollout-checklist.md)
+- [docs/postgresql-hot-key-rotation.md](docs/postgresql-hot-key-rotation.md)
 - [docs/postgresql-recovery-scenarios.md](docs/postgresql-recovery-scenarios.md)
 - [docs/supported-databases.md](docs/supported-databases.md)
 - [docs/verifbill-permission-model.md](docs/verifbill-permission-model.md)
@@ -132,6 +133,7 @@ Note:
 - `doctor --strict` exits nonzero only for `critical` / `error` overall severity, so it can be wired into CI/CD and service pre-start checks without failing on normal `degraded` warnings
 - on POSIX hosts, `doctor` also checks whether an env-file hot key is stored in a `0600`-style secret file and raises severity when permissions are too broad
 - for inline/env-backed hot keys, `doctor` also compares the derived public key with the keys on `submitter@submitter_permission`
+- `doctor` also warns when the runtime permission is broader than recommended, for example multiple keys, linked accounts, waits, or a threshold above `1`
 - `report --save-snapshot` exports one rollout evidence bundle that combines:
   - `doctor`
   - `metrics`

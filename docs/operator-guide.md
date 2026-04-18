@@ -91,6 +91,12 @@ Returns one compact live preflight report for deploy readiness with:
 - signer readiness for `submitter@submitter_permission`
 - billing account existence
 - per-source connectivity and tracked-table visibility
+- hot key / on-chain permission key matching
+- hot-permission breadth warnings, such as:
+  - multiple permission keys
+  - linked account permissions
+  - delayed waits
+  - threshold above `1`
 
 Use this before:
 
@@ -108,6 +114,10 @@ This is intended for:
 - CI/CD pre-deploy gates
 - `systemd` `ExecStartPre`
 - Windows service pre-start wrappers
+
+For PostgreSQL hot-key rotation, see:
+
+- [postgresql-hot-key-rotation.md](postgresql-hot-key-rotation.md)
 
 ### Metrics
 

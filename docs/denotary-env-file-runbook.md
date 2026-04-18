@@ -170,6 +170,10 @@ Safe hot-key rotation:
 
 If you rotate while the daemon is running, restart the process after updating the env file so the new key is reloaded.
 
+For the full PostgreSQL rotation sequence, see:
+
+- [postgresql-hot-key-rotation.md](postgresql-hot-key-rotation.md)
+
 ## If Broadcast Fails
 
 Check in this order:
