@@ -372,13 +372,21 @@ def build_legacy_exports() -> dict[str, dict[str, dict]]:
     return build_legacy_export_snapshot()
 
 
+def get_legacy_export(export_name: str) -> dict[str, dict]:
+    try:
+        export = LEGACY_EXPORT_SPECS[export_name]
+    except KeyError as exc:
+        raise KeyError(f"unknown legacy export: {export_name}") from exc
+    return build_command_alias(export["alias"])
+
+
 COMMAND_GROUP_BUILDERS = build_command_group_builders()
 COMMAND_GROUPS = build_command_groups()
 COMMAND_GROUP_ALIASES = build_legacy_export_snapshot()
-EVIDENCE_COMMANDS = COMMAND_GROUP_ALIASES["EVIDENCE_COMMANDS"]
-JSON_ENGINE_COMMANDS = COMMAND_GROUP_ALIASES["JSON_ENGINE_COMMANDS"]
-SOURCE_ACTION_COMMANDS = COMMAND_GROUP_ALIASES["SOURCE_ACTION_COMMANDS"]
-ENGINE_DISPATCH_COMMANDS = COMMAND_GROUP_ALIASES["ENGINE_DISPATCH_COMMANDS"]
+EVIDENCE_COMMANDS = get_legacy_export("EVIDENCE_COMMANDS")
+JSON_ENGINE_COMMANDS = get_legacy_export("JSON_ENGINE_COMMANDS")
+SOURCE_ACTION_COMMANDS = get_legacy_export("SOURCE_ACTION_COMMANDS")
+ENGINE_DISPATCH_COMMANDS = get_legacy_export("ENGINE_DISPATCH_COMMANDS")
 
 
 def get_command_spec(command_name: str) -> dict:
