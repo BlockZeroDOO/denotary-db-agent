@@ -164,6 +164,25 @@ class CheckpointStore:
                 ).fetchall()
         return [dict(row) for row in rows]
 
+    def list_deliveries_by_external_ref(self, source_id: str, external_ref: str) -> list[dict[str, object | None]]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                select request_id, trace_id, source_id, external_ref, tx_id, status, prepared_action_json, last_error, updated_at
+                from deliveries
+                where source_id = ? and external_ref = ?
+                order by updated_at desc, request_id desc
+                """,
+                (source_id, external_ref),
+            ).fetchall()
+        deliveries: list[dict[str, object | None]] = []
+        for row in rows:
+            entry = dict(row)
+            prepared_action_raw = entry.pop("prepared_action_json", None)
+            entry["prepared_action"] = json.loads(prepared_action_raw) if prepared_action_raw else None
+            deliveries.append(entry)
+        return deliveries
+
     def prune_deliveries(self, source_id: str, retain: int) -> int:
         if retain <= 0:
             return 0

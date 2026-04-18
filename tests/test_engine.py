@@ -198,6 +198,7 @@ class EngineTest(unittest.TestCase):
     def test_process_event_reuses_prepared_request_across_retries(self) -> None:
         engine = AgentEngine(load_config(self.config_path))
         runtime = engine.runtimes()[0]
+        engine.config.denotary.wait_for_finality = True
         event_payload = engine.config.sources[0].options["dry_run_events"][0]
         event = ChangeEvent(
             source_id=runtime.config.id,
@@ -246,6 +247,108 @@ class EngineTest(unittest.TestCase):
         self.assertEqual(register_calls, [("request-retry-1", "trace-retry-1"), ("request-retry-1", "trace-retry-1")])
         self.assertEqual(failed_calls, [("request-retry-1", "db_agent_delivery_failed")])
         self.assertEqual(included_calls, [("request-retry-1", "a" * 64, 321)])
+        checkpoints = engine.checkpoint_summary()
+        self.assertEqual(len(checkpoints), 1)
+        self.assertEqual(checkpoints[0]["token"], "lsn:1")
+
+    def test_process_event_recovers_existing_prepared_request_after_duplicate_submit(self) -> None:
+        engine = AgentEngine(load_config(self.config_path))
+        runtime = engine.runtimes()[0]
+        engine.config.denotary.wait_for_finality = True
+        event_payload = engine.config.sources[0].options["dry_run_events"][0]
+        event = ChangeEvent(
+            source_id=runtime.config.id,
+            source_type="postgresql",
+            source_instance=runtime.config.source_instance,
+            database_name=runtime.config.database_name,
+            **event_payload,
+        )
+
+        engine.store.upsert_delivery(
+            DeliveryAttempt(
+                request_id="request-existing-1",
+                trace_id="trace-existing-1",
+                source_id=runtime.config.id,
+                external_ref="external-ref-1",
+                tx_id=None,
+                status="prepared_registered",
+                prepared_action={
+                    "contract": "verifbill",
+                    "action": "submit",
+                    "data": {
+                        "payer": "enterpriseac1",
+                        "submitter": "enterpriseac1",
+                        "schema_id": 1,
+                        "policy_id": 1,
+                        "object_hash": "2" * 64,
+                        "external_ref": "1" * 64,
+                    },
+                },
+                last_error=None,
+                updated_at="2026-04-18T08:00:00Z",
+            )
+        )
+
+        original_canonicalize = event_payload["checkpoint_token"]
+        event_payload["checkpoint_token"] = "lsn:dup"
+        try:
+            prepare_calls: list[dict[str, object]] = []
+            wait_calls: list[str] = []
+            register_calls: list[str] = []
+
+            engine.ingress = SimpleNamespace(
+                prepare_single=lambda payload: prepare_calls.append(payload) or None
+            )
+
+            class DuplicateChain:
+                def push_prepared_action(self, prepared_action):
+                    raise RuntimeError("assertion failure with message: duplicate request for submitter")
+
+            engine.chain = DuplicateChain()
+            engine.watcher = SimpleNamespace(
+                register=lambda prepared_obj, envelope: register_calls.append(prepared_obj.request_id),
+                mark_failed=lambda request_id, reason, details=None: None,
+                wait_for_finalized=lambda request_id, timeout_sec, poll_interval_sec: wait_calls.append(request_id),
+            )
+            engine.receipt = SimpleNamespace(
+                get_receipt=lambda request_id: {"request_id": request_id, "tx_id": "b" * 64, "block_num": 777}
+            )
+            engine.audit = SimpleNamespace(get_chain=lambda request_id: {"request_id": request_id, "links": []})
+
+            with patch("denotary_db_agent.engine.canonicalize_event") as canonicalize_mock:
+                canonicalize_mock.return_value = SimpleNamespace(
+                    source_type="postgresql",
+                    source_instance=runtime.config.source_instance,
+                    database_name=runtime.config.database_name,
+                    schema_or_namespace="public",
+                    table_or_collection="invoices",
+                    operation="update",
+                    primary_key={"id": 1},
+                    change_version="lsn:dup",
+                    commit_timestamp="2026-04-18T08:00:00Z",
+                    before_hash=None,
+                    after_hash="a" * 64,
+                    metadata_hash="b" * 64,
+                    external_ref="external-ref-1",
+                    trace_id="trace-live-1",
+                    to_prepare_payload=lambda submitter, schema_id, policy_id: {
+                        "submitter": submitter,
+                        "payload": {"mode": "single"},
+                        "external_ref": "external-ref-1",
+                    },
+                )
+                engine._process_event(runtime, event)
+        finally:
+            event_payload["checkpoint_token"] = original_canonicalize
+
+        self.assertEqual(prepare_calls, [])
+        self.assertEqual(register_calls, [])
+        self.assertEqual(wait_calls, ["request-existing-1"])
+        proof = engine.store.get_proof("request-existing-1")
+        self.assertIsNotNone(proof)
+        delivery = engine.store.list_deliveries_by_external_ref(runtime.config.id, "external-ref-1")[0]
+        self.assertEqual(delivery["status"], "finalized_exported")
+        self.assertEqual(delivery["tx_id"], "b" * 64)
         checkpoints = engine.checkpoint_summary()
         self.assertEqual(len(checkpoints), 1)
         self.assertEqual(checkpoints[0]["token"], "lsn:1")
