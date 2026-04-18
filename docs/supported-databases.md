@@ -8,7 +8,7 @@
 | MySQL | enterprise | 8.0 | watermark polling baseline now; row-based binlog next | live watermark snapshot baseline with local full-cycle proof export |
 | MariaDB | enterprise | 10.6 | watermark polling baseline now; MariaDB binlog profile next | live watermark snapshot baseline with local full-cycle proof export |
 | SQL Server | enterprise | 2019 | watermark polling baseline now; CDC / Change Tracking next | live Docker-backed watermark snapshot baseline with local full-cycle proof export |
-| Oracle | enterprise | 19c | redo / LogMiner compatible | capability scaffold |
+| Oracle | enterprise | 19c | watermark polling baseline now; redo / LogMiner next | live Docker-backed watermark snapshot baseline with local full-cycle proof export |
 | MongoDB | enterprise | 6.0 | change streams | capability scaffold |
 
 ## Common v1 Rules

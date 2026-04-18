@@ -34,6 +34,8 @@ class MockChainHandler(BaseHTTPRequestHandler):
     push_payloads: list[dict[str, Any]] = []
 
     def do_POST(self) -> None:  # noqa: N802
+        content_length = int(self.headers.get("Content-Length", "0"))
+        body = self.rfile.read(content_length).decode("utf-8") if content_length else ""
         if self.path == "/v1/chain/get_info":
             payload = {
                 "chain_id": "1" * 64,
@@ -56,7 +58,6 @@ class MockChainHandler(BaseHTTPRequestHandler):
             return
 
         if self.path == "/v1/chain/push_transaction":
-            body = self.rfile.read(int(self.headers.get("Content-Length", "0"))).decode("utf-8")
             payload = json.loads(body)
             MockChainHandler.push_payloads.append(payload)
             self._send_json(
