@@ -5,6 +5,9 @@ This guide describes the supported production packaging patterns for `denotary-d
 For a `denotary` mainnet deployment with an env-file-backed hot key, use:
 
 - [denotary-env-file-runbook.md](denotary-env-file-runbook.md)
+- [denotary-postgresql-rollout-checklist.md](denotary-postgresql-rollout-checklist.md)
+- [denotary-postgresql-validation-report.md](denotary-postgresql-validation-report.md)
+- [postgresql-recovery-scenarios.md](postgresql-recovery-scenarios.md)
 
 ## Recommended Modes
 
@@ -143,6 +146,14 @@ docker compose -f deploy/docker-compose.example.yml logs -f
 6. Verify `health`
 7. Verify `metrics`
 8. Verify periodic diagnostics snapshots are being written when enabled
+
+If PostgreSQL maintenance or recovery causes logical runtime artifacts to disappear:
+
+1. Run `inspect`
+2. Confirm whether `slot_exists` or `publication_exists` is now false
+3. Run `refresh`
+4. Re-run `inspect`
+5. Only then resume daemon mode
 
 Optional rollout evidence:
 

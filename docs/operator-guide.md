@@ -252,7 +252,19 @@ matches the live PostgreSQL table shape. `inspect` now reports the live `selecte
 per tracked table, so operators can confirm what the current runtime will hash and send.
 For `pgoutput`, `refresh` also repairs publication drift when publication membership no longer
 matches the tracked table set. When `replica_identity_full = true`, `refresh` also repairs
-REPLICA IDENTITY drift for tracked logical tables.
+REPLICA IDENTITY drift for tracked logical tables. With auto-create enabled, `refresh`
+can also recreate a missing logical slot or a missing `pgoutput` publication after an
+unexpected PostgreSQL-side loss.
+
+Recovery rule of thumb:
+
+- if `inspect` shows `slot_exists = false`, run `refresh`
+- if `inspect` shows `publication_exists = false`, run `refresh`
+- if both are missing after PostgreSQL maintenance or failover, run `refresh` before restarting daemon mode
+
+For the fuller PostgreSQL recovery playbook, see:
+
+- [postgresql-recovery-scenarios.md](postgresql-recovery-scenarios.md)
 
 ### Pause / Resume
 

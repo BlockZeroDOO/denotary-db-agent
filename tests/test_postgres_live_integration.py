@@ -323,6 +323,39 @@ class PostgresLiveIntegrationTest(unittest.TestCase):
                 cursor.execute(f"alter publication {publication_name} set table {table_sql}")
             connection.commit()
 
+    def _drop_publication(self, publication_name: str) -> None:
+        with psycopg.connect(
+            host="127.0.0.1",
+            port=55432,
+            user="denotary",
+            password="denotarypw",
+            dbname="ledger",
+        ) as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(f"drop publication if exists {publication_name}")
+            connection.commit()
+
+    def _drop_replication_slot(self, slot_name: str) -> None:
+        with psycopg.connect(
+            host="127.0.0.1",
+            port=55432,
+            user="denotary",
+            password="denotarypw",
+            dbname="ledger",
+        ) as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    select slot_name
+                    from pg_replication_slots
+                    where slot_name = %s
+                    """,
+                    (slot_name,),
+                )
+                if cursor.fetchone():
+                    cursor.execute("select pg_drop_replication_slot(%s)", (slot_name,))
+            connection.commit()
+
     def _set_replica_identity_default(self, table_name: str) -> None:
         with psycopg.connect(
             host="127.0.0.1",
@@ -626,6 +659,53 @@ class PostgresLiveIntegrationTest(unittest.TestCase):
         self.assertTrue(repaired["sources"][0]["cdc"]["publication_in_sync"])
         self.assertIn("public.invoices", repaired["sources"][0]["cdc"]["publication_tables"])
         self.assertIn("public.payments", repaired["sources"][0]["cdc"]["publication_tables"])
+
+    def test_live_postgres_pgoutput_refresh_recreates_missing_publication(self) -> None:
+        self._write_config(capture_mode="logical", backfill_mode="none")
+        config = json.loads(self.config_path.read_text(encoding="utf-8"))
+        config["sources"][0]["options"]["output_plugin"] = "pgoutput"
+        self.config_path.write_text(json.dumps(config), encoding="utf-8")
+
+        engine = AgentEngine(load_config(self.config_path))
+        engine.validate()
+        engine.bootstrap("pg-core-ledger")
+
+        self._drop_publication("denotary_test_pub")
+
+        drifted = engine.inspect("pg-core-ledger")
+        self.assertFalse(drifted["sources"][0]["cdc"]["publication_exists"])
+        self.assertFalse(drifted["sources"][0]["cdc"]["publication_in_sync"])
+
+        refreshed = engine.refresh_source("pg-core-ledger")
+        self.assertEqual(refreshed["sources"][0]["capture_mode"], "logical")
+
+        repaired = engine.inspect("pg-core-ledger")
+        self.assertTrue(repaired["sources"][0]["cdc"]["publication_exists"])
+        self.assertTrue(repaired["sources"][0]["cdc"]["publication_in_sync"])
+        self.assertIn("public.invoices", repaired["sources"][0]["cdc"]["publication_tables"])
+        self.assertIn("public.payments", repaired["sources"][0]["cdc"]["publication_tables"])
+
+    def test_live_postgres_pgoutput_refresh_recreates_missing_slot(self) -> None:
+        self._write_config(capture_mode="logical", backfill_mode="none")
+        config = json.loads(self.config_path.read_text(encoding="utf-8"))
+        config["sources"][0]["options"]["output_plugin"] = "pgoutput"
+        self.config_path.write_text(json.dumps(config), encoding="utf-8")
+
+        engine = AgentEngine(load_config(self.config_path))
+        engine.validate()
+        engine.bootstrap("pg-core-ledger")
+
+        self._drop_replication_slot("denotary_test_slot")
+
+        drifted = engine.inspect("pg-core-ledger")
+        self.assertFalse(drifted["sources"][0]["cdc"]["slot_exists"])
+
+        refreshed = engine.refresh_source("pg-core-ledger")
+        self.assertEqual(refreshed["sources"][0]["capture_mode"], "logical")
+
+        repaired = engine.inspect("pg-core-ledger")
+        self.assertTrue(repaired["sources"][0]["cdc"]["slot_exists"])
+        self.assertEqual(repaired["sources"][0]["cdc"]["plugin"], "pgoutput")
 
     def test_live_postgres_pgoutput_refresh_repairs_replica_identity_drift(self) -> None:
         self._write_config(capture_mode="logical", backfill_mode="none")

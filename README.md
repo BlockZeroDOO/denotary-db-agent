@@ -86,6 +86,9 @@ See:
 - [docs/operator-guide.md](docs/operator-guide.md)
 - [docs/deployment-guide.md](docs/deployment-guide.md)
 - [docs/denotary-env-file-runbook.md](docs/denotary-env-file-runbook.md)
+- [docs/denotary-postgresql-validation-report.md](docs/denotary-postgresql-validation-report.md)
+- [docs/denotary-postgresql-rollout-checklist.md](docs/denotary-postgresql-rollout-checklist.md)
+- [docs/postgresql-recovery-scenarios.md](docs/postgresql-recovery-scenarios.md)
 - [docs/supported-databases.md](docs/supported-databases.md)
 - [docs/verifbill-permission-model.md](docs/verifbill-permission-model.md)
 - [docs/verifbill-permission-commands.md](docs/verifbill-permission-commands.md)
@@ -165,6 +168,7 @@ Note:
 - `refresh` forces runtime artifact refresh and stores the new runtime signature
 - `refresh` can repair PostgreSQL publication drift when `pgoutput` publication tables no longer match tracked tables
 - `refresh` can also repair PostgreSQL REPLICA IDENTITY drift when `replica_identity_full = true`
+- `refresh` can recreate a missing PostgreSQL logical slot or missing `pgoutput` publication when auto-create is enabled
 - daemon mode now uses logical slot activity checks before the fallback interval elapses
 - `pause` / `resume` let operators stop one source without changing the config file
 - `run_once` and daemon mode now auto-refresh PostgreSQL runtime artifacts when tracked table shape changes, including `ALTER TABLE` column drift
