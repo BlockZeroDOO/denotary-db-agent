@@ -29,6 +29,7 @@ def free_port() -> int:
 
 
 class MockChainHandler(BaseHTTPRequestHandler):
+    protocol_version = "HTTP/1.0"
     abi_calls = 0
     push_payloads: list[dict[str, Any]] = []
 

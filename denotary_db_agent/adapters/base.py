@@ -102,6 +102,25 @@ class BaseAdapter(ABC):
 
 class ScaffoldCdcAdapter(BaseAdapter):
     required_connection_fields: tuple[str, ...] = ()
+    minimum_version: str = ""
+    scaffold_supports_cdc: bool = True
+    scaffold_supports_snapshot: bool = True
+    scaffold_operations: tuple[str, ...] = ("insert", "update", "delete")
+    scaffold_capture_modes: tuple[str, ...] = ()
+    scaffold_bootstrap_requirements: tuple[str, ...] = ()
+    scaffold_notes: str = ""
+
+    def discover_capabilities(self) -> AdapterCapabilities:
+        return AdapterCapabilities(
+            source_type=self.source_type,
+            minimum_version=self.minimum_version,
+            supports_cdc=self.scaffold_supports_cdc,
+            supports_snapshot=self.scaffold_supports_snapshot,
+            operations=self.scaffold_operations,
+            capture_modes=self.scaffold_capture_modes,
+            bootstrap_requirements=self.scaffold_bootstrap_requirements,
+            notes=self.scaffold_notes,
+        )
 
     def validate_connection(self) -> None:
         missing = [name for name in self.required_connection_fields if not self.config.connection.get(name)]
