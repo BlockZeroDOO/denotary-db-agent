@@ -150,6 +150,12 @@ Saved rollout artifacts are indexed automatically in:
 
 - `data/diagnostics/evidence-manifest.json`
 
+To inspect them later:
+
+```bash
+denotary-db-agent --config /etc/denotary-db-agent/agent.json artifacts --source pg-core-ledger
+```
+
 Optional startup gate:
 
 ```bash

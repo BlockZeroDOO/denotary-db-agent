@@ -145,6 +145,20 @@ All saved `diagnostics`, `doctor`, and `report` snapshots are also indexed in th
 
 - `data/diagnostics/evidence-manifest.json`
 
+### Artifacts
+
+```bash
+denotary-db-agent --config examples/agent.example.json artifacts --source pg-core-ledger
+denotary-db-agent --config examples/agent.example.json artifacts --source pg-core-ledger --kind report
+```
+
+Returns entries from the local evidence manifest with optional filters by:
+
+- `source`
+- `kind`
+
+Use this when operators want to find the latest rollout evidence files without opening the manifest JSON manually.
+
 ### Diagnostics
 
 ```bash

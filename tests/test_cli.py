@@ -198,6 +198,92 @@ class CliTest(unittest.TestCase):
             self.assertEqual(payload["totals"]["source_count"], 1)
             self.assertEqual(payload["sources"][0]["source_id"], "pg-core-ledger")
 
+    def test_artifacts_command_reads_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            runtime_dir = Path(temp_dir) / "runtime" / "diagnostics"
+            runtime_dir.mkdir(parents=True, exist_ok=True)
+            manifest_path = runtime_dir / "evidence-manifest.json"
+            manifest_path.write_text(
+                json.dumps(
+                    {
+                        "artifacts": [
+                            {"kind": "doctor", "source_id": "pg-core-ledger", "path": "a.json"},
+                            {"kind": "report", "source_id": "pg-core-ledger", "path": "b.json"},
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            config_path = Path(temp_dir) / "config.json"
+            config_path.write_text("{}", encoding="utf-8")
+            fake_config = type(
+                "FakeConfig",
+                (),
+                {
+                    "storage": type("FakeStorage", (), {"state_db": str(Path(temp_dir) / "runtime" / "state.sqlite3")})(),
+                },
+            )()
+            stdout = StringIO()
+            with patch("denotary_db_agent.cli.load_config", return_value=fake_config), patch("sys.stdout", stdout):
+                exit_code = main(
+                    [
+                        "--config",
+                        str(config_path),
+                        "artifacts",
+                    ]
+                )
+
+            self.assertEqual(exit_code, 0)
+            payload = json.loads(stdout.getvalue())
+            self.assertEqual(payload["artifact_count"], 2)
+            self.assertEqual(Path(payload["manifest_path"]).name, "evidence-manifest.json")
+
+    def test_artifacts_command_filters_by_kind_and_source(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            runtime_dir = Path(temp_dir) / "runtime" / "diagnostics"
+            runtime_dir.mkdir(parents=True, exist_ok=True)
+            manifest_path = runtime_dir / "evidence-manifest.json"
+            manifest_path.write_text(
+                json.dumps(
+                    {
+                        "artifacts": [
+                            {"kind": "doctor", "source_id": "pg-core-ledger", "path": "a.json"},
+                            {"kind": "report", "source_id": "pg-core-ledger", "path": "b.json"},
+                            {"kind": "report", "source_id": "pg-archive", "path": "c.json"},
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            config_path = Path(temp_dir) / "config.json"
+            config_path.write_text("{}", encoding="utf-8")
+            fake_config = type(
+                "FakeConfig",
+                (),
+                {
+                    "storage": type("FakeStorage", (), {"state_db": str(Path(temp_dir) / "runtime" / "state.sqlite3")})(),
+                },
+            )()
+            stdout = StringIO()
+            with patch("denotary_db_agent.cli.load_config", return_value=fake_config), patch("sys.stdout", stdout):
+                exit_code = main(
+                    [
+                        "--config",
+                        str(config_path),
+                        "artifacts",
+                        "--source",
+                        "pg-core-ledger",
+                        "--kind",
+                        "report",
+                    ]
+                )
+
+            self.assertEqual(exit_code, 0)
+            payload = json.loads(stdout.getvalue())
+            self.assertEqual(payload["artifact_count"], 1)
+            self.assertEqual(payload["artifacts"][0]["kind"], "report")
+            self.assertEqual(payload["artifacts"][0]["source_id"], "pg-core-ledger")
+
     def test_report_command_prints_engine_report(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             config_path = Path(temp_dir) / "config.json"

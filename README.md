@@ -61,6 +61,7 @@ denotary-db-agent doctor --config examples/agent.example.json --source pg-core-l
 denotary-db-agent doctor --config examples/agent.example.json --source pg-core-ledger --save-snapshot
 denotary-db-agent doctor --config examples/agent.example.json --source pg-core-ledger --strict
 denotary-db-agent report --config examples/agent.example.json --source pg-core-ledger --save-snapshot
+denotary-db-agent artifacts --config examples/agent.example.json --source pg-core-ledger
 denotary-db-agent metrics --config examples/agent.example.json --source pg-core-ledger
 denotary-db-agent diagnostics --config examples/agent.example.json --source pg-core-ledger
 denotary-db-agent diagnostics --config examples/agent.example.json --source pg-core-ledger --save-snapshot
@@ -97,6 +98,7 @@ python -m denotary_db_agent --config examples/agent.example.json doctor --source
 python -m denotary_db_agent --config examples/agent.example.json doctor --source pg-core-ledger --save-snapshot
 python -m denotary_db_agent --config examples/agent.example.json doctor --source pg-core-ledger --strict
 python -m denotary_db_agent --config examples/agent.example.json report --source pg-core-ledger --save-snapshot
+python -m denotary_db_agent --config examples/agent.example.json artifacts --source pg-core-ledger
 python -m denotary_db_agent --config examples/agent.example.json metrics --source pg-core-ledger
 python -m denotary_db_agent --config examples/agent.example.json diagnostics --source pg-core-ledger
 python -m denotary_db_agent --config examples/agent.example.json diagnostics --source pg-core-ledger --save-snapshot
@@ -129,6 +131,7 @@ Note:
   - `status`
 - saved `diagnostics` / `doctor` / `report` snapshots are also registered in:
   - `data/diagnostics/evidence-manifest.json`
+- `artifacts` reads that manifest with optional filters by `source` and `kind`
 - `metrics` gives a compact export-friendly summary of source counters, backlog indicators, stream state, and severity
 - `diagnostics` gives a compact stream/logical-slot focused report per source
 - `diagnostics --save-snapshot` writes the report to a timestamped JSON file under the local runtime directory

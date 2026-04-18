@@ -82,6 +82,22 @@ def update_evidence_manifest(
     return manifest_path
 
 
+def read_evidence_manifest(state_db: str) -> dict:
+    manifest_path = default_evidence_manifest_path(state_db)
+    if not manifest_path.exists():
+        return {"artifacts": []}
+    try:
+        payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {"artifacts": []}
+    if not isinstance(payload, dict):
+        return {"artifacts": []}
+    artifacts = payload.get("artifacts")
+    if not isinstance(artifacts, list):
+        return {"artifacts": []}
+    return {"artifacts": artifacts}
+
+
 def prune_snapshot_files(
     snapshot_path: str | Path,
     keep_count: int,

@@ -8,6 +8,7 @@ from denotary_db_agent.diagnostics_snapshots import (
     default_evidence_manifest_path,
     export_diagnostics_snapshot,
     export_named_snapshot,
+    read_evidence_manifest,
 )
 from denotary_db_agent.engine import AgentEngine
 
@@ -45,6 +46,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     metrics_parser = subparsers.add_parser("metrics", help="Show compact export-friendly metrics")
     metrics_parser.add_argument("--source", help="Source id")
+    artifacts_parser = subparsers.add_parser("artifacts", help="Show saved evidence artifacts from the local manifest")
+    artifacts_parser.add_argument("--source", help="Source id")
+    artifacts_parser.add_argument("--kind", choices=["diagnostics", "doctor", "report"], help="Artifact kind")
     report_parser = subparsers.add_parser("report", help="Export a compact rollout evidence bundle")
     report_parser.add_argument("--source", help="Source id")
     report_parser.add_argument("--output", help="Write report JSON to this file")
@@ -99,6 +103,24 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     config = load_config(args.config)
+    if args.command == "artifacts":
+        manifest = read_evidence_manifest(config.storage.state_db)
+        artifacts = manifest.get("artifacts", [])
+        if args.source:
+            artifacts = [item for item in artifacts if str(item.get("source_id") or "") == args.source]
+        if args.kind:
+            artifacts = [item for item in artifacts if str(item.get("kind") or "") == args.kind]
+        print(
+            json.dumps(
+                {
+                    "manifest_path": str(default_evidence_manifest_path(config.storage.state_db)),
+                    "artifact_count": len(artifacts),
+                    "artifacts": artifacts,
+                },
+                indent=2,
+            )
+        )
+        return 0
     engine = AgentEngine(config)
 
     if args.command == "validate":
