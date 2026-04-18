@@ -6,24 +6,11 @@ import json
 from denotary_db_agent.config import load_config
 from denotary_db_agent.diagnostics_snapshots import (
     default_evidence_manifest_path,
-    export_snapshot_artifact,
+    export_snapshot_bundle,
     prune_missing_evidence_entries,
     read_evidence_manifest,
 )
 from denotary_db_agent.engine import AgentEngine
-
-
-def attach_snapshot_metadata(
-    payload: dict,
-    *,
-    snapshot_path,
-    removed,
-    state_db: str,
-) -> dict:
-    payload["snapshot_path"] = str(snapshot_path)
-    payload["pruned_snapshot_paths"] = [str(item) for item in removed]
-    payload["manifest_path"] = str(default_evidence_manifest_path(state_db))
-    return payload
 
 
 def maybe_export_snapshot(
@@ -31,7 +18,7 @@ def maybe_export_snapshot(
     *,
     state_db: str,
     source_id: str | None,
-    prefix: str,
+    prefix: str | None = None,
     output_path: str | None,
     save_snapshot: bool,
     retention: int,
@@ -40,8 +27,8 @@ def maybe_export_snapshot(
 ) -> dict:
     if not output_path and not save_snapshot:
         return payload
-    snapshot_path, removed = exporter(
-        payload,
+    metadata = exporter(
+        payload=payload,
         state_db=state_db,
         source_id=source_id,
         prefix=prefix,
@@ -49,7 +36,8 @@ def maybe_export_snapshot(
         retention=retention,
         manifest_retention=manifest_retention,
     )
-    return attach_snapshot_metadata(payload, snapshot_path=snapshot_path, removed=removed, state_db=state_db)
+    payload.update(metadata)
+    return payload
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -203,7 +191,7 @@ def main(argv: list[str] | None = None) -> int:
             save_snapshot=args.save_snapshot,
             retention=args.snapshot_retention,
             manifest_retention=manifest_retention,
-            exporter=export_snapshot_artifact,
+            exporter=export_snapshot_bundle,
         )
         print(json.dumps(report, indent=2))
         if args.strict and report.get("overall", {}).get("severity") in {"critical", "error"}:
@@ -223,7 +211,7 @@ def main(argv: list[str] | None = None) -> int:
             save_snapshot=args.save_snapshot,
             retention=args.snapshot_retention,
             manifest_retention=manifest_retention,
-            exporter=export_snapshot_artifact,
+            exporter=export_snapshot_bundle,
         )
         print(json.dumps(report, indent=2))
         return 0
@@ -238,7 +226,7 @@ def main(argv: list[str] | None = None) -> int:
             save_snapshot=args.save_snapshot,
             retention=args.snapshot_retention,
             manifest_retention=manifest_retention,
-            exporter=export_snapshot_artifact,
+            exporter=export_snapshot_bundle,
         )
         print(json.dumps(diagnostics, indent=2))
         return 0

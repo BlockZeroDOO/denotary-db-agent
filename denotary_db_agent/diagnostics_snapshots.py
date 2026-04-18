@@ -21,6 +21,19 @@ def default_diagnostics_snapshot_path(state_db: str, source_id: str | None) -> P
     return default_snapshot_path(state_db, source_id, "diagnostics")
 
 
+def build_snapshot_metadata(
+    *,
+    state_db: str,
+    snapshot_path: str | Path,
+    removed_paths: list[str | Path] | None = None,
+) -> dict:
+    return {
+        "snapshot_path": str(Path(snapshot_path)),
+        "pruned_snapshot_paths": [str(Path(item)) for item in (removed_paths or [])],
+        "manifest_path": str(default_evidence_manifest_path(state_db)),
+    }
+
+
 def write_json_snapshot(payload: dict, output_path: str | Path) -> Path:
     path = Path(output_path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -34,6 +47,16 @@ def artifact_contract_version(payload: dict) -> int | None:
         if isinstance(contract, dict):
             version = contract.get("version")
             return int(version) if isinstance(version, int) else None
+    return None
+
+
+def artifact_kind(payload: dict) -> str | None:
+    for contract_key in ("report_contract", "doctor_contract", "diagnostics_contract"):
+        contract = payload.get(contract_key)
+        if isinstance(contract, dict):
+            artifact = contract.get("artifact")
+            if isinstance(artifact, str) and artifact:
+                return artifact
     return None
 
 
@@ -206,19 +229,20 @@ def export_snapshot_artifact(
     *,
     state_db: str,
     source_id: str | None,
-    prefix: str,
+    prefix: str | None = None,
     output_path: str | Path | None = None,
     retention: int = 20,
     manifest_retention: int = 200,
 ) -> tuple[Path, list[Path]]:
+    resolved_prefix = prefix or artifact_kind(payload) or "diagnostics"
     snapshot_path = write_json_snapshot(
         payload,
-        output_path if output_path is not None else default_snapshot_path(state_db, source_id, prefix),
+        output_path if output_path is not None else default_snapshot_path(state_db, source_id, resolved_prefix),
     )
-    removed = prune_snapshot_files(snapshot_path, retention, source_id, prefix)
+    removed = prune_snapshot_files(snapshot_path, retention, source_id, resolved_prefix)
     update_evidence_manifest(
         state_db=state_db,
-        prefix=prefix,
+        prefix=resolved_prefix,
         source_id=source_id,
         snapshot_path=snapshot_path,
         payload=payload,
@@ -226,3 +250,29 @@ def export_snapshot_artifact(
         retention=manifest_retention,
     )
     return snapshot_path, removed
+
+
+def export_snapshot_bundle(
+    payload: dict,
+    *,
+    state_db: str,
+    source_id: str | None,
+    prefix: str | None = None,
+    output_path: str | Path | None = None,
+    retention: int = 20,
+    manifest_retention: int = 200,
+) -> dict:
+    snapshot_path, removed = export_snapshot_artifact(
+        payload,
+        state_db=state_db,
+        source_id=source_id,
+        prefix=prefix,
+        output_path=output_path,
+        retention=retention,
+        manifest_retention=manifest_retention,
+    )
+    return build_snapshot_metadata(
+        state_db=state_db,
+        snapshot_path=snapshot_path,
+        removed_paths=removed,
+    )

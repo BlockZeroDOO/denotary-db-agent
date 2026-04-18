@@ -7,9 +7,12 @@ from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
-from denotary_db_agent.cli import attach_snapshot_metadata, main, maybe_export_snapshot
+from denotary_db_agent.cli import main, maybe_export_snapshot
 from denotary_db_agent.diagnostics_snapshots import (
+    artifact_kind,
+    build_snapshot_metadata,
     default_diagnostics_snapshot_path,
+    export_snapshot_bundle,
     export_snapshot_artifact,
     prune_diagnostics_snapshots,
     write_json_snapshot,
@@ -29,7 +32,6 @@ class CliTest(unittest.TestCase):
             payload,
             state_db="C:/runtime/state.sqlite3",
             source_id="pg-core-ledger",
-            prefix="report",
             output_path=None,
             save_snapshot=False,
             retention=20,
@@ -41,21 +43,18 @@ class CliTest(unittest.TestCase):
         self.assertEqual(exporter_calls["count"], 0)
         self.assertNotIn("snapshot_path", result)
 
-    def test_attach_snapshot_metadata_populates_standard_fields(self) -> None:
+    def test_build_snapshot_metadata_populates_standard_fields(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            payload = {"agent_name": "denotary-db-agent"}
             snapshot_path = Path(temp_dir) / "runtime" / "diagnostics" / "report-all-20260419T100000Z.json"
             snapshot_path.parent.mkdir(parents=True, exist_ok=True)
             snapshot_path.write_text("{}", encoding="utf-8")
 
-            result = attach_snapshot_metadata(
-                payload,
+            result = build_snapshot_metadata(
                 snapshot_path=snapshot_path,
-                removed=[Path("a.json"), Path("b.json")],
+                removed_paths=[Path("a.json"), Path("b.json")],
                 state_db=str(Path(temp_dir) / "runtime" / "state.sqlite3"),
             )
 
-            self.assertIs(result, payload)
             self.assertEqual(result["snapshot_path"], str(snapshot_path))
             self.assertEqual(result["pruned_snapshot_paths"], ["a.json", "b.json"])
             self.assertEqual(Path(result["manifest_path"]).name, "evidence-manifest.json")
@@ -129,6 +128,34 @@ class CliTest(unittest.TestCase):
             manifest_payload = json.loads(manifest_path.read_text(encoding="utf-8"))
             self.assertEqual(manifest_payload["artifacts"][-1]["kind"], "report")
             self.assertEqual(manifest_payload["artifacts"][-1]["contract_version"], 1)
+
+    def test_export_snapshot_bundle_returns_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            payload = {
+                "agent_name": "denotary-db-agent",
+                "doctor_contract": {"artifact": "doctor", "version": 1, "source_entry_version": 1},
+            }
+            state_db = Path(temp_dir) / "runtime" / "state.sqlite3"
+
+            metadata = export_snapshot_bundle(
+                payload,
+                state_db=str(state_db),
+                source_id="pg-core-ledger",
+                retention=20,
+                manifest_retention=200,
+            )
+
+            self.assertTrue(Path(metadata["snapshot_path"]).exists())
+            self.assertEqual(metadata["pruned_snapshot_paths"], [])
+            self.assertTrue(Path(metadata["manifest_path"]).exists())
+
+    def test_artifact_kind_reads_contract_artifact(self) -> None:
+        payload = {
+            "agent_name": "denotary-db-agent",
+            "diagnostics_contract": {"artifact": "diagnostics", "version": 1, "source_entry_version": 1},
+        }
+
+        self.assertEqual(artifact_kind(payload), "diagnostics")
 
     def test_diagnostics_save_snapshot_writes_file_and_reports_path(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
