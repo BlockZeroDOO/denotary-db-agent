@@ -190,7 +190,14 @@ class PostgresAdapterTest(unittest.TestCase):
         ), patch.object(adapter, "_load_table_specs", return_value=specs), patch.object(
             adapter,
             "_inspect_trigger_cdc_state",
-            return_value={"installed_trigger_count": 1, "pending_event_rows": 0},
+            return_value={
+                "installed_trigger_count": 1,
+                "pending_event_rows": 0,
+                "runtime": {
+                    "transport": "notification_polling",
+                    "cursor": {"pending_event_rows": 0},
+                },
+            },
         ):
             summary = adapter.bootstrap()
 
@@ -199,6 +206,8 @@ class PostgresAdapterTest(unittest.TestCase):
         self.assertEqual(len(summary["tracked_tables"]), 1)
         self.assertEqual(summary["tracked_tables"][0]["table"], "invoices")
         self.assertEqual(summary["cdc"]["installed_trigger_count"], 1)
+        self.assertEqual(summary["cdc"]["runtime"]["transport"], "notification_polling")
+        self.assertEqual(summary["cdc"]["runtime"]["cursor"]["pending_event_rows"], 0)
 
     def test_inspect_reports_runtime_state_for_trigger_mode(self) -> None:
         config = self.make_config()
@@ -224,7 +233,14 @@ class PostgresAdapterTest(unittest.TestCase):
         ), patch.object(
             adapter,
             "_inspect_trigger_cdc_state",
-            return_value={"installed_trigger_count": 1, "pending_event_rows": 3},
+            return_value={
+                "installed_trigger_count": 1,
+                "pending_event_rows": 3,
+                "runtime": {
+                    "transport": "notification_polling",
+                    "cursor": {"pending_event_rows": 3},
+                },
+            },
         ):
             details = adapter.inspect()
 
@@ -232,6 +248,7 @@ class PostgresAdapterTest(unittest.TestCase):
         self.assertTrue(details["supports_cdc"])
         self.assertEqual(details["tracked_tables"][0]["table"], "payments")
         self.assertEqual(details["cdc"]["pending_event_rows"], 3)
+        self.assertEqual(details["cdc"]["runtime"]["transport"], "notification_polling")
 
     def test_parse_test_decoding_update_change(self) -> None:
         config = self.make_config()

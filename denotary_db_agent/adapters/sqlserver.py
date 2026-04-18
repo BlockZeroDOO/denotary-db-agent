@@ -318,6 +318,12 @@ class SqlServerAdapter(BaseAdapter):
                 "database_enabled": database_enabled,
                 "current_version": current_version,
                 "tracked_tables": tracked_tables,
+                "runtime": self.build_polling_runtime_summary(
+                    cursor={"version": current_version},
+                    extra={
+                        "tracked_table_count": len(tracked_tables),
+                    },
+                ),
             }
         )
 

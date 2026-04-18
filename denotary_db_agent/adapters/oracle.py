@@ -331,6 +331,8 @@ class OracleAdapter(BaseAdapter):
             con_name_row = self._fetch_dict_rows(cursor)[0]
             cursor.execute("select name, open_mode, log_mode, supplemental_log_data_min, supplemental_log_data_pk from v$database")
             database_row = self._fetch_dict_rows(cursor)[0]
+            cursor.execute("select current_scn from v$database")
+            current_scn_row = self._fetch_dict_rows(cursor)[0]
             cursor.execute(
                 """
                 select lf.member as member, l.status as status, l.sequence# as sequence_no
@@ -349,6 +351,7 @@ class OracleAdapter(BaseAdapter):
             "open_mode": str(self._row_get(database_row, "open_mode")),
             "supplemental_log_data_min": str(self._row_get(database_row, "supplemental_log_data_min")),
             "supplemental_log_data_pk": str(self._row_get(database_row, "supplemental_log_data_pk")),
+            "current_root_scn": int(self._row_get(current_scn_row, "current_scn")),
             "redo_members": [
                 {
                     "member": str(self._row_get(row, "member")),
@@ -358,6 +361,15 @@ class OracleAdapter(BaseAdapter):
                 for row in redo_rows
             ],
             "logminer_packages": [str(self._row_get(row, "object_name")) for row in package_rows],
+            "runtime": self.build_polling_runtime_summary(
+                cursor={
+                    "baseline_scn": self._logminer_initial_scn,
+                    "current_root_scn": int(self._row_get(current_scn_row, "current_scn")),
+                },
+                extra={
+                    "redo_member_count": len(redo_rows),
+                },
+            ),
         }
 
     def _read_source_container_name(self, connection: Any) -> str:

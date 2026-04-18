@@ -1212,6 +1212,13 @@ class PostgresAdapter(BaseAdapter):
                 "configured_trigger_count": len(trigger_names),
                 "installed_trigger_count": int(trigger_count_row["total"]),
                 "pending_event_rows": int(pending_row["total"]),
+                "runtime": self.build_polling_runtime_summary(
+                    cursor={"pending_event_rows": int(pending_row["total"])},
+                    notification_aware=True,
+                    extra={
+                        "listener_channel": "denotary_cdc_events",
+                    },
+                ),
             }
         )
 

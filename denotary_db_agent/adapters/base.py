@@ -157,6 +157,28 @@ class BaseAdapter(ABC):
             summary.update(extra)
         return summary
 
+    def build_polling_runtime_summary(
+        self,
+        *,
+        cursor: dict[str, object] | None = None,
+        configured_runtime_mode: str | None = None,
+        effective_runtime_mode: str | None = None,
+        notification_aware: bool = False,
+        extra: dict[str, object] | None = None,
+    ) -> dict[str, object]:
+        summary: dict[str, object] = {
+            "transport": "notification_polling" if notification_aware else "polling",
+            "active": False,
+            "configured_runtime_mode": configured_runtime_mode or self.capture_mode(),
+            "effective_runtime_mode": effective_runtime_mode or configured_runtime_mode or self.capture_mode(),
+            "cursor": cursor,
+            "poll_interval_sec": None,
+            "notification_aware": notification_aware,
+        }
+        if extra:
+            summary.update(extra)
+        return summary
+
     def build_bootstrap_result(
         self,
         *,

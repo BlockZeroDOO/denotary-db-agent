@@ -325,6 +325,10 @@ class SqlServerAdapterTest(unittest.TestCase):
             "capture_mode": "change_tracking",
             "database_enabled": True,
             "current_version": 42,
+            "runtime": {
+                "transport": "polling",
+                "cursor": {"version": 42},
+            },
             "tracked_tables": [
                 {
                     "table_key": "dbo.invoices",
@@ -347,6 +351,8 @@ class SqlServerAdapterTest(unittest.TestCase):
 
         self.assertEqual(bootstrap["capture_mode"], "change_tracking")
         self.assertEqual(bootstrap["cdc"]["current_version"], 42)
+        self.assertEqual(bootstrap["cdc"]["runtime"]["transport"], "polling")
+        self.assertEqual(bootstrap["cdc"]["runtime"]["cursor"]["version"], 42)
         self.assertEqual(bootstrap["tracked_tables"][0]["table_name"], spec["table_name"])
         self.assertEqual(inspect["capture_modes"], ["watermark", "change_tracking"])
         self.assertEqual(inspect["cdc_modes"], ["change_tracking"])

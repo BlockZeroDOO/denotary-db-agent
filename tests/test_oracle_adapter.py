@@ -323,6 +323,14 @@ class OracleAdapterTest(unittest.TestCase):
             "open_mode": "READ WRITE",
             "supplemental_log_data_min": "YES",
             "supplemental_log_data_pk": "NO",
+            "current_root_scn": 424242,
+            "runtime": {
+                "transport": "polling",
+                "cursor": {
+                    "baseline_scn": None,
+                    "current_root_scn": 424242,
+                },
+            },
             "redo_members": [{"member": "/redo01.log", "status": "", "sequence_no": 11}],
             "logminer_packages": ["DBMS_LOGMNR", "DBMS_LOGMNR_D"],
         }
@@ -350,6 +358,8 @@ class OracleAdapterTest(unittest.TestCase):
 
         self.assertEqual(bootstrap["capture_mode"], "logminer")
         self.assertEqual(bootstrap["cdc"]["admin_container_name"], "CDB$ROOT")
+        self.assertEqual(bootstrap["cdc"]["runtime"]["transport"], "polling")
+        self.assertEqual(bootstrap["cdc"]["runtime"]["cursor"]["current_root_scn"], bootstrap["cdc"]["current_root_scn"])
         self.assertEqual(inspect["cdc_modes"], ["logminer"])
         self.assertTrue(inspect["supports_cdc"])
 
