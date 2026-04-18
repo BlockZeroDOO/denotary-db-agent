@@ -85,6 +85,7 @@ See:
 - [docs/architecture.md](docs/architecture.md)
 - [docs/operator-guide.md](docs/operator-guide.md)
 - [docs/deployment-guide.md](docs/deployment-guide.md)
+- [docs/denotary-env-file-runbook.md](docs/denotary-env-file-runbook.md)
 - [docs/supported-databases.md](docs/supported-databases.md)
 - [docs/verifbill-permission-model.md](docs/verifbill-permission-model.md)
 - [docs/verifbill-permission-commands.md](docs/verifbill-permission-commands.md)

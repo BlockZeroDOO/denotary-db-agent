@@ -2,6 +2,10 @@
 
 This guide describes the supported production packaging patterns for `denotary-db-agent`.
 
+For a `denotary` mainnet deployment with an env-file-backed hot key, use:
+
+- [denotary-env-file-runbook.md](denotary-env-file-runbook.md)
+
 ## Recommended Modes
 
 - `systemd` on Linux servers
