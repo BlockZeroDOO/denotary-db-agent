@@ -14,6 +14,19 @@ from denotary_db_agent.diagnostics_snapshots import (
 from denotary_db_agent.engine import AgentEngine
 
 
+def attach_snapshot_metadata(
+    payload: dict,
+    *,
+    snapshot_path,
+    removed,
+    state_db: str,
+) -> dict:
+    payload["snapshot_path"] = str(snapshot_path)
+    payload["pruned_snapshot_paths"] = [str(item) for item in removed]
+    payload["manifest_path"] = str(default_evidence_manifest_path(state_db))
+    return payload
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="denotary-db-agent")
     parser.add_argument("--config", required=True, help="Path to agent config JSON")
@@ -166,9 +179,7 @@ def main(argv: list[str] | None = None) -> int:
                 retention=args.snapshot_retention,
                 manifest_retention=manifest_retention,
             )
-            report["snapshot_path"] = str(snapshot_path)
-            report["pruned_snapshot_paths"] = [str(item) for item in removed]
-            report["manifest_path"] = str(default_evidence_manifest_path(config.storage.state_db))
+            attach_snapshot_metadata(report, snapshot_path=snapshot_path, removed=removed, state_db=config.storage.state_db)
         elif args.save_snapshot:
             snapshot_path, removed = export_named_snapshot(
                 report,
@@ -178,9 +189,7 @@ def main(argv: list[str] | None = None) -> int:
                 retention=args.snapshot_retention,
                 manifest_retention=manifest_retention,
             )
-            report["snapshot_path"] = str(snapshot_path)
-            report["pruned_snapshot_paths"] = [str(item) for item in removed]
-            report["manifest_path"] = str(default_evidence_manifest_path(config.storage.state_db))
+            attach_snapshot_metadata(report, snapshot_path=snapshot_path, removed=removed, state_db=config.storage.state_db)
         print(json.dumps(report, indent=2))
         if args.strict and report.get("overall", {}).get("severity") in {"critical", "error"}:
             return 1
@@ -200,9 +209,7 @@ def main(argv: list[str] | None = None) -> int:
                 retention=args.snapshot_retention,
                 manifest_retention=manifest_retention,
             )
-            report["snapshot_path"] = str(snapshot_path)
-            report["pruned_snapshot_paths"] = [str(item) for item in removed]
-            report["manifest_path"] = str(default_evidence_manifest_path(config.storage.state_db))
+            attach_snapshot_metadata(report, snapshot_path=snapshot_path, removed=removed, state_db=config.storage.state_db)
         elif args.save_snapshot:
             snapshot_path, removed = export_named_snapshot(
                 report,
@@ -212,9 +219,7 @@ def main(argv: list[str] | None = None) -> int:
                 retention=args.snapshot_retention,
                 manifest_retention=manifest_retention,
             )
-            report["snapshot_path"] = str(snapshot_path)
-            report["pruned_snapshot_paths"] = [str(item) for item in removed]
-            report["manifest_path"] = str(default_evidence_manifest_path(config.storage.state_db))
+            attach_snapshot_metadata(report, snapshot_path=snapshot_path, removed=removed, state_db=config.storage.state_db)
         print(json.dumps(report, indent=2))
         return 0
     if args.command == "diagnostics":
@@ -228,9 +233,7 @@ def main(argv: list[str] | None = None) -> int:
                 retention=args.snapshot_retention,
                 manifest_retention=manifest_retention,
             )
-            diagnostics["snapshot_path"] = str(snapshot_path)
-            diagnostics["pruned_snapshot_paths"] = [str(item) for item in removed]
-            diagnostics["manifest_path"] = str(default_evidence_manifest_path(config.storage.state_db))
+            attach_snapshot_metadata(diagnostics, snapshot_path=snapshot_path, removed=removed, state_db=config.storage.state_db)
         elif args.save_snapshot:
             snapshot_path, removed = export_diagnostics_snapshot(
                 diagnostics,
@@ -239,9 +242,7 @@ def main(argv: list[str] | None = None) -> int:
                 retention=args.snapshot_retention,
                 manifest_retention=manifest_retention,
             )
-            diagnostics["snapshot_path"] = str(snapshot_path)
-            diagnostics["pruned_snapshot_paths"] = [str(item) for item in removed]
-            diagnostics["manifest_path"] = str(default_evidence_manifest_path(config.storage.state_db))
+            attach_snapshot_metadata(diagnostics, snapshot_path=snapshot_path, removed=removed, state_db=config.storage.state_db)
         print(json.dumps(diagnostics, indent=2))
         return 0
     if args.command == "bootstrap":

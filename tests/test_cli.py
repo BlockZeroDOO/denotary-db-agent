@@ -7,7 +7,7 @@ from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
-from denotary_db_agent.cli import main
+from denotary_db_agent.cli import attach_snapshot_metadata, main
 from denotary_db_agent.diagnostics_snapshots import (
     default_diagnostics_snapshot_path,
     prune_diagnostics_snapshots,
@@ -16,6 +16,25 @@ from denotary_db_agent.diagnostics_snapshots import (
 
 
 class CliTest(unittest.TestCase):
+    def test_attach_snapshot_metadata_populates_standard_fields(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            payload = {"agent_name": "denotary-db-agent"}
+            snapshot_path = Path(temp_dir) / "runtime" / "diagnostics" / "report-all-20260419T100000Z.json"
+            snapshot_path.parent.mkdir(parents=True, exist_ok=True)
+            snapshot_path.write_text("{}", encoding="utf-8")
+
+            result = attach_snapshot_metadata(
+                payload,
+                snapshot_path=snapshot_path,
+                removed=[Path("a.json"), Path("b.json")],
+                state_db=str(Path(temp_dir) / "runtime" / "state.sqlite3"),
+            )
+
+            self.assertIs(result, payload)
+            self.assertEqual(result["snapshot_path"], str(snapshot_path))
+            self.assertEqual(result["pruned_snapshot_paths"], ["a.json", "b.json"])
+            self.assertEqual(Path(result["manifest_path"]).name, "evidence-manifest.json")
+
     def test_default_diagnostics_snapshot_path_uses_state_db_parent(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             state_db = Path(temp_dir) / "runtime" / "state.sqlite3"
