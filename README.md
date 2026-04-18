@@ -99,6 +99,7 @@ python -m denotary_db_agent --config examples/agent.example.json doctor --source
 python -m denotary_db_agent --config examples/agent.example.json doctor --source pg-core-ledger --strict
 python -m denotary_db_agent --config examples/agent.example.json report --source pg-core-ledger --save-snapshot
 python -m denotary_db_agent --config examples/agent.example.json artifacts --source pg-core-ledger
+python -m denotary_db_agent --config examples/agent.example.json artifacts --source pg-core-ledger --latest 5
 python -m denotary_db_agent --config examples/agent.example.json metrics --source pg-core-ledger
 python -m denotary_db_agent --config examples/agent.example.json diagnostics --source pg-core-ledger
 python -m denotary_db_agent --config examples/agent.example.json diagnostics --source pg-core-ledger --save-snapshot
@@ -132,6 +133,7 @@ Note:
 - saved `diagnostics` / `doctor` / `report` snapshots are also registered in:
   - `data/diagnostics/evidence-manifest.json`
 - `artifacts` reads that manifest with optional filters by `source` and `kind`
+- `artifacts --latest N` returns only the newest matching entries after filters are applied
 - `artifacts --prune-missing` removes stale manifest entries whose files were already deleted from disk
 - the manifest itself is now capped by `storage.evidence_manifest_retention`
 - `metrics` gives a compact export-friendly summary of source counters, backlog indicators, stream state, and severity

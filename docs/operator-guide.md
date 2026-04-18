@@ -154,6 +154,7 @@ The manifest itself is capped by:
 ```bash
 denotary-db-agent --config examples/agent.example.json artifacts --source pg-core-ledger
 denotary-db-agent --config examples/agent.example.json artifacts --source pg-core-ledger --kind report
+denotary-db-agent --config examples/agent.example.json artifacts --source pg-core-ledger --latest 5
 denotary-db-agent --config examples/agent.example.json artifacts --source pg-core-ledger --prune-missing
 ```
 
@@ -161,6 +162,7 @@ Returns entries from the local evidence manifest with optional filters by:
 
 - `source`
 - `kind`
+- `latest`
 
 Use this when operators want to find the latest rollout evidence files without opening the manifest JSON manually.
 Use `--prune-missing` when some snapshot files were removed outside the agent and you want to reconcile the manifest in place.

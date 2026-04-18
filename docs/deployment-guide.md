@@ -158,6 +158,7 @@ To inspect them later:
 
 ```bash
 denotary-db-agent --config /etc/denotary-db-agent/agent.json artifacts --source pg-core-ledger
+denotary-db-agent --config /etc/denotary-db-agent/agent.json artifacts --source pg-core-ledger --latest 5
 denotary-db-agent --config /etc/denotary-db-agent/agent.json artifacts --source pg-core-ledger --prune-missing
 ```
 

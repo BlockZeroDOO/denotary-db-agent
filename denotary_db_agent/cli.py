@@ -51,6 +51,11 @@ def build_parser() -> argparse.ArgumentParser:
     artifacts_parser.add_argument("--source", help="Source id")
     artifacts_parser.add_argument("--kind", choices=["diagnostics", "doctor", "report"], help="Artifact kind")
     artifacts_parser.add_argument(
+        "--latest",
+        type=int,
+        help="Return only the newest N artifacts after filters are applied",
+    )
+    artifacts_parser.add_argument(
         "--prune-missing",
         action="store_true",
         help="Remove manifest entries whose snapshot files no longer exist",
@@ -120,6 +125,11 @@ def main(argv: list[str] | None = None) -> int:
             artifacts = [item for item in artifacts if str(item.get("source_id") or "") == args.source]
         if args.kind:
             artifacts = [item for item in artifacts if str(item.get("kind") or "") == args.kind]
+        artifacts = sorted(artifacts, key=lambda item: str(item.get("created_at") or ""), reverse=True)
+        if args.latest is not None:
+            if args.latest < 1:
+                raise SystemExit("--latest must be at least 1")
+            artifacts = artifacts[: args.latest]
         print(
             json.dumps(
                 {
