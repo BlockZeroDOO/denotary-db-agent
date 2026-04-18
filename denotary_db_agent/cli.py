@@ -349,9 +349,13 @@ def build_command_group_aliases() -> dict[str, dict[str, dict]]:
     }
 
 
+def build_compatibility_alias_snapshot() -> dict[str, dict[str, dict]]:
+    return build_command_group_aliases()
+
+
 COMMAND_GROUP_BUILDERS = build_command_group_builders()
 COMMAND_GROUPS = build_command_groups()
-COMMAND_GROUP_ALIASES = build_command_group_aliases()
+COMMAND_GROUP_ALIASES = build_compatibility_alias_snapshot()
 EVIDENCE_COMMANDS = COMMAND_GROUP_ALIASES["EVIDENCE_COMMANDS"]
 JSON_ENGINE_COMMANDS = COMMAND_GROUP_ALIASES["JSON_ENGINE_COMMANDS"]
 SOURCE_ACTION_COMMANDS = COMMAND_GROUP_ALIASES["SOURCE_ACTION_COMMANDS"]
