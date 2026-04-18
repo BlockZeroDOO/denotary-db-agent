@@ -94,6 +94,18 @@ class PostgresAdapter(BaseAdapter):
             supports_cdc=capture_mode in {"trigger", "logical"},
             supports_snapshot=True,
             operations=("snapshot",) if capture_mode == "watermark" else ("insert", "update", "delete"),
+            capture_modes=("watermark", "trigger", "logical"),
+            bootstrap_requirements=(
+                ("tracked tables visible", "watermark columns configured")
+                if capture_mode == "watermark"
+                else ("tracked tables visible", "trigger schema installed", "LISTEN/NOTIFY optional")
+                if capture_mode == "trigger"
+                else (
+                    ("tracked tables visible", "logical slot available", "pgoutput publication available")
+                    if logical_plugin == "pgoutput"
+                    else ("tracked tables visible", "logical slot available", "test_decoding available")
+                )
+            ),
             notes=(
                 "Trigger-based built-in CDC is enabled for PostgreSQL with optional LISTEN/NOTIFY wakeups."
                 if capture_mode == "trigger"
@@ -157,6 +169,8 @@ class PostgresAdapter(BaseAdapter):
             "supports_cdc": capabilities.supports_cdc,
             "supports_snapshot": capabilities.supports_snapshot,
             "tracked_tables": [self._spec_summary(spec) for spec in specs],
+            "capture_modes": list(capabilities.capture_modes),
+            "bootstrap_requirements": list(capabilities.bootstrap_requirements),
             "cdc": cdc_state,
             "notes": capabilities.notes,
         }

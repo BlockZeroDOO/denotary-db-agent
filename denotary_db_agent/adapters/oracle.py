@@ -14,5 +14,7 @@ class OracleAdapter(ScaffoldCdcAdapter):
             supports_cdc=True,
             supports_snapshot=True,
             operations=("insert", "update", "delete"),
+            capture_modes=("snapshot", "logminer"),
+            bootstrap_requirements=("redo or logminer access", "tracked tables visible"),
             notes="Expected CDC source is redo / LogMiner compatible pipeline or approved abstraction.",
         )

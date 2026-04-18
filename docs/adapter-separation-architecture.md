@@ -162,3 +162,12 @@ The harness verifies that every scaffold adapter:
 
 That gives us one reusable baseline for MySQL, MariaDB, SQL Server, Oracle, MongoDB,
 and future adapters without coupling those tests to PostgreSQL behavior.
+
+Capabilities now also declare:
+
+- `capture_modes`
+- `bootstrap_requirements`
+
+This makes adapter behavior more declarative for operator tooling and for future adapter
+work, instead of forcing every new database integration to infer those expectations from
+implementation details alone.

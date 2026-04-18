@@ -18,6 +18,8 @@ class AdapterCapabilities:
     supports_snapshot: bool
     operations: tuple[str, ...]
     notes: str
+    capture_modes: tuple[str, ...] = ()
+    bootstrap_requirements: tuple[str, ...] = ()
 
 
 class BaseAdapter(ABC):
@@ -79,6 +81,8 @@ class BaseAdapter(ABC):
             "supports_cdc": capabilities.supports_cdc,
             "supports_snapshot": capabilities.supports_snapshot,
             "operations": list(capabilities.operations),
+            "capture_modes": list(capabilities.capture_modes),
+            "bootstrap_requirements": list(capabilities.bootstrap_requirements),
             "notes": capabilities.notes,
         }
 

@@ -89,8 +89,8 @@ class AgentEngine:
     def _is_paused(self, source_id: str) -> bool:
         return self.store.is_source_paused(source_id)
 
-    def validate(self) -> list[dict[str, str]]:
-        results: list[dict[str, str]] = []
+    def validate(self) -> list[dict[str, object]]:
+        results: list[dict[str, object]] = []
         if self.chain is not None:
             chain_info = self.chain.health()
             results.append(
@@ -101,6 +101,8 @@ class AgentEngine:
                     "minimum_version": str(chain_info.get("server_version_string") or chain_info.get("server_version") or "unknown"),
                     "supports_cdc": "false",
                     "supports_snapshot": "false",
+                    "capture_modes": [],
+                    "bootstrap_requirements": [],
                 }
             )
         if self.receipt is not None:
@@ -118,6 +120,8 @@ class AgentEngine:
                     "minimum_version": capabilities.minimum_version,
                     "supports_cdc": str(capabilities.supports_cdc).lower(),
                     "supports_snapshot": str(capabilities.supports_snapshot).lower(),
+                    "capture_modes": list(capabilities.capture_modes),
+                    "bootstrap_requirements": list(capabilities.bootstrap_requirements),
                 }
             )
         return results

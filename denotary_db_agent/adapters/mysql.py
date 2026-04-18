@@ -14,5 +14,7 @@ class MySqlAdapter(ScaffoldCdcAdapter):
             supports_cdc=True,
             supports_snapshot=True,
             operations=("insert", "update", "delete"),
+            capture_modes=("snapshot", "binlog"),
+            bootstrap_requirements=("row-based binlog enabled", "tracked tables visible"),
             notes="Expected CDC source is row-based binlog.",
         )

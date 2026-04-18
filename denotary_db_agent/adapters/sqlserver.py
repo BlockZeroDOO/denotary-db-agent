@@ -14,5 +14,7 @@ class SqlServerAdapter(ScaffoldCdcAdapter):
             supports_cdc=True,
             supports_snapshot=True,
             operations=("insert", "update", "delete"),
+            capture_modes=("snapshot", "cdc", "change_tracking"),
+            bootstrap_requirements=("cdc or change tracking enabled", "tracked tables visible"),
             notes="Expected CDC source is SQL Server CDC or Change Tracking depending on edition.",
         )

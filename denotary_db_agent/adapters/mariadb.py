@@ -14,5 +14,7 @@ class MariaDbAdapter(ScaffoldCdcAdapter):
             supports_cdc=True,
             supports_snapshot=True,
             operations=("insert", "update", "delete"),
+            capture_modes=("snapshot", "binlog"),
+            bootstrap_requirements=("binlog access", "tracked tables visible"),
             notes="Expected CDC source is MariaDB binlog with adapter-specific profile.",
         )

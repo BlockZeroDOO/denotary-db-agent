@@ -14,6 +14,8 @@ class MongoDbAdapter(ScaffoldCdcAdapter):
             supports_cdc=True,
             supports_snapshot=True,
             operations=("insert", "update", "delete"),
+            capture_modes=("snapshot", "change_streams"),
+            bootstrap_requirements=("replica set or sharded cluster", "tracked collections visible"),
             notes="Expected CDC source is MongoDB change streams.",
         )
 

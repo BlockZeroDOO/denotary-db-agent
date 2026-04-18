@@ -27,6 +27,8 @@ class AdapterContractTest(unittest.TestCase):
                 },
                 "minimum_version": "8.0",
                 "notes": "row-based binlog",
+                "capture_modes": ("snapshot", "binlog"),
+                "bootstrap_requirements": ("row-based binlog enabled", "tracked tables visible"),
             },
             {
                 "adapter": "mariadb",
@@ -40,6 +42,8 @@ class AdapterContractTest(unittest.TestCase):
                 },
                 "minimum_version": "10.6",
                 "notes": "MariaDB binlog",
+                "capture_modes": ("snapshot", "binlog"),
+                "bootstrap_requirements": ("binlog access", "tracked tables visible"),
             },
             {
                 "adapter": "sqlserver",
@@ -53,6 +57,8 @@ class AdapterContractTest(unittest.TestCase):
                 },
                 "minimum_version": "2019",
                 "notes": "SQL Server CDC",
+                "capture_modes": ("snapshot", "cdc", "change_tracking"),
+                "bootstrap_requirements": ("cdc or change tracking enabled", "tracked tables visible"),
             },
             {
                 "adapter": "oracle",
@@ -66,6 +72,8 @@ class AdapterContractTest(unittest.TestCase):
                 },
                 "minimum_version": "19c",
                 "notes": "LogMiner",
+                "capture_modes": ("snapshot", "logminer"),
+                "bootstrap_requirements": ("redo or logminer access", "tracked tables visible"),
             },
             {
                 "adapter": "mongodb",
@@ -76,6 +84,8 @@ class AdapterContractTest(unittest.TestCase):
                 },
                 "minimum_version": "6.0",
                 "notes": "change streams",
+                "capture_modes": ("snapshot", "change_streams"),
+                "bootstrap_requirements": ("replica set or sharded cluster", "tracked collections visible"),
             },
         ]
 
@@ -127,6 +137,8 @@ class AdapterContractTest(unittest.TestCase):
                 self.assertTrue(capabilities.supports_cdc)
                 self.assertTrue(capabilities.supports_snapshot)
                 self.assertEqual(capabilities.operations, ("insert", "update", "delete"))
+                self.assertEqual(capabilities.capture_modes, case["capture_modes"])
+                self.assertEqual(capabilities.bootstrap_requirements, case["bootstrap_requirements"])
                 self.assertIn(case["notes"], capabilities.notes)
 
     def test_scaffold_adapters_validate_required_connection_fields(self) -> None:
@@ -150,6 +162,8 @@ class AdapterContractTest(unittest.TestCase):
                 self.assertEqual(bootstrap["bootstrap"], "validated")
                 self.assertEqual(inspect["source_type"], case["adapter"])
                 self.assertEqual(inspect["operations"], ["insert", "update", "delete"])
+                self.assertEqual(inspect["capture_modes"], list(case["capture_modes"]))
+                self.assertEqual(inspect["bootstrap_requirements"], list(case["bootstrap_requirements"]))
 
     def test_scaffold_adapters_return_empty_snapshot_and_noop_checkpoint_resume(self) -> None:
         checkpoint = SourceCheckpoint(
