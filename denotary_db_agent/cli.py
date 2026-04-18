@@ -6,8 +6,7 @@ import json
 from denotary_db_agent.config import load_config
 from denotary_db_agent.diagnostics_snapshots import (
     default_evidence_manifest_path,
-    export_diagnostics_snapshot,
-    export_named_snapshot,
+    export_snapshot_artifact,
     prune_missing_evidence_entries,
     read_evidence_manifest,
 )
@@ -204,7 +203,7 @@ def main(argv: list[str] | None = None) -> int:
             save_snapshot=args.save_snapshot,
             retention=args.snapshot_retention,
             manifest_retention=manifest_retention,
-            exporter=export_named_snapshot,
+            exporter=export_snapshot_artifact,
         )
         print(json.dumps(report, indent=2))
         if args.strict and report.get("overall", {}).get("severity") in {"critical", "error"}:
@@ -224,7 +223,7 @@ def main(argv: list[str] | None = None) -> int:
             save_snapshot=args.save_snapshot,
             retention=args.snapshot_retention,
             manifest_retention=manifest_retention,
-            exporter=export_named_snapshot,
+            exporter=export_snapshot_artifact,
         )
         print(json.dumps(report, indent=2))
         return 0
@@ -239,14 +238,7 @@ def main(argv: list[str] | None = None) -> int:
             save_snapshot=args.save_snapshot,
             retention=args.snapshot_retention,
             manifest_retention=manifest_retention,
-            exporter=lambda payload, **kwargs: export_diagnostics_snapshot(
-                payload,
-                state_db=kwargs["state_db"],
-                source_id=kwargs["source_id"],
-                output_path=kwargs.get("output_path"),
-                retention=kwargs["retention"],
-                manifest_retention=kwargs["manifest_retention"],
-            ),
+            exporter=export_snapshot_artifact,
         )
         print(json.dumps(diagnostics, indent=2))
         return 0

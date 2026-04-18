@@ -10,6 +10,7 @@ from unittest.mock import patch
 from denotary_db_agent.cli import attach_snapshot_metadata, main, maybe_export_snapshot
 from denotary_db_agent.diagnostics_snapshots import (
     default_diagnostics_snapshot_path,
+    export_snapshot_artifact,
     prune_diagnostics_snapshots,
     write_json_snapshot,
 )
@@ -104,6 +105,30 @@ class CliTest(unittest.TestCase):
 
             with self.assertRaises(ValueError):
                 prune_diagnostics_snapshots(snapshot_path, 0, "pg-core-ledger")
+
+    def test_export_snapshot_artifact_writes_file_and_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            payload = {
+                "agent_name": "denotary-db-agent",
+                "report_contract": {"artifact": "report", "version": 1, "source_report_version": 1},
+            }
+            state_db = Path(temp_dir) / "runtime" / "state.sqlite3"
+
+            snapshot_path, removed = export_snapshot_artifact(
+                payload,
+                state_db=str(state_db),
+                source_id="pg-core-ledger",
+                prefix="report",
+                retention=20,
+                manifest_retention=200,
+            )
+
+            self.assertTrue(snapshot_path.exists())
+            self.assertEqual(removed, [])
+            manifest_path = Path(temp_dir) / "runtime" / "diagnostics" / "evidence-manifest.json"
+            manifest_payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+            self.assertEqual(manifest_payload["artifacts"][-1]["kind"], "report")
+            self.assertEqual(manifest_payload["artifacts"][-1]["contract_version"], 1)
 
     def test_diagnostics_save_snapshot_writes_file_and_reports_path(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

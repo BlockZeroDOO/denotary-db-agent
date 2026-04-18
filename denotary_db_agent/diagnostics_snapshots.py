@@ -169,7 +169,7 @@ def export_diagnostics_snapshot(
     retention: int = 20,
     manifest_retention: int = 200,
 ) -> tuple[Path, list[Path]]:
-    return export_named_snapshot(
+    return export_snapshot_artifact(
         payload,
         state_db=state_db,
         source_id=source_id,
@@ -181,6 +181,27 @@ def export_diagnostics_snapshot(
 
 
 def export_named_snapshot(
+    payload: dict,
+    *,
+    state_db: str,
+    source_id: str | None,
+    prefix: str,
+    output_path: str | Path | None = None,
+    retention: int = 20,
+    manifest_retention: int = 200,
+) -> tuple[Path, list[Path]]:
+    return export_snapshot_artifact(
+        payload,
+        state_db=state_db,
+        source_id=source_id,
+        prefix=prefix,
+        output_path=output_path,
+        retention=retention,
+        manifest_retention=manifest_retention,
+    )
+
+
+def export_snapshot_artifact(
     payload: dict,
     *,
     state_db: str,
