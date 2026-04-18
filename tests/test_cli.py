@@ -7,7 +7,7 @@ from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
-from denotary_db_agent.cli import COMMAND_BEHAVIORS, COMMAND_SPECS, EVIDENCE_COMMANDS, ENGINE_DISPATCH_COMMANDS, JSON_ENGINE_COMMANDS, OPTION_SPECS, SOURCE_ACTION_COMMANDS, build_parser, main, maybe_export_snapshot
+from denotary_db_agent.cli import COMMAND_BEHAVIORS, COMMAND_SPECS, EVIDENCE_COMMANDS, ENGINE_DISPATCH_COMMANDS, JSON_ENGINE_COMMANDS, OPTION_SPECS, SOURCE_ACTION_COMMANDS, build_parser, evaluate_command_exit_policy, main, maybe_export_snapshot
 from denotary_db_agent.diagnostics_snapshots import (
     artifact_kind,
     build_snapshot_metadata,
@@ -48,6 +48,13 @@ class CliTest(unittest.TestCase):
         self.assertEqual(COMMAND_BEHAVIORS["doctor"]["strict_on_severity"], {"critical", "error"})
         self.assertEqual(COMMAND_BEHAVIORS["report"]["snapshot_prefix"], "report")
         self.assertEqual(COMMAND_BEHAVIORS["metrics"]["output_mode"], "json")
+
+    def test_evaluate_command_exit_policy_uses_behavior_contract(self) -> None:
+        args = type("Args", (), {"strict": True})()
+        payload = {"overall": {"severity": "critical"}}
+
+        self.assertEqual(evaluate_command_exit_policy("doctor", args, payload), 1)
+        self.assertEqual(evaluate_command_exit_policy("report", args, payload), 0)
 
     def test_option_specs_cover_shared_cli_flags(self) -> None:
         self.assertEqual(OPTION_SPECS["source"]["flags"], ("--source",))

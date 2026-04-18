@@ -302,16 +302,24 @@ def run_evidence_command(
         retention=int(getattr(args, "snapshot_retention", 20)),
         manifest_retention=manifest_retention,
     )
-    print(json.dumps(payload, indent=2))
-    strict_on_severity = behavior.get("strict_on_severity")
+    exit_code = evaluate_command_exit_policy(command_name, args, payload)
+    emit_command_output(command_name, payload)
+    return exit_code
+
+
+def emit_command_output(command_name: str, payload: dict, *, flush: bool = False) -> int:
+    behavior = COMMAND_BEHAVIORS[command_name]
+    if behavior.get("output_mode") == "json":
+        print(json.dumps(payload, indent=2), flush=flush)
+        return 0
+    raise ValueError(f"unsupported output mode for {command_name}: {behavior.get('output_mode')}")
+
+
+def evaluate_command_exit_policy(command_name: str, args, payload: dict) -> int:
+    strict_on_severity = COMMAND_BEHAVIORS[command_name].get("strict_on_severity")
     if strict_on_severity and getattr(args, "strict", False):
         if payload.get("overall", {}).get("severity") in strict_on_severity:
             return 1
-    return 0
-
-
-def print_json(payload: dict) -> int:
-    print(json.dumps(payload, indent=2))
     return 0
 
 
@@ -321,13 +329,13 @@ def run_json_engine_command(engine: AgentEngine, args, *, command_name: str, **_
     payload = method(args.source) if command.get("source_arg") else method()
     if "wrap_key" in command:
         payload = {"ok": True, command["wrap_key"]: payload}
-    return print_json(payload)
+    return emit_command_output(command_name, payload)
 
 
 def run_source_action_command(engine: AgentEngine, args, *, command_name: str, **_: object) -> int:
     command = COMMAND_SPECS[command_name]
     getattr(engine, command["engine_method"])(args.source)
-    return print_json({"ok": True, "source": args.source, "action": command["action"]})
+    return emit_command_output(command_name, {"ok": True, "source": args.source, "action": command["action"]})
 
 
 def run_artifacts_command(args, *, state_db: str) -> int:
@@ -345,7 +353,8 @@ def run_artifacts_command(args, *, state_db: str) -> int:
         if args.latest < 1:
             raise SystemExit("--latest must be at least 1")
         artifacts = artifacts[: args.latest]
-    return print_json(
+    return emit_command_output(
+        "artifacts",
         {
             "manifest_path": str(default_evidence_manifest_path(state_db)),
             "pruned_missing_count": len(pruned_missing),
@@ -358,9 +367,9 @@ def run_artifacts_command(args, *, state_db: str) -> int:
 
 def run_run_command(engine: AgentEngine, args, **_: object) -> int:
     if args.once:
-        return print_json(engine.run_once())
-    print(json.dumps({"status": "running", "interval_sec": args.interval_sec}, indent=2), flush=True)
-    return print_json(engine.run_forever(args.interval_sec))
+        return emit_command_output("run", engine.run_once())
+    emit_command_output("run", {"status": "running", "interval_sec": args.interval_sec}, flush=True)
+    return emit_command_output("run", engine.run_forever(args.interval_sec))
 
 
 def run_checkpoint_command(engine: AgentEngine, args, **_: object) -> int:
@@ -368,16 +377,16 @@ def run_checkpoint_command(engine: AgentEngine, args, **_: object) -> int:
         if not args.source:
             raise SystemExit("--source is required with --reset")
         engine.reset_checkpoint(args.source)
-        return print_json({"ok": True, "source": args.source, "action": "checkpoint_reset"})
+        return emit_command_output("checkpoint", {"ok": True, "source": args.source, "action": "checkpoint_reset"})
     checkpoints = engine.checkpoint_summary()
     if args.source:
         checkpoints = [item for item in checkpoints if item["source_id"] == args.source]
-    return print_json({"checkpoints": checkpoints})
+    return emit_command_output("checkpoint", {"checkpoints": checkpoints})
 
 
 def run_proof_command(engine: AgentEngine, args, **_: object) -> int:
     proof = engine.store.get_proof(args.request_id)
-    return print_json({"proof": proof})
+    return emit_command_output("proof", {"proof": proof})
 
 
 def dispatch_engine_command(
