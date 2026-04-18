@@ -291,10 +291,18 @@ COMMAND_GROUP_BUILDERS = {
 }
 
 
+def build_command_group(group_name: str) -> dict[str, dict]:
+    try:
+        builder = COMMAND_GROUP_BUILDERS[group_name]
+    except KeyError as exc:
+        raise KeyError(f"unknown command group: {group_name}") from exc
+    return builder()
+
+
 def build_command_groups() -> dict[str, dict[str, dict]]:
     return {
-        group_name: builder()
-        for group_name, builder in COMMAND_GROUP_BUILDERS.items()
+        group_name: build_command_group(group_name)
+        for group_name in COMMAND_GROUP_BUILDERS
     }
 
 
@@ -314,7 +322,7 @@ def get_command_behavior(command_name: str) -> dict:
 
 
 def get_command_group(group_name: str) -> dict[str, dict]:
-    return COMMAND_GROUPS[group_name]
+    return build_command_group(group_name)
 
 
 def add_option(parser, name: str, **overrides: object) -> None:
