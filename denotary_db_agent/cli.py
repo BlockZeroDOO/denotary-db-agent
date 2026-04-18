@@ -414,6 +414,16 @@ def run_proof_command(engine: AgentEngine, args, **_: object) -> dict:
     return build_command_result("proof", {"proof": proof})
 
 
+COMMAND_KIND_HANDLERS = {
+    "json_engine": run_json_engine_command,
+    "evidence": run_evidence_command,
+    "source_action": run_source_action_command,
+    "run": run_run_command,
+    "checkpoint": run_checkpoint_command,
+    "proof": run_proof_command,
+}
+
+
 def dispatch_engine_command(
     engine: AgentEngine,
     args,
@@ -422,15 +432,7 @@ def dispatch_engine_command(
     manifest_retention: int,
 ) -> dict:
     command = COMMAND_SPECS[args.command]
-    handler_name = {
-        "json_engine": "run_json_engine_command",
-        "evidence": "run_evidence_command",
-        "source_action": "run_source_action_command",
-        "run": "run_run_command",
-        "checkpoint": "run_checkpoint_command",
-        "proof": "run_proof_command",
-    }[command["kind"]]
-    handler = globals()[handler_name]
+    handler = COMMAND_KIND_HANDLERS[command["kind"]]
     return handler(
         engine,
         args,
@@ -438,6 +440,23 @@ def dispatch_engine_command(
         state_db=state_db,
         manifest_retention=manifest_retention,
     )
+
+
+def command_uses_engine(command_name: str) -> bool:
+    return COMMAND_SPECS[command_name]["kind"] != "artifacts"
+
+
+def execute_command(args, config) -> dict:
+    manifest_retention = int(getattr(config.storage, "evidence_manifest_retention", 200))
+    if command_uses_engine(args.command):
+        engine = AgentEngine(config)
+        return dispatch_engine_command(
+            engine,
+            args,
+            state_db=config.storage.state_db,
+            manifest_retention=manifest_retention,
+        )
+    return run_artifacts_command(args, state_db=config.storage.state_db)
 
 
 def add_command_parser(subparsers, command_name: str, command: dict) -> None:
@@ -478,17 +497,4 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     config = load_config(args.config)
-    manifest_retention = int(getattr(config.storage, "evidence_manifest_retention", 200))
-    if COMMAND_SPECS[args.command]["kind"] == "artifacts":
-        return emit_command_result(run_artifacts_command(args, state_db=config.storage.state_db))
-    engine = AgentEngine(config)
-    if COMMAND_SPECS[args.command]["kind"] != "artifacts":
-        return emit_command_result(
-            dispatch_engine_command(
-                engine,
-                args,
-                state_db=config.storage.state_db,
-                manifest_retention=manifest_retention,
-            )
-        )
-    raise SystemExit("unsupported command")
+    return emit_command_result(execute_command(args, config))

@@ -7,7 +7,7 @@ from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
-from denotary_db_agent.cli import COMMAND_BEHAVIORS, COMMAND_SPECS, EVIDENCE_COMMANDS, ENGINE_DISPATCH_COMMANDS, JSON_ENGINE_COMMANDS, OPTION_SPECS, SOURCE_ACTION_COMMANDS, build_command_result, build_parser, emit_command_result, evaluate_command_exit_policy, main, maybe_export_snapshot
+from denotary_db_agent.cli import COMMAND_BEHAVIORS, COMMAND_KIND_HANDLERS, COMMAND_SPECS, EVIDENCE_COMMANDS, ENGINE_DISPATCH_COMMANDS, JSON_ENGINE_COMMANDS, OPTION_SPECS, SOURCE_ACTION_COMMANDS, build_command_result, build_parser, command_uses_engine, emit_command_result, evaluate_command_exit_policy, execute_command, main, maybe_export_snapshot
 from denotary_db_agent.diagnostics_snapshots import (
     artifact_kind,
     build_snapshot_metadata,
@@ -66,6 +66,23 @@ class CliTest(unittest.TestCase):
         self.assertEqual(exit_code, 7)
         self.assertEqual(json.loads(stdout.getvalue()), {"ok": True})
 
+    def test_execute_command_uses_shared_engine_decision(self) -> None:
+        args = type("Args", (), {"command": "artifacts", "prune_missing": False, "source": None, "kind": None, "latest": None})()
+        config = type(
+            "FakeConfig",
+            (),
+            {
+                "storage": type("FakeStorage", (), {"state_db": "C:/runtime/state.sqlite3", "evidence_manifest_retention": 200})(),
+            },
+        )()
+
+        with patch("denotary_db_agent.cli.run_artifacts_command", return_value=build_command_result("artifacts", {"ok": True})) as run_artifacts:
+            result = execute_command(args, config)
+
+        self.assertFalse(command_uses_engine("artifacts"))
+        self.assertEqual(result["command_name"], "artifacts")
+        run_artifacts.assert_called_once()
+
     def test_option_specs_cover_shared_cli_flags(self) -> None:
         self.assertEqual(OPTION_SPECS["source"]["flags"], ("--source",))
         self.assertEqual(OPTION_SPECS["request_id"]["flags"], ("--request-id",))
@@ -81,6 +98,7 @@ class CliTest(unittest.TestCase):
         self.assertEqual(ENGINE_DISPATCH_COMMANDS["run"]["kind"], "run")
         self.assertEqual(ENGINE_DISPATCH_COMMANDS["checkpoint"]["kind"], "checkpoint")
         self.assertEqual(ENGINE_DISPATCH_COMMANDS["proof"]["kind"], "proof")
+        self.assertEqual(COMMAND_KIND_HANDLERS["proof"].__name__, "run_proof_command")
 
     def test_evidence_parser_specs_are_built_from_registry(self) -> None:
         parser = build_parser()
