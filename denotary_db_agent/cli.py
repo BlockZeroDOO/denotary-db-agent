@@ -380,13 +380,21 @@ def get_legacy_export(export_name: str) -> dict[str, dict]:
     return build_command_alias(export["alias"])
 
 
+def build_exported_legacy_globals() -> dict[str, dict[str, dict]]:
+    return {
+        export_name: get_legacy_export(export_name)
+        for export_name in LEGACY_EXPORT_SPECS
+    }
+
+
 COMMAND_GROUP_BUILDERS = build_command_group_builders()
 COMMAND_GROUPS = build_command_groups()
 COMMAND_GROUP_ALIASES = build_legacy_export_snapshot()
-EVIDENCE_COMMANDS = get_legacy_export("EVIDENCE_COMMANDS")
-JSON_ENGINE_COMMANDS = get_legacy_export("JSON_ENGINE_COMMANDS")
-SOURCE_ACTION_COMMANDS = get_legacy_export("SOURCE_ACTION_COMMANDS")
-ENGINE_DISPATCH_COMMANDS = get_legacy_export("ENGINE_DISPATCH_COMMANDS")
+LEGACY_EXPORTS = build_exported_legacy_globals()
+EVIDENCE_COMMANDS = LEGACY_EXPORTS["EVIDENCE_COMMANDS"]
+JSON_ENGINE_COMMANDS = LEGACY_EXPORTS["JSON_ENGINE_COMMANDS"]
+SOURCE_ACTION_COMMANDS = LEGACY_EXPORTS["SOURCE_ACTION_COMMANDS"]
+ENGINE_DISPATCH_COMMANDS = LEGACY_EXPORTS["ENGINE_DISPATCH_COMMANDS"]
 
 
 def get_command_spec(command_name: str) -> dict:
