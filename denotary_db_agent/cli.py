@@ -275,6 +275,13 @@ def build_named_snapshot(specs: dict[str, dict], builder) -> dict[str, dict]:
     }
 
 
+def build_named_access_snapshot(names, getter) -> dict[str, dict]:
+    return {
+        name: getter(name)
+        for name in names
+    }
+
+
 def build_engine_dispatch_commands() -> dict[str, dict]:
     return {
         name: {"kind": command["kind"]}
@@ -350,10 +357,7 @@ def build_command_alias(alias_name: str) -> dict[str, dict]:
 
 
 def build_command_group_aliases() -> dict[str, dict[str, dict]]:
-    return build_named_snapshot(
-        COMMAND_ALIAS_SPECS,
-        lambda alias_name, _spec: build_command_alias(alias_name),
-    )
+    return build_named_access_snapshot(COMMAND_ALIAS_SPECS, build_command_alias)
 
 
 def build_compatibility_alias_snapshot() -> dict[str, dict[str, dict]]:
@@ -370,9 +374,9 @@ LEGACY_EXPORT_NAMES = tuple(LEGACY_EXPORT_SPECS)
 
 
 def build_legacy_export_snapshot() -> dict[str, dict[str, dict]]:
-    return build_named_snapshot(
+    return build_named_access_snapshot(
         LEGACY_EXPORT_SPECS,
-        lambda _export_name, export: build_command_alias(export["alias"]),
+        lambda export_name: build_command_alias(LEGACY_EXPORT_SPECS[export_name]["alias"]),
     )
 
 
@@ -389,10 +393,7 @@ def get_legacy_export(export_name: str) -> dict[str, dict]:
 
 
 def build_exported_legacy_globals() -> dict[str, dict[str, dict]]:
-    return build_named_snapshot(
-        {export_name: LEGACY_EXPORT_SPECS[export_name] for export_name in LEGACY_EXPORT_NAMES},
-        lambda export_name, _spec: get_legacy_export(export_name),
-    )
+    return build_named_access_snapshot(LEGACY_EXPORT_NAMES, get_legacy_export)
 
 
 def build_legacy_export_surface() -> dict[str, dict[str, dict]]:
