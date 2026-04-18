@@ -332,12 +332,14 @@ class SqlServerAdapter(BaseAdapter):
         database_enabled = self._is_change_tracking_enabled(connection)
         for spec in self._load_table_specs(connection):
             tracked_tables.append(self._change_tracking_table_status(connection, spec))
-        return {
-            "capture_mode": "change_tracking",
-            "database_enabled": database_enabled,
-            "current_version": current_version,
-            "tracked_tables": tracked_tables,
-        }
+        return self.build_cdc_summary(
+            {
+                "capture_mode": "change_tracking",
+                "database_enabled": database_enabled,
+                "current_version": current_version,
+                "tracked_tables": tracked_tables,
+            }
+        )
 
     def _row_get(self, row: dict[str, Any], key: str) -> Any:
         if key in row:

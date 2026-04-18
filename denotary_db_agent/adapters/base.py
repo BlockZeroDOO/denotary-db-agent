@@ -101,6 +101,21 @@ class BaseAdapter(ABC):
     def activity_model(self) -> str:
         return self.discover_capabilities().activity_model
 
+    def build_cdc_summary(self, extra: dict[str, object] | None = None) -> dict[str, object]:
+        capabilities = self.discover_capabilities()
+        summary: dict[str, object] = {
+            "configured_capture_mode": self.capture_mode(),
+            "supports_cdc": capabilities.supports_cdc,
+            "is_cdc_mode": self.is_cdc_mode(),
+            "checkpoint_strategy": capabilities.checkpoint_strategy,
+            "activity_model": capabilities.activity_model,
+            "default_capture_mode": capabilities.default_capture_mode,
+            "cdc_modes": list(capabilities.cdc_modes),
+        }
+        if extra:
+            summary.update(extra)
+        return summary
+
     def bootstrap(self) -> dict:
         self.validate_connection()
         return {

@@ -1220,16 +1220,18 @@ class PostgresAdapter(BaseAdapter):
                 (trigger_names,),
             ).fetchone()
             pending_row = cursor.execute("select count(*) as total from denotary_cdc.events").fetchone()
-        return {
-            "schema": "denotary_cdc",
-            "events_table": "denotary_cdc.events",
-            "listener_channel": "denotary_cdc_events",
-            "schema_exists": bool(schema_exists_row["exists"]),
-            "events_table_exists": bool(events_table_row["exists"]),
-            "configured_trigger_count": len(trigger_names),
-            "installed_trigger_count": int(trigger_count_row["total"]),
-            "pending_event_rows": int(pending_row["total"]),
-        }
+        return self.build_cdc_summary(
+            {
+                "schema": "denotary_cdc",
+                "events_table": "denotary_cdc.events",
+                "listener_channel": "denotary_cdc_events",
+                "schema_exists": bool(schema_exists_row["exists"]),
+                "events_table_exists": bool(events_table_row["exists"]),
+                "configured_trigger_count": len(trigger_names),
+                "installed_trigger_count": int(trigger_count_row["total"]),
+                "pending_event_rows": int(pending_row["total"]),
+            }
+        )
 
     def _inspect_logical_cdc_state(self, connection: Any, specs: list[PostgresTableSpec]) -> dict[str, Any]:
         publication_name = self._logical_publication_name()
@@ -1314,7 +1316,8 @@ class PostgresAdapter(BaseAdapter):
             replica_identity_by_table.get(spec.key, "") == replica_identity_expected
             for spec in specs
         )
-        return {
+        return self.build_cdc_summary(
+            {
             "mode": "logical",
             "slot_name": self._logical_slot_name(),
             "plugin": plugin,
@@ -1383,7 +1386,8 @@ class PostgresAdapter(BaseAdapter):
             "stream_probation_remaining_sec": round(self._stream_probation_remaining_sec(), 3),
             "stream_probation_until": self._stream_probation_until,
             "stream_probation_reason": self._stream_probation_reason,
-        }
+            }
+        )
 
     def _sort_key(self, spec: PostgresTableSpec, row: dict[str, Any]) -> tuple[Any, ...]:
         commit_timestamp = self._normalize_timestamp(row[spec.commit_timestamp_column])

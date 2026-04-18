@@ -332,14 +332,16 @@ class MySqlAdapter(BaseAdapter):
         binlog_status = self._read_server_variable(connection, "log_bin")
         binlog_format = self._read_server_variable(connection, "binlog_format")
         binlog_row_image = self._read_server_variable(connection, "binlog_row_image")
-        return {
+        return self.build_cdc_summary(
+            {
             "capture_mode": "binlog",
             "log_bin": str(binlog_status).upper() in {"ON", "1"},
             "binlog_format": str(binlog_format or "").upper(),
             "binlog_row_image": str(binlog_row_image or "").upper(),
             "stream_active": self._binlog_stream is not None,
             "server_id": int(self.config.options.get("binlog_server_id", 1001)),
-        }
+            }
+        )
 
     def _row_get(self, row: dict[str, Any], key: str) -> Any:
         if key in row:

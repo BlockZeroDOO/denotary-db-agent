@@ -124,12 +124,13 @@ class AdapterRegistryContractTest(unittest.TestCase):
                 with self.subTest(adapter=adapter_name, capture_mode=capture_mode):
                     adapter = build_adapter(self._source_config_with_mode(adapter_name, connection, capture_mode))
                     capabilities = adapter.discover_capabilities()
-                    inspect = adapter.inspect()
                     self.assertEqual(capabilities.checkpoint_strategy, expected_values[0])
                     self.assertEqual(capabilities.activity_model, expected_values[1])
-                    self.assertEqual(inspect["checkpoint_strategy"], expected_values[0])
-                    self.assertEqual(inspect["activity_model"], expected_values[1])
-                    self.assertTrue(inspect["is_cdc_mode"])
+                    summary = adapter.build_cdc_summary()
+                    self.assertEqual(summary["checkpoint_strategy"], expected_values[0])
+                    self.assertEqual(summary["activity_model"], expected_values[1])
+                    self.assertTrue(summary["is_cdc_mode"])
+                    self.assertEqual(summary["configured_capture_mode"], capture_mode)
 
 
 if __name__ == "__main__":

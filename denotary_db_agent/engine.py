@@ -358,6 +358,13 @@ class AgentEngine:
             if "inspect_error" in inspect_source:
                 entry["inspect_error"] = inspect_source["inspect_error"]
             if isinstance(cdc, dict):
+                entry["cdc_contract"] = {
+                    "configured_capture_mode": cdc.get("configured_capture_mode"),
+                    "is_cdc_mode": cdc.get("is_cdc_mode"),
+                    "checkpoint_strategy": cdc.get("checkpoint_strategy"),
+                    "activity_model": cdc.get("activity_model"),
+                    "cdc_modes": cdc.get("cdc_modes", []),
+                }
                 entry["stream"] = {
                     "configured_runtime_mode": cdc.get("runtime_mode"),
                     "effective_runtime_mode": cdc.get("effective_runtime_mode", cdc.get("runtime_mode")),
@@ -827,6 +834,7 @@ class AgentEngine:
                     errors.append(f"inspect failed: {exc}")
             capture_mode = inspect_payload.get("capture_mode") if inspect_payload else runtime.config.options.get("capture_mode", "watermark")
             tracked_tables = inspect_payload.get("tracked_tables") if inspect_payload else []
+            tracked_collections = inspect_payload.get("tracked_collections") if inspect_payload else []
             cdc = inspect_payload.get("cdc") if inspect_payload else None
             if isinstance(cdc, dict):
                 warnings.extend(self._build_source_health_warnings(runtime, cdc))
@@ -844,6 +852,16 @@ class AgentEngine:
                     "connectivity_ok": connectivity_ok,
                     "inspect_ok": connectivity_ok and not errors,
                     "tracked_table_count": len(tracked_tables) if isinstance(tracked_tables, list) else 0,
+                    "tracked_collection_count": len(tracked_collections) if isinstance(tracked_collections, list) else 0,
+                    "cdc_contract": {
+                        "configured_capture_mode": cdc.get("configured_capture_mode"),
+                        "is_cdc_mode": cdc.get("is_cdc_mode"),
+                        "checkpoint_strategy": cdc.get("checkpoint_strategy"),
+                        "activity_model": cdc.get("activity_model"),
+                        "cdc_modes": cdc.get("cdc_modes", []),
+                    }
+                    if isinstance(cdc, dict)
+                    else None,
                     "severity": severity,
                     "warnings": warnings,
                     "errors": errors,

@@ -343,7 +343,7 @@ class OracleAdapter(BaseAdapter):
 
     def _cdc_summary(self) -> dict[str, Any]:
         with self._connect_logminer_admin() as admin_connection:
-            return self._read_logminer_summary(admin_connection)
+            return self.build_cdc_summary(self._read_logminer_summary(admin_connection))
 
     def _read_logminer_summary(self, admin_connection: Any) -> dict[str, Any]:
         with admin_connection.cursor() as cursor:

@@ -294,12 +294,14 @@ class MongoDbAdapter(BaseAdapter):
         if self._capture_mode() != "change_streams":
             return None
         hello = client.admin.command("hello")
-        return {
-            "capture_mode": "change_streams",
-            "replica_set_name": hello.get("setName"),
-            "deployment_type": hello.get("msg") or ("replica_set" if hello.get("setName") else "standalone"),
-            "streams_active": len(self._active_streams),
-        }
+        return self.build_cdc_summary(
+            {
+                "capture_mode": "change_streams",
+                "replica_set_name": hello.get("setName"),
+                "deployment_type": hello.get("msg") or ("replica_set" if hello.get("setName") else "standalone"),
+                "streams_active": len(self._active_streams),
+            }
+        )
 
     def _load_collection_specs(self, client: Any) -> list[MongoCollectionSpec]:
         include = self.config.include or {self.config.database_name: []}

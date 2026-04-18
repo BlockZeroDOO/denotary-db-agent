@@ -794,6 +794,42 @@ class EngineTest(unittest.TestCase):
         self.assertEqual(source["stream_reconnect_count"], 2)
         self.assertTrue(source["stream_backoff_active"])
 
+    def test_diagnostics_and_doctor_surface_shared_cdc_contract(self) -> None:
+        engine = AgentEngine(load_config(self.config_path))
+        source_config = engine.config.sources[0]
+
+        fake_adapter = SimpleNamespace(
+            validate_connection=lambda: None,
+            inspect=lambda: {
+                "source_id": source_config.id,
+                "adapter": source_config.adapter,
+                "capture_mode": "binlog",
+                "tracked_tables": [{"table_name": "invoices"}],
+                "cdc": {
+                    "configured_capture_mode": "binlog",
+                    "is_cdc_mode": True,
+                    "checkpoint_strategy": "binlog_cursor",
+                    "activity_model": "stream",
+                    "cdc_modes": ["binlog"],
+                    "stream_session_active": True,
+                },
+            },
+        )
+
+        with patch.object(
+            engine,
+            "runtimes",
+            return_value=[SourceRuntime(config=source_config, adapter=fake_adapter)],
+        ):
+            diagnostics = engine.diagnostics(source_config.id)
+            doctor = engine.doctor(source_config.id)
+
+        self.assertEqual(diagnostics["sources"][0]["cdc_contract"]["checkpoint_strategy"], "binlog_cursor")
+        self.assertEqual(diagnostics["sources"][0]["cdc_contract"]["activity_model"], "stream")
+        self.assertTrue(diagnostics["sources"][0]["cdc_contract"]["is_cdc_mode"])
+        self.assertEqual(doctor["sources"][0]["cdc_contract"]["checkpoint_strategy"], "binlog_cursor")
+        self.assertEqual(doctor["sources"][0]["cdc_contract"]["activity_model"], "stream")
+
     def test_report_combines_doctor_metrics_diagnostics_and_status(self) -> None:
         engine = AgentEngine(load_config(self.config_path))
 

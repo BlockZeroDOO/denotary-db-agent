@@ -188,6 +188,10 @@ That gives `inspect` and future operator automation a database-neutral way to an
 - what kind of cursor/checkpoint this source persists
 - whether the source waits on notifications/streams or is purely poll-based
 
+For CDC-capable adapters, the `cdc` payload itself should also carry this shared contract so
+`inspect`, `health`, `doctor`, and `diagnostics` can reason about sources without parsing
+database-specific fields first.
+
 `BaseAdapter` now also owns the generic source-runtime choice between snapshot and CDC:
 
 - `capture_mode()`
