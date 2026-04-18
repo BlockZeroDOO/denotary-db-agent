@@ -7,7 +7,7 @@ from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
-from denotary_db_agent.cli import EVIDENCE_COMMANDS, build_parser, main, maybe_export_snapshot
+from denotary_db_agent.cli import EVIDENCE_COMMANDS, JSON_ENGINE_COMMANDS, SOURCE_ACTION_COMMANDS, build_parser, main, maybe_export_snapshot
 from denotary_db_agent.diagnostics_snapshots import (
     artifact_kind,
     build_snapshot_metadata,
@@ -41,6 +41,12 @@ class CliTest(unittest.TestCase):
         self.assertEqual(EVIDENCE_COMMANDS["report"]["engine_method"], "report")
         self.assertEqual(EVIDENCE_COMMANDS["diagnostics"]["engine_method"], "diagnostics")
 
+    def test_non_evidence_command_registries_declare_engine_methods(self) -> None:
+        self.assertEqual(JSON_ENGINE_COMMANDS["validate"]["engine_method"], "validate")
+        self.assertEqual(JSON_ENGINE_COMMANDS["refresh"]["engine_method"], "refresh_source")
+        self.assertEqual(SOURCE_ACTION_COMMANDS["pause"]["engine_method"], "pause_source")
+        self.assertEqual(SOURCE_ACTION_COMMANDS["replay"]["engine_method"], "reset_checkpoint")
+
     def test_evidence_parser_specs_are_built_from_registry(self) -> None:
         parser = build_parser()
 
@@ -54,6 +60,9 @@ class CliTest(unittest.TestCase):
 
         diagnostics_args = parser.parse_args(["--config", "cfg.json", "diagnostics", "--snapshot-retention", "7"])
         self.assertEqual(diagnostics_args.snapshot_retention, 7)
+
+        pause_args = parser.parse_args(["--config", "cfg.json", "pause", "--source", "pg-core-ledger"])
+        self.assertEqual(pause_args.source, "pg-core-ledger")
 
     def test_build_snapshot_metadata_populates_standard_fields(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

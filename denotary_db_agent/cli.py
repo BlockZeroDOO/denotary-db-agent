@@ -30,6 +30,22 @@ EVIDENCE_COMMANDS = {
     },
 }
 
+JSON_ENGINE_COMMANDS = {
+    "validate": {"engine_method": "validate", "wrap_key": "sources"},
+    "status": {"engine_method": "status"},
+    "health": {"engine_method": "health"},
+    "metrics": {"engine_method": "metrics", "source_arg": True},
+    "bootstrap": {"engine_method": "bootstrap", "source_arg": True},
+    "inspect": {"engine_method": "inspect", "source_arg": True},
+    "refresh": {"engine_method": "refresh_source", "source_arg": True},
+}
+
+SOURCE_ACTION_COMMANDS = {
+    "pause": {"engine_method": "pause_source", "action": "paused"},
+    "resume": {"engine_method": "resume_source", "action": "resumed"},
+    "replay": {"engine_method": "reset_checkpoint", "action": "checkpoint_reset"},
+}
+
 
 def add_evidence_parser(subparsers, command_name: str, command: dict) -> None:
     parser = subparsers.add_parser(command_name, help=command["help"])
@@ -108,6 +124,52 @@ def run_evidence_command(
     return 0
 
 
+def print_json(payload: dict) -> int:
+    print(json.dumps(payload, indent=2))
+    return 0
+
+
+def run_json_engine_command(engine: AgentEngine, args, *, command_name: str) -> int:
+    command = JSON_ENGINE_COMMANDS[command_name]
+    method = getattr(engine, command["engine_method"])
+    payload = method(args.source) if command.get("source_arg") else method()
+    if "wrap_key" in command:
+        payload = {"ok": True, command["wrap_key"]: payload}
+    return print_json(payload)
+
+
+def run_source_action_command(engine: AgentEngine, args, *, command_name: str) -> int:
+    command = SOURCE_ACTION_COMMANDS[command_name]
+    getattr(engine, command["engine_method"])(args.source)
+    return print_json({"ok": True, "source": args.source, "action": command["action"]})
+
+
+def run_artifacts_command(args, *, state_db: str) -> int:
+    pruned_missing: list[dict] = []
+    if args.prune_missing:
+        _, pruned_missing = prune_missing_evidence_entries(state_db)
+    manifest = read_evidence_manifest(state_db)
+    artifacts = manifest.get("artifacts", [])
+    if args.source:
+        artifacts = [item for item in artifacts if str(item.get("source_id") or "") == args.source]
+    if args.kind:
+        artifacts = [item for item in artifacts if str(item.get("kind") or "") == args.kind]
+    artifacts = sorted(artifacts, key=lambda item: str(item.get("created_at") or ""), reverse=True)
+    if args.latest is not None:
+        if args.latest < 1:
+            raise SystemExit("--latest must be at least 1")
+        artifacts = artifacts[: args.latest]
+    return print_json(
+        {
+            "manifest_path": str(default_evidence_manifest_path(state_db)),
+            "pruned_missing_count": len(pruned_missing),
+            "pruned_missing_paths": [str(item.get("path") or "") for item in pruned_missing],
+            "artifact_count": len(artifacts),
+            "artifacts": artifacts,
+        }
+    )
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="denotary-db-agent")
     parser.add_argument("--config", required=True, help="Path to agent config JSON")
@@ -165,44 +227,11 @@ def main(argv: list[str] | None = None) -> int:
     config = load_config(args.config)
     manifest_retention = int(getattr(config.storage, "evidence_manifest_retention", 200))
     if args.command == "artifacts":
-        pruned_missing: list[dict] = []
-        if args.prune_missing:
-            _, pruned_missing = prune_missing_evidence_entries(config.storage.state_db)
-        manifest = read_evidence_manifest(config.storage.state_db)
-        artifacts = manifest.get("artifacts", [])
-        if args.source:
-            artifacts = [item for item in artifacts if str(item.get("source_id") or "") == args.source]
-        if args.kind:
-            artifacts = [item for item in artifacts if str(item.get("kind") or "") == args.kind]
-        artifacts = sorted(artifacts, key=lambda item: str(item.get("created_at") or ""), reverse=True)
-        if args.latest is not None:
-            if args.latest < 1:
-                raise SystemExit("--latest must be at least 1")
-            artifacts = artifacts[: args.latest]
-        print(
-            json.dumps(
-                {
-                    "manifest_path": str(default_evidence_manifest_path(config.storage.state_db)),
-                    "pruned_missing_count": len(pruned_missing),
-                    "pruned_missing_paths": [str(item.get("path") or "") for item in pruned_missing],
-                    "artifact_count": len(artifacts),
-                    "artifacts": artifacts,
-                },
-                indent=2,
-            )
-        )
-        return 0
+        return run_artifacts_command(args, state_db=config.storage.state_db)
     engine = AgentEngine(config)
 
-    if args.command == "validate":
-        print(json.dumps({"ok": True, "sources": engine.validate()}, indent=2))
-        return 0
-    if args.command == "status":
-        print(json.dumps(engine.status(), indent=2))
-        return 0
-    if args.command == "health":
-        print(json.dumps(engine.health(), indent=2))
-        return 0
+    if args.command in JSON_ENGINE_COMMANDS:
+        return run_json_engine_command(engine, args, command_name=args.command)
     if args.command == "doctor":
         return run_evidence_command(
             engine,
@@ -211,9 +240,6 @@ def main(argv: list[str] | None = None) -> int:
             state_db=config.storage.state_db,
             manifest_retention=manifest_retention,
         )
-    if args.command == "metrics":
-        print(json.dumps(engine.metrics(args.source), indent=2))
-        return 0
     if args.command == "report":
         return run_evidence_command(
             engine,
@@ -230,48 +256,24 @@ def main(argv: list[str] | None = None) -> int:
             state_db=config.storage.state_db,
             manifest_retention=manifest_retention,
         )
-    if args.command == "bootstrap":
-        print(json.dumps(engine.bootstrap(args.source), indent=2))
-        return 0
-    if args.command == "inspect":
-        print(json.dumps(engine.inspect(args.source), indent=2))
-        return 0
-    if args.command == "refresh":
-        print(json.dumps(engine.refresh_source(args.source), indent=2))
-        return 0
-    if args.command == "pause":
-        engine.pause_source(args.source)
-        print(json.dumps({"ok": True, "source": args.source, "action": "paused"}, indent=2))
-        return 0
-    if args.command == "resume":
-        engine.resume_source(args.source)
-        print(json.dumps({"ok": True, "source": args.source, "action": "resumed"}, indent=2))
-        return 0
+    if args.command in SOURCE_ACTION_COMMANDS:
+        return run_source_action_command(engine, args, command_name=args.command)
     if args.command == "run":
         if args.once:
-            print(json.dumps(engine.run_once(), indent=2))
-            return 0
+            return print_json(engine.run_once())
         print(json.dumps({"status": "running", "interval_sec": args.interval_sec}, indent=2), flush=True)
-        print(json.dumps(engine.run_forever(args.interval_sec), indent=2))
-        return 0
-    if args.command == "replay":
-        engine.reset_checkpoint(args.source)
-        print(json.dumps({"ok": True, "source": args.source, "action": "checkpoint_reset"}, indent=2))
-        return 0
+        return print_json(engine.run_forever(args.interval_sec))
     if args.command == "checkpoint":
         if args.reset:
             if not args.source:
                 raise SystemExit("--source is required with --reset")
             engine.reset_checkpoint(args.source)
-            print(json.dumps({"ok": True, "source": args.source, "action": "checkpoint_reset"}, indent=2))
-            return 0
+            return print_json({"ok": True, "source": args.source, "action": "checkpoint_reset"})
         checkpoints = engine.checkpoint_summary()
         if args.source:
             checkpoints = [item for item in checkpoints if item["source_id"] == args.source]
-        print(json.dumps({"checkpoints": checkpoints}, indent=2))
-        return 0
+        return print_json({"checkpoints": checkpoints})
     if args.command == "proof":
         proof = engine.store.get_proof(args.request_id)
-        print(json.dumps({"proof": proof}, indent=2))
-        return 0
+        return print_json({"proof": proof})
     raise SystemExit("unsupported command")
