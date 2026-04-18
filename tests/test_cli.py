@@ -7,7 +7,7 @@ from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
-from denotary_db_agent.cli import COMMAND_GROUPS, COMMAND_GROUP_BUILDERS, COMMAND_KIND_BEHAVIOR_DEFAULTS, COMMAND_KIND_COMMAND_DEFAULTS, COMMAND_KIND_HANDLERS, COMMAND_KIND_OPTION_LAYOUTS, COMMAND_KIND_PARSER_BUILDERS, COMMAND_KIND_SPECS, COMMAND_SPECS, EVIDENCE_COMMANDS, ENGINE_DISPATCH_COMMANDS, JSON_ENGINE_COMMANDS, OPTION_SPECS, RESOLVED_COMMAND_SPECS, SOURCE_ACTION_COMMANDS, build_command_group, build_command_groups, build_command_result, build_engine_dispatch_commands, build_kind_component_map, build_kind_registry, build_parser, command_uses_engine, emit_command_result, evaluate_command_exit_policy, execute_command, get_command_behavior, get_command_group, get_command_kind_spec, get_command_spec, main, maybe_export_snapshot, select_commands
+from denotary_db_agent.cli import COMMAND_GROUPS, COMMAND_GROUP_BUILDERS, COMMAND_GROUP_SPECS, COMMAND_KIND_BEHAVIOR_DEFAULTS, COMMAND_KIND_COMMAND_DEFAULTS, COMMAND_KIND_HANDLERS, COMMAND_KIND_OPTION_LAYOUTS, COMMAND_KIND_PARSER_BUILDERS, COMMAND_KIND_SPECS, COMMAND_SPECS, EVIDENCE_COMMANDS, ENGINE_DISPATCH_COMMANDS, JSON_ENGINE_COMMANDS, OPTION_SPECS, RESOLVED_COMMAND_SPECS, SOURCE_ACTION_COMMANDS, build_command_group, build_command_group_builders, build_command_groups, build_command_result, build_engine_dispatch_commands, build_kind_component_map, build_kind_registry, build_parser, command_uses_engine, emit_command_result, evaluate_command_exit_policy, execute_command, get_command_behavior, get_command_group, get_command_kind_spec, get_command_spec, main, maybe_export_snapshot, select_commands
 from denotary_db_agent.diagnostics_snapshots import (
     artifact_kind,
     build_snapshot_metadata,
@@ -42,7 +42,9 @@ class CliTest(unittest.TestCase):
         self.assertEqual(EVIDENCE_COMMANDS["diagnostics"]["engine_method"], "diagnostics")
         self.assertEqual(set(select_commands(kind="evidence")), set(EVIDENCE_COMMANDS))
         self.assertEqual(build_kind_registry(kind="evidence"), EVIDENCE_COMMANDS)
+        self.assertIn("evidence", COMMAND_GROUP_SPECS)
         self.assertIn("evidence", COMMAND_GROUP_BUILDERS)
+        self.assertEqual(set(build_command_group_builders()), set(COMMAND_GROUP_SPECS))
         self.assertEqual(build_command_group("evidence"), EVIDENCE_COMMANDS)
         self.assertEqual(build_command_groups()["evidence"], EVIDENCE_COMMANDS)
         self.assertEqual(COMMAND_GROUPS["evidence"], EVIDENCE_COMMANDS)

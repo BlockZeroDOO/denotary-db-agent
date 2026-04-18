@@ -283,29 +283,50 @@ def build_kind_registry(*, kind: str, mapper=None) -> dict[str, dict]:
 
 
 RESOLVED_COMMAND_SPECS = map_commands(COMMAND_SPECS, build_resolved_command_spec)
-COMMAND_GROUP_BUILDERS = {
-    "evidence": lambda: build_kind_registry(kind="evidence"),
-    "json_engine": lambda: build_kind_registry(kind="json_engine"),
-    "source_action": lambda: build_kind_registry(kind="source_action"),
-    "engine_dispatch": build_engine_dispatch_commands,
+COMMAND_GROUP_SPECS = {
+    "evidence": {
+        "selector": {"kind": "evidence"},
+    },
+    "json_engine": {
+        "selector": {"kind": "json_engine"},
+    },
+    "source_action": {
+        "selector": {"kind": "source_action"},
+    },
+    "engine_dispatch": {
+        "selector": {"exclude_kind": "artifacts"},
+        "mapper": lambda name, command: {"kind": command["kind"]},
+    },
 }
 
 
 def build_command_group(group_name: str) -> dict[str, dict]:
     try:
-        builder = COMMAND_GROUP_BUILDERS[group_name]
+        group = COMMAND_GROUP_SPECS[group_name]
     except KeyError as exc:
         raise KeyError(f"unknown command group: {group_name}") from exc
-    return builder()
+    selected = select_commands(**group["selector"])
+    mapper = group.get("mapper")
+    if mapper is None:
+        return selected
+    return map_commands(selected, mapper)
+
+
+def build_command_group_builders() -> dict[str, object]:
+    return {
+        group_name: (lambda current_group_name=group_name: build_command_group(current_group_name))
+        for group_name in COMMAND_GROUP_SPECS
+    }
 
 
 def build_command_groups() -> dict[str, dict[str, dict]]:
     return {
         group_name: build_command_group(group_name)
-        for group_name in COMMAND_GROUP_BUILDERS
+        for group_name in COMMAND_GROUP_SPECS
     }
 
 
+COMMAND_GROUP_BUILDERS = build_command_group_builders()
 COMMAND_GROUPS = build_command_groups()
 EVIDENCE_COMMANDS = COMMAND_GROUPS["evidence"]
 JSON_ENGINE_COMMANDS = COMMAND_GROUPS["json_engine"]
