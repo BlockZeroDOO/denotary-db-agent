@@ -536,6 +536,60 @@ class CliTest(unittest.TestCase):
             remaining = sorted(diagnostics_dir.glob("doctor-pg-core-ledger-*.json"))
             self.assertEqual(len(remaining), 2)
 
+    def test_manifest_retention_keeps_only_newest_entries(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "config.json"
+            config_path.write_text("{}", encoding="utf-8")
+            fake_config = type(
+                "FakeConfig",
+                (),
+                {
+                    "storage": type(
+                        "FakeStorage",
+                        (),
+                        {
+                            "state_db": str(Path(temp_dir) / "runtime" / "state.sqlite3"),
+                            "evidence_manifest_retention": 2,
+                        },
+                    )(),
+                },
+            )()
+            fake_engine = type(
+                "FakeEngine",
+                (),
+                {
+                    "doctor": lambda self, source: {
+                        "agent_name": "denotary-db-agent",
+                        "overall": {"severity": "healthy", "ok": True},
+                        "sources": [{"source_id": source}],
+                    },
+                },
+            )()
+
+            for index in range(3):
+                stdout = StringIO()
+                with patch("denotary_db_agent.cli.load_config", return_value=fake_config), patch(
+                    "denotary_db_agent.cli.AgentEngine",
+                    return_value=fake_engine,
+                ), patch("sys.stdout", stdout):
+                    exit_code = main(
+                        [
+                            "--config",
+                            str(config_path),
+                            "doctor",
+                            "--source",
+                            "pg-core-ledger",
+                            "--save-snapshot",
+                            "--snapshot-retention",
+                            "10",
+                        ]
+                    )
+                self.assertEqual(exit_code, 0)
+
+            manifest_path = Path(temp_dir) / "runtime" / "diagnostics" / "evidence-manifest.json"
+            manifest_payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+            self.assertEqual(len(manifest_payload["artifacts"]), 2)
+
     def test_doctor_strict_returns_nonzero_for_critical_report(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             config_path = Path(temp_dir) / "config.json"

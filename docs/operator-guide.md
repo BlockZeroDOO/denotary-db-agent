@@ -145,6 +145,10 @@ All saved `diagnostics`, `doctor`, and `report` snapshots are also indexed in th
 
 - `data/diagnostics/evidence-manifest.json`
 
+The manifest itself is capped by:
+
+- `storage.evidence_manifest_retention`
+
 ### Artifacts
 
 ```bash

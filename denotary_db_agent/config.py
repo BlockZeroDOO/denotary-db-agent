@@ -52,6 +52,7 @@ class StorageConfig:
     dlq_retention: int = 0
     diagnostics_snapshot_interval_sec: float = 0.0
     diagnostics_snapshot_retention: int = 20
+    evidence_manifest_retention: int = 200
 
 
 @dataclass
@@ -138,6 +139,7 @@ def load_config(path: str | Path) -> AgentConfig:
         dlq_retention=_require_non_negative_int(storage_raw, "dlq_retention", 0),
         diagnostics_snapshot_interval_sec=max(float(storage_raw.get("diagnostics_snapshot_interval_sec", 0.0)), 0.0),
         diagnostics_snapshot_retention=_require_positive_int(storage_raw, "diagnostics_snapshot_retention", 20),
+        evidence_manifest_retention=_require_positive_int(storage_raw, "evidence_manifest_retention", 200),
     )
 
     sources: list[SourceConfig] = []

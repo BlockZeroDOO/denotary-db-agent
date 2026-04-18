@@ -36,6 +36,7 @@ def update_evidence_manifest(
     snapshot_path: str | Path,
     payload: dict,
     removed_paths: list[Path] | None = None,
+    retention: int = 200,
 ) -> Path:
     manifest_path = default_evidence_manifest_path(state_db)
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
@@ -77,6 +78,12 @@ def update_evidence_manifest(
         "severity": severity,
     }
     artifacts.append(entry)
+    if retention > 0:
+        artifacts = sorted(
+            artifacts,
+            key=lambda item: str(item.get("created_at") or ""),
+            reverse=True,
+        )[:retention]
     existing["artifacts"] = artifacts
     manifest_path.write_text(json.dumps(existing, indent=2), encoding="utf-8")
     return manifest_path
@@ -128,6 +135,7 @@ def export_diagnostics_snapshot(
     source_id: str | None,
     output_path: str | Path | None = None,
     retention: int = 20,
+    manifest_retention: int = 200,
 ) -> tuple[Path, list[Path]]:
     return export_named_snapshot(
         payload,
@@ -136,6 +144,7 @@ def export_diagnostics_snapshot(
         prefix="diagnostics",
         output_path=output_path,
         retention=retention,
+        manifest_retention=manifest_retention,
     )
 
 
@@ -147,6 +156,7 @@ def export_named_snapshot(
     prefix: str,
     output_path: str | Path | None = None,
     retention: int = 20,
+    manifest_retention: int = 200,
 ) -> tuple[Path, list[Path]]:
     snapshot_path = write_json_snapshot(
         payload,
@@ -160,5 +170,6 @@ def export_named_snapshot(
         snapshot_path=snapshot_path,
         payload=payload,
         removed_paths=removed,
+        retention=manifest_retention,
     )
     return snapshot_path, removed

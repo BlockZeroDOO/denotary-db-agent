@@ -150,6 +150,10 @@ Saved rollout artifacts are indexed automatically in:
 
 - `data/diagnostics/evidence-manifest.json`
 
+That manifest is also bounded by:
+
+- `storage.evidence_manifest_retention`
+
 To inspect them later:
 
 ```bash

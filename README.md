@@ -132,6 +132,7 @@ Note:
 - saved `diagnostics` / `doctor` / `report` snapshots are also registered in:
   - `data/diagnostics/evidence-manifest.json`
 - `artifacts` reads that manifest with optional filters by `source` and `kind`
+- the manifest itself is now capped by `storage.evidence_manifest_retention`
 - `metrics` gives a compact export-friendly summary of source counters, backlog indicators, stream state, and severity
 - `diagnostics` gives a compact stream/logical-slot focused report per source
 - `diagnostics --save-snapshot` writes the report to a timestamped JSON file under the local runtime directory

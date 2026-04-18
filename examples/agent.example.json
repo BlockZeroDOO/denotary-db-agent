@@ -25,7 +25,8 @@
     "delivery_retention": 5000,
     "dlq_retention": 1000,
     "diagnostics_snapshot_interval_sec": 900,
-    "diagnostics_snapshot_retention": 20
+    "diagnostics_snapshot_retention": 20,
+    "evidence_manifest_retention": 200
   },
   "sources": [
     {

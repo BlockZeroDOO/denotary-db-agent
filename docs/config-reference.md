@@ -207,7 +207,8 @@ Example:
   "delivery_retention": 5000,
   "dlq_retention": 1000,
   "diagnostics_snapshot_interval_sec": 900,
-  "diagnostics_snapshot_retention": 20
+  "diagnostics_snapshot_retention": 20,
+  "evidence_manifest_retention": 200
 }
 ```
 
@@ -276,6 +277,17 @@ Example:
 - Default: `20`
 - Must be at least: `1`
 - Purpose: keep only the newest N periodic diagnostics snapshots for the `all` source group
+
+### `evidence_manifest_retention`
+
+- Type: `integer`
+- Required: no
+- Default: `200`
+- Must be at least: `1`
+- Purpose: keep only the newest N entries in `data/diagnostics/evidence-manifest.json`
+- Notes:
+  - this is independent from per-prefix snapshot file retention
+  - stale or missing artifact paths are also removed automatically during manifest updates
 
 ## `sources[]`
 
@@ -702,6 +714,7 @@ For a first real deployment:
 - `diagnostics --save-snapshot` writes JSON snapshots under the runtime directory.
 - diagnostics snapshot retention now defaults to keeping the newest `20` matching files per source.
 - use `--snapshot-retention <N>` to tune local diagnostics history length.
+- evidence manifest retention defaults to keeping the newest `200` indexed artifacts overall.
 - runtime artifact retention is configured separately in `storage`:
   - `proof_retention`
   - `delivery_retention`

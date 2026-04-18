@@ -103,6 +103,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     config = load_config(args.config)
+    manifest_retention = int(getattr(config.storage, "evidence_manifest_retention", 200))
     if args.command == "artifacts":
         manifest = read_evidence_manifest(config.storage.state_db)
         artifacts = manifest.get("artifacts", [])
@@ -142,6 +143,7 @@ def main(argv: list[str] | None = None) -> int:
                 prefix="doctor",
                 output_path=args.output,
                 retention=args.snapshot_retention,
+                manifest_retention=manifest_retention,
             )
             report["snapshot_path"] = str(snapshot_path)
             report["pruned_snapshot_paths"] = [str(item) for item in removed]
@@ -153,6 +155,7 @@ def main(argv: list[str] | None = None) -> int:
                 source_id=args.source,
                 prefix="doctor",
                 retention=args.snapshot_retention,
+                manifest_retention=manifest_retention,
             )
             report["snapshot_path"] = str(snapshot_path)
             report["pruned_snapshot_paths"] = [str(item) for item in removed]
@@ -174,6 +177,7 @@ def main(argv: list[str] | None = None) -> int:
                 prefix="report",
                 output_path=args.output,
                 retention=args.snapshot_retention,
+                manifest_retention=manifest_retention,
             )
             report["snapshot_path"] = str(snapshot_path)
             report["pruned_snapshot_paths"] = [str(item) for item in removed]
@@ -185,6 +189,7 @@ def main(argv: list[str] | None = None) -> int:
                 source_id=args.source,
                 prefix="report",
                 retention=args.snapshot_retention,
+                manifest_retention=manifest_retention,
             )
             report["snapshot_path"] = str(snapshot_path)
             report["pruned_snapshot_paths"] = [str(item) for item in removed]
@@ -200,6 +205,7 @@ def main(argv: list[str] | None = None) -> int:
                 source_id=args.source,
                 output_path=args.output,
                 retention=args.snapshot_retention,
+                manifest_retention=manifest_retention,
             )
             diagnostics["snapshot_path"] = str(snapshot_path)
             diagnostics["pruned_snapshot_paths"] = [str(item) for item in removed]
@@ -210,6 +216,7 @@ def main(argv: list[str] | None = None) -> int:
                 state_db=config.storage.state_db,
                 source_id=args.source,
                 retention=args.snapshot_retention,
+                manifest_retention=manifest_retention,
             )
             diagnostics["snapshot_path"] = str(snapshot_path)
             diagnostics["pruned_snapshot_paths"] = [str(item) for item in removed]
