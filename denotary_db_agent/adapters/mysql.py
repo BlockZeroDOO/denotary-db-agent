@@ -232,6 +232,17 @@ class MySqlAdapter(BaseAdapter):
     def _capture_mode(self) -> str:
         return str(self.config.options.get("capture_mode", "watermark")).lower()
 
+    def _row_get(self, row: dict[str, Any], key: str) -> Any:
+        if key in row:
+            return row[key]
+        upper_key = key.upper()
+        if upper_key in row:
+            return row[upper_key]
+        lower_map = {str(existing).lower(): value for existing, value in row.items()}
+        if key.lower() in lower_map:
+            return lower_map[key.lower()]
+        raise KeyError(key)
+
     def _load_table_specs(self, connection: Any) -> list[MySqlTableSpec]:
         include = self.config.include or {self.config.database_name: []}
         watermark_column = str(self.config.options.get("watermark_column", "updated_at"))
@@ -259,8 +270,12 @@ class MySqlAdapter(BaseAdapter):
                     rows = cursor.fetchall()
                     if not rows:
                         raise ValueError(f"mysql table {target_schema}.{table_name} was not found")
-                    columns = [str(row["column_name"]) for row in rows]
-                    primary_key_columns = [str(row["column_name"]) for row in rows if row["is_primary_key"]]
+                    columns = [str(self._row_get(row, "column_name")) for row in rows]
+                    primary_key_columns = [
+                        str(self._row_get(row, "column_name"))
+                        for row in rows
+                        if self._row_get(row, "is_primary_key")
+                    ]
                     if not primary_key_columns:
                         raise ValueError(f"mysql table {target_schema}.{table_name} must have a primary key")
                     if watermark_column not in columns:
