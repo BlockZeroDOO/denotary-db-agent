@@ -387,10 +387,14 @@ def build_exported_legacy_globals() -> dict[str, dict[str, dict]]:
     }
 
 
+def build_legacy_export_surface() -> dict[str, dict[str, dict]]:
+    return build_exported_legacy_globals()
+
+
 COMMAND_GROUP_BUILDERS = build_command_group_builders()
 COMMAND_GROUPS = build_command_groups()
 COMMAND_GROUP_ALIASES = build_legacy_export_snapshot()
-LEGACY_EXPORTS = build_exported_legacy_globals()
+LEGACY_EXPORTS = build_legacy_export_surface()
 EVIDENCE_COMMANDS = LEGACY_EXPORTS["EVIDENCE_COMMANDS"]
 JSON_ENGINE_COMMANDS = LEGACY_EXPORTS["JSON_ENGINE_COMMANDS"]
 SOURCE_ACTION_COMMANDS = LEGACY_EXPORTS["SOURCE_ACTION_COMMANDS"]
