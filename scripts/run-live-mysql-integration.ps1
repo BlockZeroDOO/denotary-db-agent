@@ -8,7 +8,7 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 try {
-  python -m unittest discover -s tests -p test_mysql_live_integration.py -v
+  python -m unittest discover -s tests -p test_mysql*_integration.py -v
   exit $LASTEXITCODE
 }
 finally {

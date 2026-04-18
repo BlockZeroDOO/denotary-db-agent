@@ -7,4 +7,4 @@ compose_file="${project_root}/deploy/mysql-live/docker-compose.yml"
 docker compose -f "${compose_file}" up -d
 trap 'docker compose -f "${compose_file}" down -v' EXIT
 
-python -m unittest discover -s tests -p test_mysql_live_integration.py -v
+python -m unittest discover -s tests -p 'test_mysql*_integration.py' -v
