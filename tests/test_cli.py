@@ -7,7 +7,7 @@ from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
-from denotary_db_agent.cli import COMMAND_ALIAS_SPECS, COMMAND_GROUPS, COMMAND_GROUP_ALIASES, COMMAND_GROUP_BUILDERS, COMMAND_GROUP_SPECS, COMMAND_KIND_BEHAVIOR_DEFAULTS, COMMAND_KIND_COMMAND_DEFAULTS, COMMAND_KIND_HANDLERS, COMMAND_KIND_OPTION_LAYOUTS, COMMAND_KIND_PARSER_BUILDERS, COMMAND_KIND_SPECS, COMMAND_SPECS, EVIDENCE_COMMANDS, ENGINE_DISPATCH_COMMANDS, JSON_ENGINE_COMMANDS, OPTION_SPECS, RESOLVED_COMMAND_SPECS, SOURCE_ACTION_COMMANDS, build_command_alias, build_command_group, build_command_group_aliases, build_command_group_builders, build_command_groups, build_command_result, build_compatibility_alias_snapshot, build_engine_dispatch_commands, build_kind_component_map, build_kind_registry, build_parser, command_uses_engine, emit_command_result, evaluate_command_exit_policy, execute_command, get_command_alias, get_command_behavior, get_command_group, get_command_kind_spec, get_command_spec, main, maybe_export_snapshot, select_commands
+from denotary_db_agent.cli import COMMAND_ALIAS_SPECS, COMMAND_GROUPS, COMMAND_GROUP_ALIASES, COMMAND_GROUP_BUILDERS, COMMAND_GROUP_SPECS, COMMAND_KIND_BEHAVIOR_DEFAULTS, COMMAND_KIND_COMMAND_DEFAULTS, COMMAND_KIND_HANDLERS, COMMAND_KIND_OPTION_LAYOUTS, COMMAND_KIND_PARSER_BUILDERS, COMMAND_KIND_SPECS, COMMAND_SPECS, EVIDENCE_COMMANDS, ENGINE_DISPATCH_COMMANDS, JSON_ENGINE_COMMANDS, OPTION_SPECS, RESOLVED_COMMAND_SPECS, SOURCE_ACTION_COMMANDS, build_command_alias, build_command_group, build_command_group_aliases, build_command_group_builders, build_command_groups, build_command_result, build_compatibility_alias_snapshot, build_engine_dispatch_commands, build_kind_component_map, build_kind_registry, build_legacy_exports, build_parser, command_uses_engine, emit_command_result, evaluate_command_exit_policy, execute_command, get_command_alias, get_command_behavior, get_command_group, get_command_kind_spec, get_command_spec, main, maybe_export_snapshot, select_commands
 from denotary_db_agent.diagnostics_snapshots import (
     artifact_kind,
     build_snapshot_metadata,
@@ -51,6 +51,7 @@ class CliTest(unittest.TestCase):
         self.assertEqual(build_command_alias("EVIDENCE_COMMANDS"), EVIDENCE_COMMANDS)
         self.assertEqual(build_command_group_aliases()["EVIDENCE_COMMANDS"], EVIDENCE_COMMANDS)
         self.assertEqual(build_compatibility_alias_snapshot()["EVIDENCE_COMMANDS"], EVIDENCE_COMMANDS)
+        self.assertEqual(build_legacy_exports()["EVIDENCE_COMMANDS"], EVIDENCE_COMMANDS)
         self.assertEqual(COMMAND_GROUP_ALIASES["EVIDENCE_COMMANDS"], EVIDENCE_COMMANDS)
         self.assertEqual(get_command_alias("EVIDENCE_COMMANDS"), EVIDENCE_COMMANDS)
         self.assertEqual(COMMAND_GROUPS["evidence"], EVIDENCE_COMMANDS)
