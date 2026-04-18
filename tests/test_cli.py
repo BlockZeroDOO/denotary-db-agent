@@ -7,7 +7,7 @@ from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
-from denotary_db_agent.cli import COMMAND_BEHAVIORS, COMMAND_KIND_HANDLERS, COMMAND_KIND_PARSER_BUILDERS, COMMAND_SPECS, EVIDENCE_COMMANDS, ENGINE_DISPATCH_COMMANDS, JSON_ENGINE_COMMANDS, OPTION_SPECS, SOURCE_ACTION_COMMANDS, build_command_result, build_engine_dispatch_commands, build_parser, command_uses_engine, emit_command_result, evaluate_command_exit_policy, execute_command, main, maybe_export_snapshot, select_commands
+from denotary_db_agent.cli import COMMAND_BEHAVIORS, COMMAND_KIND_HANDLERS, COMMAND_KIND_PARSER_BUILDERS, COMMAND_KIND_SPECS, COMMAND_SPECS, EVIDENCE_COMMANDS, ENGINE_DISPATCH_COMMANDS, JSON_ENGINE_COMMANDS, OPTION_SPECS, SOURCE_ACTION_COMMANDS, build_command_result, build_engine_dispatch_commands, build_kind_component_map, build_kind_registry, build_parser, command_uses_engine, emit_command_result, evaluate_command_exit_policy, execute_command, main, maybe_export_snapshot, select_commands
 from denotary_db_agent.diagnostics_snapshots import (
     artifact_kind,
     build_snapshot_metadata,
@@ -41,6 +41,7 @@ class CliTest(unittest.TestCase):
         self.assertEqual(EVIDENCE_COMMANDS["report"]["engine_method"], "report")
         self.assertEqual(EVIDENCE_COMMANDS["diagnostics"]["engine_method"], "diagnostics")
         self.assertEqual(set(select_commands(kind="evidence")), set(EVIDENCE_COMMANDS))
+        self.assertEqual(build_kind_registry(kind="evidence"), EVIDENCE_COMMANDS)
 
     def test_command_behaviors_cover_evidence_output_and_strict_policy(self) -> None:
         self.assertTrue(COMMAND_BEHAVIORS["doctor"]["supports_snapshot_export"])
@@ -102,6 +103,9 @@ class CliTest(unittest.TestCase):
         self.assertEqual(COMMAND_KIND_HANDLERS["proof"].__name__, "run_proof_command")
         self.assertEqual(COMMAND_KIND_PARSER_BUILDERS["artifacts"].__name__, "add_artifacts_parser")
         self.assertEqual(build_engine_dispatch_commands(), ENGINE_DISPATCH_COMMANDS)
+        self.assertTrue(COMMAND_KIND_SPECS["json_engine"]["uses_engine"])
+        self.assertFalse(COMMAND_KIND_SPECS["artifacts"]["uses_engine"])
+        self.assertEqual(build_kind_component_map("handler", include_engineless=False), COMMAND_KIND_HANDLERS)
 
     def test_evidence_parser_specs_are_built_from_registry(self) -> None:
         parser = build_parser()

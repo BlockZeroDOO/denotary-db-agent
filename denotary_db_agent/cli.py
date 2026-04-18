@@ -184,6 +184,13 @@ def select_commands(*, kind: str | None = None, exclude_kind: str | None = None)
     return selected
 
 
+def map_commands(command_names: dict[str, dict], mapper) -> dict[str, dict]:
+    return {
+        name: mapper(name, command)
+        for name, command in command_names.items()
+    }
+
+
 def build_engine_dispatch_commands() -> dict[str, dict]:
     return {
         name: {"kind": command["kind"]}
@@ -192,15 +199,19 @@ def build_engine_dispatch_commands() -> dict[str, dict]:
 
 
 def build_command_behaviors() -> dict[str, dict]:
-    return {
-        name: build_command_behavior(name, command)
-        for name, command in COMMAND_SPECS.items()
-    }
+    return map_commands(COMMAND_SPECS, build_command_behavior)
 
 
-EVIDENCE_COMMANDS = select_commands(kind="evidence")
-JSON_ENGINE_COMMANDS = select_commands(kind="json_engine")
-SOURCE_ACTION_COMMANDS = select_commands(kind="source_action")
+def build_kind_registry(*, kind: str, mapper=None) -> dict[str, dict]:
+    selected = select_commands(kind=kind)
+    if mapper is None:
+        return selected
+    return map_commands(selected, mapper)
+
+
+EVIDENCE_COMMANDS = build_kind_registry(kind="evidence")
+JSON_ENGINE_COMMANDS = build_kind_registry(kind="json_engine")
+SOURCE_ACTION_COMMANDS = build_kind_registry(kind="source_action")
 ENGINE_DISPATCH_COMMANDS = build_engine_dispatch_commands()
 COMMAND_BEHAVIORS = build_command_behaviors()
 
@@ -271,17 +282,6 @@ def add_artifacts_parser(subparsers, command_name: str, command: dict) -> None:
     add_option(parser, "kind")
     add_option(parser, "latest")
     add_option(parser, "prune_missing")
-
-
-COMMAND_KIND_PARSER_BUILDERS = {
-    "json_engine": add_json_engine_parser,
-    "evidence": add_evidence_parser,
-    "source_action": add_source_action_parser,
-    "run": add_run_parser,
-    "checkpoint": add_checkpoint_parser,
-    "proof": add_proof_parser,
-    "artifacts": add_artifacts_parser,
-}
 
 
 def maybe_export_snapshot(
@@ -443,14 +443,58 @@ def run_proof_command(engine: AgentEngine, args, **_: object) -> dict:
     return build_command_result("proof", {"proof": proof})
 
 
-COMMAND_KIND_HANDLERS = {
-    "json_engine": run_json_engine_command,
-    "evidence": run_evidence_command,
-    "source_action": run_source_action_command,
-    "run": run_run_command,
-    "checkpoint": run_checkpoint_command,
-    "proof": run_proof_command,
-}
+def build_kind_specs() -> dict[str, dict]:
+    return {
+        "json_engine": {
+            "parser_builder": add_json_engine_parser,
+            "handler": run_json_engine_command,
+            "uses_engine": True,
+        },
+        "evidence": {
+            "parser_builder": add_evidence_parser,
+            "handler": run_evidence_command,
+            "uses_engine": True,
+        },
+        "source_action": {
+            "parser_builder": add_source_action_parser,
+            "handler": run_source_action_command,
+            "uses_engine": True,
+        },
+        "run": {
+            "parser_builder": add_run_parser,
+            "handler": run_run_command,
+            "uses_engine": True,
+        },
+        "checkpoint": {
+            "parser_builder": add_checkpoint_parser,
+            "handler": run_checkpoint_command,
+            "uses_engine": True,
+        },
+        "proof": {
+            "parser_builder": add_proof_parser,
+            "handler": run_proof_command,
+            "uses_engine": True,
+        },
+        "artifacts": {
+            "parser_builder": add_artifacts_parser,
+            "uses_engine": False,
+        },
+    }
+
+
+def build_kind_component_map(component: str, *, include_engineless: bool = True) -> dict[str, object]:
+    mapped: dict[str, object] = {}
+    for kind, spec in COMMAND_KIND_SPECS.items():
+        if not include_engineless and not spec.get("uses_engine", False):
+            continue
+        if component in spec:
+            mapped[kind] = spec[component]
+    return mapped
+
+
+COMMAND_KIND_SPECS = build_kind_specs()
+COMMAND_KIND_PARSER_BUILDERS = build_kind_component_map("parser_builder")
+COMMAND_KIND_HANDLERS = build_kind_component_map("handler", include_engineless=False)
 
 
 def dispatch_engine_command(
@@ -461,7 +505,7 @@ def dispatch_engine_command(
     manifest_retention: int,
 ) -> dict:
     command = COMMAND_SPECS[args.command]
-    handler = COMMAND_KIND_HANDLERS[command["kind"]]
+    handler = COMMAND_KIND_SPECS[command["kind"]]["handler"]
     return handler(
         engine,
         args,
@@ -472,7 +516,7 @@ def dispatch_engine_command(
 
 
 def command_uses_engine(command_name: str) -> bool:
-    return COMMAND_SPECS[command_name]["kind"] != "artifacts"
+    return bool(COMMAND_KIND_SPECS[COMMAND_SPECS[command_name]["kind"]]["uses_engine"])
 
 
 def execute_command(args, config) -> dict:
@@ -491,7 +535,7 @@ def execute_command(args, config) -> dict:
 def add_command_parser(subparsers, command_name: str, command: dict) -> None:
     kind = command["kind"]
     try:
-        builder = COMMAND_KIND_PARSER_BUILDERS[kind]
+        builder = COMMAND_KIND_SPECS[kind]["parser_builder"]
     except KeyError as exc:
         raise ValueError(f"unsupported command kind: {kind}") from exc
     builder(subparsers, command_name, command)
