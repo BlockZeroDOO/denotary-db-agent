@@ -12,6 +12,7 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
+from unittest.mock import patch
 
 from denotary_db_agent.config import load_config
 from denotary_db_agent.engine import AgentEngine, SourceRuntime
@@ -218,7 +219,7 @@ class EngineTest(unittest.TestCase):
             }
         )
 
-        with unittest.mock.patch.object(
+        with patch.object(
             engine,
             "runtimes",
             return_value=[SourceRuntime(config=source_config, adapter=fake_adapter)],
@@ -257,7 +258,7 @@ class EngineTest(unittest.TestCase):
             }
         )
 
-        with unittest.mock.patch.object(
+        with patch.object(
             engine,
             "runtimes",
             return_value=[SourceRuntime(config=source_config, adapter=fake_adapter)],
@@ -290,7 +291,7 @@ class EngineTest(unittest.TestCase):
             }
         )
 
-        with unittest.mock.patch.object(
+        with patch.object(
             engine,
             "runtimes",
             return_value=[SourceRuntime(config=source_config, adapter=fake_adapter)],
@@ -327,7 +328,7 @@ class EngineTest(unittest.TestCase):
             }
         )
 
-        with unittest.mock.patch.object(
+        with patch.object(
             engine,
             "runtimes",
             return_value=[SourceRuntime(config=source_config, adapter=fake_adapter)],
@@ -388,7 +389,7 @@ class EngineTest(unittest.TestCase):
             }
         )
 
-        with unittest.mock.patch.object(
+        with patch.object(
             engine,
             "runtimes",
             return_value=[SourceRuntime(config=source_config, adapter=fake_adapter)],
@@ -412,7 +413,7 @@ class EngineTest(unittest.TestCase):
             inspect=lambda: (_ for _ in ()).throw(RuntimeError("db offline"))
         )
 
-        with unittest.mock.patch.object(
+        with patch.object(
             engine,
             "runtimes",
             return_value=[SourceRuntime(config=source_config, adapter=fake_adapter)],
@@ -556,7 +557,7 @@ class EngineTest(unittest.TestCase):
             }
         )
 
-        with unittest.mock.patch.object(
+        with patch.object(
             engine,
             "runtimes",
             return_value=[SourceRuntime(config=source_config, adapter=fake_adapter)],

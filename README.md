@@ -58,6 +58,7 @@ pip install -e .
 denotary-db-agent status --config examples/agent.example.json
 denotary-db-agent health --config examples/agent.example.json
 denotary-db-agent doctor --config examples/agent.example.json --source pg-core-ledger
+denotary-db-agent doctor --config examples/agent.example.json --source pg-core-ledger --save-snapshot
 denotary-db-agent metrics --config examples/agent.example.json --source pg-core-ledger
 denotary-db-agent diagnostics --config examples/agent.example.json --source pg-core-ledger
 denotary-db-agent diagnostics --config examples/agent.example.json --source pg-core-ledger --save-snapshot
@@ -91,6 +92,7 @@ python -m unittest discover -s tests -v
 python -m denotary_db_agent --config examples/agent.example.json status
 python -m denotary_db_agent --config examples/agent.example.json health
 python -m denotary_db_agent --config examples/agent.example.json doctor --source pg-core-ledger
+python -m denotary_db_agent --config examples/agent.example.json doctor --source pg-core-ledger --save-snapshot
 python -m denotary_db_agent --config examples/agent.example.json metrics --source pg-core-ledger
 python -m denotary_db_agent --config examples/agent.example.json diagnostics --source pg-core-ledger
 python -m denotary_db_agent --config examples/agent.example.json diagnostics --source pg-core-ledger --save-snapshot
@@ -114,6 +116,7 @@ Note:
   - chain RPC readiness
   - signer hot-permission readiness
   - per-source connectivity and tracked table visibility
+- `doctor --save-snapshot` stores the same preflight report under the local runtime directory for rollout evidence
 - `metrics` gives a compact export-friendly summary of source counters, backlog indicators, stream state, and severity
 - `diagnostics` gives a compact stream/logical-slot focused report per source
 - `diagnostics --save-snapshot` writes the report to a timestamped JSON file under the local runtime directory

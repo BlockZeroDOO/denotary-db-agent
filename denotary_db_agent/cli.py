@@ -5,10 +5,8 @@ import json
 
 from denotary_db_agent.config import load_config
 from denotary_db_agent.diagnostics_snapshots import (
-    default_diagnostics_snapshot_path,
     export_diagnostics_snapshot,
-    prune_diagnostics_snapshots,
-    write_json_snapshot,
+    export_named_snapshot,
 )
 from denotary_db_agent.engine import AgentEngine
 
@@ -27,6 +25,18 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("health", help="Show service and source health")
     doctor_parser = subparsers.add_parser("doctor", help="Run a live preflight report for deploy readiness")
     doctor_parser.add_argument("--source", help="Source id")
+    doctor_parser.add_argument("--output", help="Write doctor JSON to this file")
+    doctor_parser.add_argument(
+        "--save-snapshot",
+        action="store_true",
+        help="Save doctor snapshot to a timestamped JSON file under the local runtime directory",
+    )
+    doctor_parser.add_argument(
+        "--snapshot-retention",
+        type=int,
+        default=20,
+        help="When saving doctor snapshots, keep only the newest N matching files (default: 20)",
+    )
     metrics_parser = subparsers.add_parser("metrics", help="Show compact export-friendly metrics")
     metrics_parser.add_argument("--source", help="Source id")
     diagnostics_parser = subparsers.add_parser("diagnostics", help="Show compact stream/runtime diagnostics")
@@ -81,7 +91,29 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(engine.health(), indent=2))
         return 0
     if args.command == "doctor":
-        print(json.dumps(engine.doctor(args.source), indent=2))
+        report = engine.doctor(args.source)
+        if args.output:
+            snapshot_path, removed = export_named_snapshot(
+                report,
+                state_db=config.storage.state_db,
+                source_id=args.source,
+                prefix="doctor",
+                output_path=args.output,
+                retention=args.snapshot_retention,
+            )
+            report["snapshot_path"] = str(snapshot_path)
+            report["pruned_snapshot_paths"] = [str(item) for item in removed]
+        elif args.save_snapshot:
+            snapshot_path, removed = export_named_snapshot(
+                report,
+                state_db=config.storage.state_db,
+                source_id=args.source,
+                prefix="doctor",
+                retention=args.snapshot_retention,
+            )
+            report["snapshot_path"] = str(snapshot_path)
+            report["pruned_snapshot_paths"] = [str(item) for item in removed]
+        print(json.dumps(report, indent=2))
         return 0
     if args.command == "metrics":
         print(json.dumps(engine.metrics(args.source), indent=2))

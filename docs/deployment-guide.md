@@ -125,3 +125,9 @@ docker compose -f deploy/docker-compose.example.yml logs -f
 6. Verify `health`
 7. Verify `metrics`
 8. Verify periodic diagnostics snapshots are being written when enabled
+
+Optional rollout evidence:
+
+```bash
+denotary-db-agent --config /etc/denotary-db-agent/agent.json doctor --source pg-core-ledger --save-snapshot
+```
