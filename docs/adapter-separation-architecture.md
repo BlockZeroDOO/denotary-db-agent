@@ -209,3 +209,7 @@ That keeps `AgentEngine` out of source-specific mode branching such as
 capabilities instead of extending orchestrator conditionals. It also keeps adapters focused
 on their tracked objects and CDC state instead of hand-assembling the same bootstrap/inspect
 JSON envelopes over and over again.
+
+Those shared envelopes now also include a database-neutral `tracked_objects` list and
+`tracked_object_count`, so operator tooling can reason about source coverage without caring
+whether a given adapter exposes tables, collections, or other source-native object types.

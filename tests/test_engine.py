@@ -925,6 +925,46 @@ class EngineTest(unittest.TestCase):
         self.assertEqual(doctor["sources"][0]["cdc_contract"]["activity_model"], "stream")
         self.assertEqual(doctor["sources"][0]["cdc_runtime"]["configured_runtime_mode"], "binlog")
 
+    def test_doctor_uses_shared_tracked_object_contract(self) -> None:
+        engine = AgentEngine(load_config(self.config_path))
+        source_config = engine.config.sources[0]
+
+        fake_adapter = SimpleNamespace(
+            validate_connection=lambda: None,
+            inspect=lambda: {
+                "source_id": source_config.id,
+                "adapter": source_config.adapter,
+                "capture_mode": "change_streams",
+                "tracked_collections": [{"database": "ledger", "collection": "invoices"}],
+                "tracked_objects": [{"kind": "collection", "database": "ledger", "collection": "invoices"}],
+                "cdc": {
+                    "configured_capture_mode": "change_streams",
+                    "is_cdc_mode": True,
+                    "checkpoint_strategy": "resume_token",
+                    "activity_model": "stream",
+                    "cdc_modes": ["change_streams"],
+                    "runtime": {
+                        "transport": "stream",
+                        "configured_runtime_mode": "change_streams",
+                        "effective_runtime_mode": "change_streams",
+                        "active": True,
+                        "cursor": {"resume_token": "token-1"},
+                    },
+                },
+            },
+        )
+
+        with patch.object(
+            engine,
+            "runtimes",
+            return_value=[SourceRuntime(config=source_config, adapter=fake_adapter)],
+        ):
+            doctor = engine.doctor(source_config.id)
+
+        self.assertEqual(doctor["sources"][0]["tracked_object_count"], 1)
+        self.assertEqual(doctor["sources"][0]["tracked_collection_count"], 1)
+        self.assertEqual(doctor["sources"][0]["tracked_table_count"], 0)
+
     def test_report_combines_doctor_metrics_diagnostics_and_status(self) -> None:
         engine = AgentEngine(load_config(self.config_path))
 

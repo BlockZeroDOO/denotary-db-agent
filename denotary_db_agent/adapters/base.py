@@ -192,6 +192,8 @@ class BaseAdapter(ABC):
             "adapter": self.config.adapter,
             "capture_mode": self.capture_mode(),
             tracked_key: tracked_items,
+            "tracked_objects": self._build_tracked_objects(tracked_key, tracked_items),
+            "tracked_object_count": len(tracked_items),
             "cdc": cdc,
         }
         if extra:
@@ -211,6 +213,8 @@ class BaseAdapter(ABC):
             {
                 "capture_mode": self.capture_mode(),
                 tracked_key: tracked_items,
+                "tracked_objects": self._build_tracked_objects(tracked_key, tracked_items),
+                "tracked_object_count": len(tracked_items),
                 "cdc": cdc,
             }
         )
@@ -244,6 +248,10 @@ class BaseAdapter(ABC):
             "is_cdc_mode": self.is_cdc_mode(),
             "notes": capabilities.notes,
         }
+
+    def _build_tracked_objects(self, tracked_key: str, tracked_items: list[dict[str, object]]) -> list[dict[str, object]]:
+        object_kind = "collection" if tracked_key == "tracked_collections" else "table" if tracked_key == "tracked_tables" else "object"
+        return [{"kind": object_kind, **item} for item in tracked_items]
 
     def inspect(self) -> dict:
         return self._base_inspect_payload()

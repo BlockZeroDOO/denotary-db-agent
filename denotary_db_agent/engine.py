@@ -712,6 +712,7 @@ class AgentEngine:
             if connectivity_ok and snapshot.get("inspect_error"):
                 errors.append(f"inspect failed: {snapshot['inspect_error']}")
             capture_mode = str(snapshot.get("capture_mode") or runtime.config.options.get("capture_mode", "watermark"))
+            tracked_objects = inspect_payload.get("tracked_objects") if inspect_payload else []
             tracked_tables = inspect_payload.get("tracked_tables") if inspect_payload else []
             tracked_collections = inspect_payload.get("tracked_collections") if inspect_payload else []
             cdc = snapshot.get("cdc")
@@ -729,6 +730,7 @@ class AgentEngine:
                     "capture_mode": capture_mode,
                     "connectivity_ok": connectivity_ok,
                     "inspect_ok": connectivity_ok and not errors,
+                    "tracked_object_count": len(tracked_objects) if isinstance(tracked_objects, list) else 0,
                     "tracked_table_count": len(tracked_tables) if isinstance(tracked_tables, list) else 0,
                     "tracked_collection_count": len(tracked_collections) if isinstance(tracked_collections, list) else 0,
                     "cdc_contract": snapshot.get("cdc_contract"),
