@@ -7,7 +7,7 @@ from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
-from denotary_db_agent.cli import EVIDENCE_COMMANDS, JSON_ENGINE_COMMANDS, SOURCE_ACTION_COMMANDS, build_parser, main, maybe_export_snapshot
+from denotary_db_agent.cli import EVIDENCE_COMMANDS, ENGINE_DISPATCH_COMMANDS, JSON_ENGINE_COMMANDS, SOURCE_ACTION_COMMANDS, build_parser, main, maybe_export_snapshot
 from denotary_db_agent.diagnostics_snapshots import (
     artifact_kind,
     build_snapshot_metadata,
@@ -46,6 +46,9 @@ class CliTest(unittest.TestCase):
         self.assertEqual(JSON_ENGINE_COMMANDS["refresh"]["engine_method"], "refresh_source")
         self.assertEqual(SOURCE_ACTION_COMMANDS["pause"]["engine_method"], "pause_source")
         self.assertEqual(SOURCE_ACTION_COMMANDS["replay"]["engine_method"], "reset_checkpoint")
+        self.assertEqual(ENGINE_DISPATCH_COMMANDS["run"]["handler"], "run_run_command")
+        self.assertEqual(ENGINE_DISPATCH_COMMANDS["checkpoint"]["handler"], "run_checkpoint_command")
+        self.assertEqual(ENGINE_DISPATCH_COMMANDS["proof"]["handler"], "run_proof_command")
 
     def test_evidence_parser_specs_are_built_from_registry(self) -> None:
         parser = build_parser()
@@ -318,6 +321,91 @@ class CliTest(unittest.TestCase):
             payload = json.loads(stdout.getvalue())
             self.assertEqual(payload["totals"]["source_count"], 1)
             self.assertEqual(payload["sources"][0]["source_id"], "pg-core-ledger")
+
+    def test_checkpoint_reset_command_uses_dispatch_registry(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "config.json"
+            config_path.write_text("{}", encoding="utf-8")
+            fake_config = type(
+                "FakeConfig",
+                (),
+                {
+                    "storage": type("FakeStorage", (), {"state_db": str(Path(temp_dir) / "runtime" / "state.sqlite3")})(),
+                },
+            )()
+            fake_engine = type(
+                "FakeEngine",
+                (),
+                {
+                    "reset_checkpoint": lambda self, source: None,
+                },
+            )()
+
+            stdout = StringIO()
+            with patch("denotary_db_agent.cli.load_config", return_value=fake_config), patch(
+                "denotary_db_agent.cli.AgentEngine",
+                return_value=fake_engine,
+            ), patch("sys.stdout", stdout):
+                exit_code = main(
+                    [
+                        "--config",
+                        str(config_path),
+                        "checkpoint",
+                        "--source",
+                        "pg-core-ledger",
+                        "--reset",
+                    ]
+                )
+
+            self.assertEqual(exit_code, 0)
+            payload = json.loads(stdout.getvalue())
+            self.assertEqual(payload["action"], "checkpoint_reset")
+            self.assertEqual(payload["source"], "pg-core-ledger")
+
+    def test_proof_command_uses_dispatch_registry(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "config.json"
+            config_path.write_text("{}", encoding="utf-8")
+            fake_config = type(
+                "FakeConfig",
+                (),
+                {
+                    "storage": type("FakeStorage", (), {"state_db": str(Path(temp_dir) / "runtime" / "state.sqlite3")})(),
+                },
+            )()
+            fake_store = type(
+                "FakeStore",
+                (),
+                {
+                    "get_proof": lambda self, request_id: {"request_id": request_id, "status": "stored"},
+                },
+            )()
+            fake_engine = type(
+                "FakeEngine",
+                (),
+                {
+                    "store": fake_store,
+                },
+            )()
+
+            stdout = StringIO()
+            with patch("denotary_db_agent.cli.load_config", return_value=fake_config), patch(
+                "denotary_db_agent.cli.AgentEngine",
+                return_value=fake_engine,
+            ), patch("sys.stdout", stdout):
+                exit_code = main(
+                    [
+                        "--config",
+                        str(config_path),
+                        "proof",
+                        "--request-id",
+                        "req-123",
+                    ]
+                )
+
+            self.assertEqual(exit_code, 0)
+            payload = json.loads(stdout.getvalue())
+            self.assertEqual(payload["proof"]["request_id"], "req-123")
 
     def test_artifacts_command_reads_manifest(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

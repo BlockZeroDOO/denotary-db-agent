@@ -46,6 +46,15 @@ SOURCE_ACTION_COMMANDS = {
     "replay": {"engine_method": "reset_checkpoint", "action": "checkpoint_reset"},
 }
 
+ENGINE_DISPATCH_COMMANDS = {
+    **{name: {"handler": "run_json_engine_command"} for name in JSON_ENGINE_COMMANDS},
+    **{name: {"handler": "run_evidence_command"} for name in EVIDENCE_COMMANDS},
+    **{name: {"handler": "run_source_action_command"} for name in SOURCE_ACTION_COMMANDS},
+    "run": {"handler": "run_run_command"},
+    "checkpoint": {"handler": "run_checkpoint_command"},
+    "proof": {"handler": "run_proof_command"},
+}
+
 
 def add_evidence_parser(subparsers, command_name: str, command: dict) -> None:
     parser = subparsers.add_parser(command_name, help=command["help"])
@@ -129,7 +138,7 @@ def print_json(payload: dict) -> int:
     return 0
 
 
-def run_json_engine_command(engine: AgentEngine, args, *, command_name: str) -> int:
+def run_json_engine_command(engine: AgentEngine, args, *, command_name: str, **_: object) -> int:
     command = JSON_ENGINE_COMMANDS[command_name]
     method = getattr(engine, command["engine_method"])
     payload = method(args.source) if command.get("source_arg") else method()
@@ -138,7 +147,7 @@ def run_json_engine_command(engine: AgentEngine, args, *, command_name: str) -> 
     return print_json(payload)
 
 
-def run_source_action_command(engine: AgentEngine, args, *, command_name: str) -> int:
+def run_source_action_command(engine: AgentEngine, args, *, command_name: str, **_: object) -> int:
     command = SOURCE_ACTION_COMMANDS[command_name]
     getattr(engine, command["engine_method"])(args.source)
     return print_json({"ok": True, "source": args.source, "action": command["action"]})
@@ -167,6 +176,48 @@ def run_artifacts_command(args, *, state_db: str) -> int:
             "artifact_count": len(artifacts),
             "artifacts": artifacts,
         }
+    )
+
+
+def run_run_command(engine: AgentEngine, args, **_: object) -> int:
+    if args.once:
+        return print_json(engine.run_once())
+    print(json.dumps({"status": "running", "interval_sec": args.interval_sec}, indent=2), flush=True)
+    return print_json(engine.run_forever(args.interval_sec))
+
+
+def run_checkpoint_command(engine: AgentEngine, args, **_: object) -> int:
+    if args.reset:
+        if not args.source:
+            raise SystemExit("--source is required with --reset")
+        engine.reset_checkpoint(args.source)
+        return print_json({"ok": True, "source": args.source, "action": "checkpoint_reset"})
+    checkpoints = engine.checkpoint_summary()
+    if args.source:
+        checkpoints = [item for item in checkpoints if item["source_id"] == args.source]
+    return print_json({"checkpoints": checkpoints})
+
+
+def run_proof_command(engine: AgentEngine, args, **_: object) -> int:
+    proof = engine.store.get_proof(args.request_id)
+    return print_json({"proof": proof})
+
+
+def dispatch_engine_command(
+    engine: AgentEngine,
+    args,
+    *,
+    state_db: str,
+    manifest_retention: int,
+) -> int:
+    command = ENGINE_DISPATCH_COMMANDS[args.command]
+    handler = globals()[command["handler"]]
+    return handler(
+        engine,
+        args,
+        command_name=args.command,
+        state_db=state_db,
+        manifest_retention=manifest_retention,
     )
 
 
@@ -229,51 +280,11 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "artifacts":
         return run_artifacts_command(args, state_db=config.storage.state_db)
     engine = AgentEngine(config)
-
-    if args.command in JSON_ENGINE_COMMANDS:
-        return run_json_engine_command(engine, args, command_name=args.command)
-    if args.command == "doctor":
-        return run_evidence_command(
+    if args.command in ENGINE_DISPATCH_COMMANDS:
+        return dispatch_engine_command(
             engine,
             args,
-            command_name="doctor",
             state_db=config.storage.state_db,
             manifest_retention=manifest_retention,
         )
-    if args.command == "report":
-        return run_evidence_command(
-            engine,
-            args,
-            command_name="report",
-            state_db=config.storage.state_db,
-            manifest_retention=manifest_retention,
-        )
-    if args.command == "diagnostics":
-        return run_evidence_command(
-            engine,
-            args,
-            command_name="diagnostics",
-            state_db=config.storage.state_db,
-            manifest_retention=manifest_retention,
-        )
-    if args.command in SOURCE_ACTION_COMMANDS:
-        return run_source_action_command(engine, args, command_name=args.command)
-    if args.command == "run":
-        if args.once:
-            return print_json(engine.run_once())
-        print(json.dumps({"status": "running", "interval_sec": args.interval_sec}, indent=2), flush=True)
-        return print_json(engine.run_forever(args.interval_sec))
-    if args.command == "checkpoint":
-        if args.reset:
-            if not args.source:
-                raise SystemExit("--source is required with --reset")
-            engine.reset_checkpoint(args.source)
-            return print_json({"ok": True, "source": args.source, "action": "checkpoint_reset"})
-        checkpoints = engine.checkpoint_summary()
-        if args.source:
-            checkpoints = [item for item in checkpoints if item["source_id"] == args.source]
-        return print_json({"checkpoints": checkpoints})
-    if args.command == "proof":
-        proof = engine.store.get_proof(args.request_id)
-        return print_json({"proof": proof})
     raise SystemExit("unsupported command")
