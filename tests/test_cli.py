@@ -7,7 +7,7 @@ from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
-from denotary_db_agent.cli import main, maybe_export_snapshot
+from denotary_db_agent.cli import EVIDENCE_COMMANDS, build_parser, main, maybe_export_snapshot
 from denotary_db_agent.diagnostics_snapshots import (
     artifact_kind,
     build_snapshot_metadata,
@@ -22,11 +22,6 @@ from denotary_db_agent.diagnostics_snapshots import (
 class CliTest(unittest.TestCase):
     def test_maybe_export_snapshot_returns_payload_when_export_not_requested(self) -> None:
         payload = {"agent_name": "denotary-db-agent"}
-        exporter_calls = {"count": 0}
-
-        def fake_exporter(*args, **kwargs):
-            exporter_calls["count"] += 1
-            return Path("snapshot.json"), []
 
         result = maybe_export_snapshot(
             payload,
@@ -36,12 +31,29 @@ class CliTest(unittest.TestCase):
             save_snapshot=False,
             retention=20,
             manifest_retention=200,
-            exporter=fake_exporter,
         )
 
         self.assertIs(result, payload)
-        self.assertEqual(exporter_calls["count"], 0)
         self.assertNotIn("snapshot_path", result)
+
+    def test_evidence_commands_registry_declares_engine_methods(self) -> None:
+        self.assertEqual(EVIDENCE_COMMANDS["doctor"]["engine_method"], "doctor")
+        self.assertEqual(EVIDENCE_COMMANDS["report"]["engine_method"], "report")
+        self.assertEqual(EVIDENCE_COMMANDS["diagnostics"]["engine_method"], "diagnostics")
+
+    def test_evidence_parser_specs_are_built_from_registry(self) -> None:
+        parser = build_parser()
+
+        doctor_args = parser.parse_args(["--config", "cfg.json", "doctor", "--strict", "--save-snapshot"])
+        self.assertTrue(doctor_args.strict)
+        self.assertTrue(doctor_args.save_snapshot)
+
+        report_args = parser.parse_args(["--config", "cfg.json", "report", "--save-snapshot"])
+        self.assertFalse(hasattr(report_args, "strict"))
+        self.assertTrue(report_args.save_snapshot)
+
+        diagnostics_args = parser.parse_args(["--config", "cfg.json", "diagnostics", "--snapshot-retention", "7"])
+        self.assertEqual(diagnostics_args.snapshot_retention, 7)
 
     def test_build_snapshot_metadata_populates_standard_fields(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

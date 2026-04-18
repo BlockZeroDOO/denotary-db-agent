@@ -13,6 +13,47 @@ from denotary_db_agent.diagnostics_snapshots import (
 from denotary_db_agent.engine import AgentEngine
 
 
+EVIDENCE_COMMANDS = {
+    "doctor": {
+        "engine_method": "doctor",
+        "strict_on_severity": {"critical", "error"},
+        "help": "Run a live preflight report for deploy readiness",
+        "supports_strict": True,
+    },
+    "report": {
+        "engine_method": "report",
+        "help": "Export a compact rollout evidence bundle",
+    },
+    "diagnostics": {
+        "engine_method": "diagnostics",
+        "help": "Show compact stream/runtime diagnostics",
+    },
+}
+
+
+def add_evidence_parser(subparsers, command_name: str, command: dict) -> None:
+    parser = subparsers.add_parser(command_name, help=command["help"])
+    parser.add_argument("--source", help="Source id")
+    if command.get("supports_strict"):
+        parser.add_argument(
+            "--strict",
+            action="store_true",
+            help=f"Exit with status 1 when {command_name} reports critical or error severity",
+        )
+    parser.add_argument("--output", help=f"Write {command_name} JSON to this file")
+    parser.add_argument(
+        "--save-snapshot",
+        action="store_true",
+        help=f"Save {command_name} snapshot to a timestamped JSON file under the local runtime directory",
+    )
+    parser.add_argument(
+        "--snapshot-retention",
+        type=int,
+        default=20,
+        help=f"When saving {command_name} snapshots, keep only the newest N matching files (default: 20)",
+    )
+
+
 def maybe_export_snapshot(
     payload: dict,
     *,
@@ -23,11 +64,10 @@ def maybe_export_snapshot(
     save_snapshot: bool,
     retention: int,
     manifest_retention: int,
-    exporter,
 ) -> dict:
     if not output_path and not save_snapshot:
         return payload
-    metadata = exporter(
+    metadata = export_snapshot_bundle(
         payload=payload,
         state_db=state_db,
         source_id=source_id,
@@ -38,6 +78,34 @@ def maybe_export_snapshot(
     )
     payload.update(metadata)
     return payload
+
+
+def run_evidence_command(
+    engine: AgentEngine,
+    args,
+    *,
+    command_name: str,
+    state_db: str,
+    manifest_retention: int,
+) -> int:
+    command = EVIDENCE_COMMANDS[command_name]
+    payload = getattr(engine, command["engine_method"])(args.source)
+    maybe_export_snapshot(
+        payload,
+        state_db=state_db,
+        source_id=args.source,
+        prefix=command_name,
+        output_path=getattr(args, "output", None),
+        save_snapshot=bool(getattr(args, "save_snapshot", False)),
+        retention=int(getattr(args, "snapshot_retention", 20)),
+        manifest_retention=manifest_retention,
+    )
+    print(json.dumps(payload, indent=2))
+    strict_on_severity = command.get("strict_on_severity")
+    if strict_on_severity and getattr(args, "strict", False):
+        if payload.get("overall", {}).get("severity") in strict_on_severity:
+            return 1
+    return 0
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -52,25 +120,6 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("validate", help="Validate config and adapter connectivity")
     subparsers.add_parser("status", help="Show source status")
     subparsers.add_parser("health", help="Show service and source health")
-    doctor_parser = subparsers.add_parser("doctor", help="Run a live preflight report for deploy readiness")
-    doctor_parser.add_argument("--source", help="Source id")
-    doctor_parser.add_argument(
-        "--strict",
-        action="store_true",
-        help="Exit with status 1 when doctor reports critical or error severity",
-    )
-    doctor_parser.add_argument("--output", help="Write doctor JSON to this file")
-    doctor_parser.add_argument(
-        "--save-snapshot",
-        action="store_true",
-        help="Save doctor snapshot to a timestamped JSON file under the local runtime directory",
-    )
-    doctor_parser.add_argument(
-        "--snapshot-retention",
-        type=int,
-        default=20,
-        help="When saving doctor snapshots, keep only the newest N matching files (default: 20)",
-    )
     metrics_parser = subparsers.add_parser("metrics", help="Show compact export-friendly metrics")
     metrics_parser.add_argument("--source", help="Source id")
     artifacts_parser = subparsers.add_parser("artifacts", help="Show saved evidence artifacts from the local manifest")
@@ -86,34 +135,8 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Remove manifest entries whose snapshot files no longer exist",
     )
-    report_parser = subparsers.add_parser("report", help="Export a compact rollout evidence bundle")
-    report_parser.add_argument("--source", help="Source id")
-    report_parser.add_argument("--output", help="Write report JSON to this file")
-    report_parser.add_argument(
-        "--save-snapshot",
-        action="store_true",
-        help="Save report snapshot to a timestamped JSON file under the local runtime directory",
-    )
-    report_parser.add_argument(
-        "--snapshot-retention",
-        type=int,
-        default=20,
-        help="When saving report snapshots, keep only the newest N matching files (default: 20)",
-    )
-    diagnostics_parser = subparsers.add_parser("diagnostics", help="Show compact stream/runtime diagnostics")
-    diagnostics_parser.add_argument("--source", help="Source id")
-    diagnostics_parser.add_argument("--output", help="Write diagnostics JSON to this file")
-    diagnostics_parser.add_argument(
-        "--save-snapshot",
-        action="store_true",
-        help="Save diagnostics snapshot to a timestamped JSON file under the local runtime directory",
-    )
-    diagnostics_parser.add_argument(
-        "--snapshot-retention",
-        type=int,
-        default=20,
-        help="When saving diagnostics snapshots, keep only the newest N matching files (default: 20)",
-    )
+    for command_name, command in EVIDENCE_COMMANDS.items():
+        add_evidence_parser(subparsers, command_name, command)
     bootstrap_parser = subparsers.add_parser("bootstrap", help="Install or refresh source-side runtime artifacts")
     bootstrap_parser.add_argument("--source", help="Source id")
     inspect_parser = subparsers.add_parser("inspect", help="Inspect source configuration and live runtime state")
@@ -181,55 +204,32 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(engine.health(), indent=2))
         return 0
     if args.command == "doctor":
-        report = engine.doctor(args.source)
-        maybe_export_snapshot(
-            report,
+        return run_evidence_command(
+            engine,
+            args,
+            command_name="doctor",
             state_db=config.storage.state_db,
-            source_id=args.source,
-            prefix="doctor",
-            output_path=args.output,
-            save_snapshot=args.save_snapshot,
-            retention=args.snapshot_retention,
             manifest_retention=manifest_retention,
-            exporter=export_snapshot_bundle,
         )
-        print(json.dumps(report, indent=2))
-        if args.strict and report.get("overall", {}).get("severity") in {"critical", "error"}:
-            return 1
-        return 0
     if args.command == "metrics":
         print(json.dumps(engine.metrics(args.source), indent=2))
         return 0
     if args.command == "report":
-        report = engine.report(args.source)
-        maybe_export_snapshot(
-            report,
+        return run_evidence_command(
+            engine,
+            args,
+            command_name="report",
             state_db=config.storage.state_db,
-            source_id=args.source,
-            prefix="report",
-            output_path=args.output,
-            save_snapshot=args.save_snapshot,
-            retention=args.snapshot_retention,
             manifest_retention=manifest_retention,
-            exporter=export_snapshot_bundle,
         )
-        print(json.dumps(report, indent=2))
-        return 0
     if args.command == "diagnostics":
-        diagnostics = engine.diagnostics(args.source)
-        maybe_export_snapshot(
-            diagnostics,
+        return run_evidence_command(
+            engine,
+            args,
+            command_name="diagnostics",
             state_db=config.storage.state_db,
-            source_id=args.source,
-            prefix="diagnostics",
-            output_path=args.output,
-            save_snapshot=args.save_snapshot,
-            retention=args.snapshot_retention,
             manifest_retention=manifest_retention,
-            exporter=export_snapshot_bundle,
         )
-        print(json.dumps(diagnostics, indent=2))
-        return 0
     if args.command == "bootstrap":
         print(json.dumps(engine.bootstrap(args.source), indent=2))
         return 0
