@@ -131,3 +131,9 @@ Optional rollout evidence:
 ```bash
 denotary-db-agent --config /etc/denotary-db-agent/agent.json doctor --source pg-core-ledger --save-snapshot
 ```
+
+Optional startup gate:
+
+```bash
+denotary-db-agent --config /etc/denotary-db-agent/agent.json doctor --source pg-core-ledger --strict
+```

@@ -80,6 +80,7 @@ Returns:
 ```bash
 denotary-db-agent --config examples/agent.example.json doctor --source pg-core-ledger
 denotary-db-agent --config examples/agent.example.json doctor --source pg-core-ledger --save-snapshot
+denotary-db-agent --config examples/agent.example.json doctor --source pg-core-ledger --strict
 ```
 
 Returns one compact live preflight report for deploy readiness with:
@@ -100,6 +101,13 @@ Use this before:
 
 With `--save-snapshot`, the same preflight JSON is written under the local runtime directory.
 Use this when operators want rollout evidence or want to attach the exact readiness report to a change ticket.
+
+With `--strict`, the command exits with status `1` only when overall severity is `critical` or `error`.
+This is intended for:
+
+- CI/CD pre-deploy gates
+- `systemd` `ExecStartPre`
+- Windows service pre-start wrappers
 
 ### Metrics
 

@@ -25,6 +25,11 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("health", help="Show service and source health")
     doctor_parser = subparsers.add_parser("doctor", help="Run a live preflight report for deploy readiness")
     doctor_parser.add_argument("--source", help="Source id")
+    doctor_parser.add_argument(
+        "--strict",
+        action="store_true",
+        help="Exit with status 1 when doctor reports critical or error severity",
+    )
     doctor_parser.add_argument("--output", help="Write doctor JSON to this file")
     doctor_parser.add_argument(
         "--save-snapshot",
@@ -114,6 +119,8 @@ def main(argv: list[str] | None = None) -> int:
             report["snapshot_path"] = str(snapshot_path)
             report["pruned_snapshot_paths"] = [str(item) for item in removed]
         print(json.dumps(report, indent=2))
+        if args.strict and report.get("overall", {}).get("severity") in {"critical", "error"}:
+            return 1
         return 0
     if args.command == "metrics":
         print(json.dumps(engine.metrics(args.source), indent=2))
