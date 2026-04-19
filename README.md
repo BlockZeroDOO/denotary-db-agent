@@ -72,6 +72,15 @@ Current Oracle status:
 - local full-cycle proof export is implemented for `watermark`
 - local full-cycle proof export is implemented for `logminer`
 
+Current Wave 1 mainnet status:
+
+- PostgreSQL is validated on real `denotary` mainnet
+- MySQL is validated on real `denotary` mainnet
+- MariaDB is validated on real `denotary` mainnet
+- SQL Server is validated on real `denotary` mainnet
+- Oracle is validated on real `denotary` mainnet
+- MongoDB is validated on real `denotary` mainnet
+
 ## Quick Start
 
 ```bash
@@ -119,11 +128,17 @@ See:
 - [docs/deployment-guide.md](docs/deployment-guide.md)
 - [docs/denotary-env-file-runbook.md](docs/denotary-env-file-runbook.md)
 - [docs/denotary-postgresql-validation-report.md](docs/denotary-postgresql-validation-report.md)
+- [docs/denotary-wave1-mainnet-validation-report.md](docs/denotary-wave1-mainnet-validation-report.md)
+- [docs/wave1-recovery-validation-report.md](docs/wave1-recovery-validation-report.md)
+- [docs/wave1-source-restart-validation.md](docs/wave1-source-restart-validation.md)
+- [docs/wave1-source-restart-validation-report.md](docs/wave1-source-restart-validation-report.md)
 - [docs/denotary-postgresql-rollout-checklist.md](docs/denotary-postgresql-rollout-checklist.md)
 - [docs/jungle4-postgresql-short-soak-report.md](docs/jungle4-postgresql-short-soak-report.md)
 - [docs/jungle4-postgresql-soak-runbook.md](docs/jungle4-postgresql-soak-runbook.md)
 - [docs/postgresql-hot-key-rotation.md](docs/postgresql-hot-key-rotation.md)
 - [docs/postgresql-recovery-scenarios.md](docs/postgresql-recovery-scenarios.md)
+- [docs/wave1-recovery-validation.md](docs/wave1-recovery-validation.md)
+- [scripts/run-wave1-source-restart-validation.ps1](scripts/run-wave1-source-restart-validation.ps1)
 - [docs/supported-databases.md](docs/supported-databases.md)
 - [docs/verifbill-permission-model.md](docs/verifbill-permission-model.md)
 - [docs/verifbill-permission-commands.md](docs/verifbill-permission-commands.md)
@@ -148,6 +163,7 @@ python -m denotary_db_agent --config examples/agent.example.json bootstrap --sou
 python -m denotary_db_agent --config examples/agent.example.json inspect --source pg-core-ledger
 python -m denotary_db_agent --config examples/agent.example.json refresh --source pg-core-ledger
 python -m denotary_db_agent --config examples/agent.example.json proof --request-id <request_id>
+scripts/run-wave1-recovery-validation.ps1
 ```
 
 Note:
