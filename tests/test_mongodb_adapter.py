@@ -34,6 +34,7 @@ class FakeCollection:
         self.find_calls: list[dict[str, object]] = []
         self.watch_calls: list[tuple[list[dict[str, object]], dict[str, object]]] = []
         self.change_events: list[dict[str, object]] = []
+        self.streams: list[object] = []
 
     def find(self, query: dict[str, object]):
         self.find_calls.append(query)
@@ -42,6 +43,8 @@ class FakeCollection:
 
     def watch(self, pipeline: list[dict[str, object]], **kwargs: object):
         self.watch_calls.append((pipeline, kwargs))
+        if self.streams:
+            return self.streams.pop(0)
         return FakeChangeStream(list(self.change_events))
 
     def _matches(self, document: dict[str, object], query: dict[str, object]) -> bool:
@@ -112,6 +115,15 @@ class FakeChangeStream:
 
     def close(self):
         self.closed = True
+
+
+class BrokenChangeStream(FakeChangeStream):
+    def __init__(self, error: Exception):
+        super().__init__([])
+        self.error = error
+
+    def try_next(self):
+        raise self.error
 
 
 class MongoDbAdapterTest(unittest.TestCase):
@@ -325,6 +337,45 @@ class MongoDbAdapterTest(unittest.TestCase):
         self.assertEqual(events[1].operation, "delete")
         self.assertIsNone(events[1].after)
         self.assertEqual(collection.watch_calls[0][1]["full_document"], "updateLookup")
+
+    def test_start_stream_reopens_stream_after_recoverable_error(self) -> None:
+        config = SourceConfig(
+            id="mongodb-core-ledger",
+            adapter="mongodb",
+            enabled=True,
+            source_instance="erp-eu-1",
+            database_name="ledger",
+            include={"ledger": ["invoices"]},
+            connection={"uri": "mongodb://127.0.0.1:27017"},
+            options={"capture_mode": "change_streams"},
+        )
+        adapter = MongoDbAdapter(config)
+        collection = FakeCollection([])
+        collection.streams = [
+            BrokenChangeStream(RuntimeError("stream lost after restart")),
+            FakeChangeStream(
+                [
+                    {
+                        "_id": {"_data": "token-2"},
+                        "operationType": "insert",
+                        "clusterTime": datetime(2026, 4, 18, 10, 0, 2, tzinfo=timezone.utc),
+                        "documentKey": {"_id": "doc-2"},
+                        "fullDocument": {"_id": "doc-2", "status": "paid"},
+                        "ns": {"db": "ledger", "coll": "invoices"},
+                    }
+                ]
+            ),
+        ]
+        client = FakeMongoClient({"ledger": FakeDatabase({"invoices": collection})})
+
+        with patch("denotary_db_agent.adapters.mongodb.pymongo", object()), patch.object(
+            adapter, "_ensure_stream_client", return_value=client
+        ), patch.object(adapter, "_stream_error_types", return_value=(RuntimeError,)):
+            events = list(adapter.start_stream(None))
+
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].primary_key, {"_id": "doc-2"})
+        self.assertEqual(len(collection.watch_calls), 2)
 
 
 if __name__ == "__main__":

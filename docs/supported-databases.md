@@ -5,11 +5,11 @@
 | Adapter | Target path | Minimum version | CDC path | Current production-validation status |
 | --- | --- | --- | --- | --- |
 | PostgreSQL | enterprise | 14 | watermark polling, trigger CDC, logical decoding, pgoutput streaming | live local full-cycle, stable Jungle4 path, and real `denotary` mainnet validation |
-| MySQL | enterprise | 8.0 | watermark polling baseline plus shared row-based binlog CDC baseline | live local full-cycle plus real `denotary` mainnet validation |
-| MariaDB | enterprise | 10.6 | watermark polling baseline plus shared row-based binlog CDC baseline | live local full-cycle plus real `denotary` mainnet validation |
-| SQL Server | enterprise | 2019 | watermark polling baseline plus native Change Tracking CDC baseline | live local full-cycle plus real `denotary` mainnet validation |
-| Oracle | enterprise | 19c | watermark polling baseline plus LogMiner CDC baseline | live local full-cycle plus real `denotary` mainnet validation |
-| MongoDB | enterprise | 6.0 | watermark polling baseline and change streams | live local full-cycle plus real `denotary` mainnet validation |
+| MySQL | enterprise | 8.0 | watermark polling baseline plus shared row-based binlog CDC baseline | live local full-cycle, source-restart validation, plus real `denotary` mainnet validation |
+| MariaDB | enterprise | 10.6 | watermark polling baseline plus shared row-based binlog CDC baseline | live local full-cycle, source-restart validation, plus real `denotary` mainnet validation |
+| SQL Server | enterprise | 2019 | watermark polling baseline plus native Change Tracking CDC baseline | live local full-cycle, source-restart validation, plus real `denotary` mainnet validation |
+| Oracle | enterprise | 19c | watermark polling baseline plus LogMiner CDC baseline | live local full-cycle, source-restart validation, plus real `denotary` mainnet validation |
+| MongoDB | enterprise | 6.0 | watermark polling baseline and change streams | live local full-cycle, source-restart validation, plus real `denotary` mainnet validation |
 
 ## Common v1 Rules
 

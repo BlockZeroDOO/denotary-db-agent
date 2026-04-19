@@ -20,7 +20,7 @@ from denotary_db_agent.engine import AgentEngine
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 MYSQL_COMPOSE_FILE = PROJECT_ROOT / "deploy" / "mysql-live" / "docker-compose.yml"
-MYSQL_PORT = 57306
+MYSQL_PORT = 53306
 
 
 def free_port() -> int:

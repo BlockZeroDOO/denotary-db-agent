@@ -48,28 +48,33 @@ Execution mode:
     - `delivery_count = 6`
     - `proof_count = 6`
 
-## Current Gaps
-
 ### Oracle
 
 - mode:
   - `logminer`
-- current result:
-  - first post-bootstrap batch succeeds
-  - second batch after `docker restart` fails
-- observed failure:
-  - `ValueError: oracle LogMiner checkpoint is older than the current online redo window; bootstrap a fresh source or reset the source checkpoint`
-- interpretation:
-  - current `LogMiner` baseline does not yet recover cleanly across this restart drill when the saved SCN is no longer covered by the currently available online redo window
+- result:
+  - baseline pass: `0 processed`
+  - first batch after bootstrap: `3 processed`
+  - second batch after `docker restart`: `3 processed`
+  - total:
+    - `delivery_count = 6`
+    - `proof_count = 6`
+- note:
+  - the local Oracle harness now enables `ARCHIVELOG`, and the `LogMiner` adapter resumes across restart using archived redo plus current online redo
 
 ### MongoDB
 
 - mode:
   - `change_streams`
-- current result:
-  - adapter-specific restart drill does not complete within the current validation timeout window
-- interpretation:
-  - restart recovery for the current `change_streams` path still needs targeted debugging before it can be called stable in the same way as MySQL, MariaDB, and SQL Server
+- result:
+  - baseline pass: `0 processed`
+  - first batch after bootstrap: `3 processed`
+  - second batch after `docker restart`: `3 processed`
+  - total:
+    - `delivery_count = 6`
+    - `proof_count = 6`
+- note:
+  - the `change_streams` adapter now reopens stale streams from the saved resume token after source restart
 
 ## Outcome
 
@@ -78,10 +83,7 @@ Confirmed passing native-CDC restart drills:
 - MySQL
 - MariaDB
 - SQL Server
-
-Confirmed open restart-recovery gaps:
-
 - Oracle `logminer`
 - MongoDB `change_streams`
 
-This means Wave 1 restart recovery is partially validated, but not yet closed across all native CDC adapters.
+This closes the Wave 1 source-restart matrix for the current local live harnesses.

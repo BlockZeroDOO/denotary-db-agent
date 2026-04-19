@@ -20,7 +20,7 @@ from denotary_db_agent.engine import AgentEngine
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 MARIADB_COMPOSE_FILE = PROJECT_ROOT / "deploy" / "mariadb-live" / "docker-compose.yml"
-MARIADB_PORT = 57307
+MARIADB_PORT = 53307
 
 
 def free_port() -> int:

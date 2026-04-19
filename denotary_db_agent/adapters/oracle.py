@@ -57,7 +57,7 @@ class OracleAdapter(BaseAdapter):
     minimum_version = "19c"
     adapter_notes = (
         "Oracle supports both watermark-based snapshot polling and a root-admin LogMiner CDC baseline. "
-        "The current LogMiner path mines recent online redo logs and resumes from an SCN checkpoint."
+        "The current LogMiner path mines recent redo logs and resumes from an SCN checkpoint."
     )
 
     def __init__(self, config):
@@ -84,8 +84,8 @@ class OracleAdapter(BaseAdapter):
                     "tracked tables visible",
                     "LogMiner root-admin connection configured",
                     "database supplemental logging enabled",
-                    "accessible online redo members discovered",
-                    "redo checkpoints must remain within the online redo window",
+                    "accessible redo log files discovered",
+                    "restart-safe recovery requires ARCHIVELOG mode",
                 )
             ),
             notes=self.adapter_notes,
@@ -336,18 +336,37 @@ class OracleAdapter(BaseAdapter):
             cursor.execute(
                 """
                 select lf.member as member, l.status as status, l.sequence# as sequence_no
+                     , l.first_change# as first_change_scn, l.next_change# as next_change_scn
                 from v$logfile lf
                 join v$log l on lf.group# = l.group#
                 order by l.group#, lf.member
                 """
             )
             redo_rows = self._fetch_dict_rows(cursor)
+            cursor.execute(
+                """
+                select distinct
+                    name as member,
+                    status as status,
+                    sequence# as sequence_no,
+                    first_change# as first_change_scn,
+                    next_change# as next_change_scn
+                from v$archived_log
+                where name is not null
+                  and archived = 'YES'
+                  and deleted = 'NO'
+                order by first_change#, sequence#
+                """
+            )
+            archived_rows = self._fetch_dict_rows(cursor)
             cursor.execute("select owner, object_name from all_objects where owner = 'PUBLIC' and object_name in ('DBMS_LOGMNR', 'DBMS_LOGMNR_D') order by object_name")
             package_rows = self._fetch_dict_rows(cursor)
+        log_mode = str(self._row_get(database_row, "log_mode"))
         return {
             "capture_mode": "logminer",
             "admin_container_name": str(self._row_get(con_name_row, "con_name")),
-            "log_mode": str(self._row_get(database_row, "log_mode")),
+            "log_mode": log_mode,
+            "archivelog_enabled": log_mode.upper() == "ARCHIVELOG",
             "open_mode": str(self._row_get(database_row, "open_mode")),
             "supplemental_log_data_min": str(self._row_get(database_row, "supplemental_log_data_min")),
             "supplemental_log_data_pk": str(self._row_get(database_row, "supplemental_log_data_pk")),
@@ -357,8 +376,20 @@ class OracleAdapter(BaseAdapter):
                     "member": str(self._row_get(row, "member")),
                     "status": str(self._row_get(row, "status")),
                     "sequence_no": int(self._row_get(row, "sequence_no")),
+                    "first_change_scn": int(self._row_get(row, "first_change_scn")),
+                    "next_change_scn": int(self._row_get(row, "next_change_scn")),
                 }
                 for row in redo_rows
+            ],
+            "archived_redo_members": [
+                {
+                    "member": str(self._row_get(row, "member")),
+                    "status": str(self._row_get(row, "status")),
+                    "sequence_no": int(self._row_get(row, "sequence_no")),
+                    "first_change_scn": int(self._row_get(row, "first_change_scn")),
+                    "next_change_scn": int(self._row_get(row, "next_change_scn")),
+                }
+                for row in archived_rows
             ],
             "logminer_packages": [str(self._row_get(row, "object_name")) for row in package_rows],
             "runtime": self.build_polling_runtime_summary(
@@ -368,6 +399,7 @@ class OracleAdapter(BaseAdapter):
                 },
                 extra={
                     "redo_member_count": len(redo_rows),
+                    "archived_redo_member_count": len(archived_rows),
                 },
             ),
         }
@@ -385,9 +417,13 @@ class OracleAdapter(BaseAdapter):
         return int(self._row_get(row, "current_scn"))
 
     def _start_logminer_session(self, admin_connection: Any, start_scn: int) -> None:
-        redo_members = list(self._read_logminer_summary(admin_connection).get("redo_members") or [])
+        summary = self._read_logminer_summary(admin_connection)
+        redo_members = self._select_logminer_redo_members(summary, start_scn)
         if not redo_members:
-            raise ValueError(f"{self.source_type} logminer admin connection could not discover online redo members")
+            raise ValueError(
+                "oracle LogMiner checkpoint is older than the current redo window; "
+                "bootstrap a fresh source or reset the source checkpoint"
+            )
         with admin_connection.cursor() as cursor:
             for index, entry in enumerate(redo_members):
                 option = "dbms_logmnr.new" if index == 0 else "dbms_logmnr.addfile"
@@ -411,10 +447,43 @@ class OracleAdapter(BaseAdapter):
                 message = str(exc)
                 if "ORA-01291" in message:
                     raise ValueError(
-                        "oracle LogMiner checkpoint is older than the current online redo window; "
+                        "oracle LogMiner checkpoint is older than the current redo window; "
                         "bootstrap a fresh source or reset the source checkpoint"
                     ) from exc
                 raise
+
+    def _select_logminer_redo_members(self, summary: dict[str, Any], start_scn: int) -> list[dict[str, Any]]:
+        candidates = [
+            ({**entry, "_source_kind": "archived"}) for entry in list(summary.get("archived_redo_members") or [])
+        ] + [
+            ({**entry, "_source_kind": "online"}) for entry in list(summary.get("redo_members") or [])
+        ]
+        selected: list[dict[str, Any]] = []
+        seen_members: set[str] = set()
+        seen_sequences: set[int] = set()
+        for entry in sorted(
+            candidates,
+            key=lambda item: (
+                int(item.get("first_change_scn") or 0),
+                int(item.get("sequence_no") or 0),
+                0 if str(item.get("_source_kind") or "") == "archived" else 1,
+                str(item.get("member") or ""),
+            ),
+        ):
+            member = str(entry.get("member") or "")
+            sequence_no = int(entry.get("sequence_no") or 0)
+            if not member or member in seen_members:
+                continue
+            next_change_scn = int(entry.get("next_change_scn") or 0)
+            if next_change_scn and next_change_scn <= start_scn:
+                continue
+            if sequence_no and sequence_no in seen_sequences:
+                continue
+            selected.append(entry)
+            seen_members.add(member)
+            if sequence_no:
+                seen_sequences.add(sequence_no)
+        return selected
 
     def _end_logminer_session(self, admin_connection: Any) -> None:
         with admin_connection.cursor() as cursor:

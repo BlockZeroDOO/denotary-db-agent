@@ -144,14 +144,26 @@ class MongoDbAdapter(BaseAdapter):
         current_state = dict(checkpoint_state)
         events: list[ChangeEvent] = []
         for spec in specs:
-            stream = self._ensure_collection_stream(client, spec, checkpoint_state.get(spec.key))
+            stream_state = checkpoint_state.get(spec.key)
+            reopened = False
             while True:
-                change = stream.try_next()
-                if change is None:
+                stream = self._ensure_collection_stream(client, spec, stream_state)
+                try:
+                    while True:
+                        change = stream.try_next()
+                        if change is None:
+                            break
+                        event = self._event_from_change(spec, change, current_state)
+                        current_state[spec.key] = dict(self._stream_state.get(spec.key) or {})
+                        stream_state = current_state.get(spec.key)
+                        events.append(event)
                     break
-                event = self._event_from_change(spec, change, current_state)
-                current_state[spec.key] = dict(self._stream_state.get(spec.key) or {})
-                events.append(event)
+                except self._stream_error_types():
+                    if reopened:
+                        raise
+                    reopened = True
+                    self._reset_stream_client()
+                    client = self._ensure_stream_client()
         return iter(events)
 
     def stop_stream(self) -> None:
@@ -382,6 +394,25 @@ class MongoDbAdapter(BaseAdapter):
                 connectTimeoutMS=int(self.config.connection.get("connect_timeout_ms", 10000)),
             )
         return self._stream_client
+
+    def _reset_stream_client(self) -> None:
+        for stream in self._active_streams.values():
+            try:
+                stream.close()
+            except Exception:
+                pass
+        self._active_streams.clear()
+        if self._stream_client is not None:
+            try:
+                self._stream_client.close()
+            except Exception:
+                pass
+        self._stream_client = None
+
+    def _stream_error_types(self) -> tuple[type[BaseException], ...]:
+        if pymongo is not None and getattr(pymongo, "errors", None) is not None:
+            return (pymongo.errors.PyMongoError,)
+        return (Exception,)
 
     def _ensure_collection_stream(self, client: Any, spec: MongoCollectionSpec, stream_state: dict[str, Any] | None) -> Any:
         existing = self._active_streams.get(spec.key)

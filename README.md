@@ -81,6 +81,14 @@ Current Wave 1 mainnet status:
 - Oracle is validated on real `denotary` mainnet
 - MongoDB is validated on real `denotary` mainnet
 
+Current Wave 1 restart-recovery status:
+
+- MySQL `binlog` restart drill is validated
+- MariaDB `binlog` restart drill is validated
+- SQL Server `change_tracking` restart drill is validated
+- Oracle `logminer` restart drill is validated
+- MongoDB `change_streams` restart drill is validated
+
 ## Quick Start
 
 ```bash

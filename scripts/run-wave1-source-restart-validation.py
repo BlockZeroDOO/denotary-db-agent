@@ -461,6 +461,31 @@ def enable_oracle_root_supplemental_logging() -> None:
         connection.close()
 
 
+def enable_oracle_archivelog() -> None:
+    subprocess.run(
+        [
+            "docker",
+            "exec",
+            ORACLE_CONTAINER,
+            "bash",
+            "-lc",
+            (
+                "sqlplus -s / as sysdba <<'SQL'\n"
+                "shutdown immediate;\n"
+                "startup mount;\n"
+                "alter database archivelog;\n"
+                "alter database open;\n"
+                "exit\n"
+                "SQL"
+            ),
+        ],
+        check=True,
+        cwd=str(PROJECT_ROOT),
+        capture_output=True,
+        text=True,
+    )
+
+
 def apply_sqlserver_init() -> None:
     connection = pytds.connect(
         dsn="127.0.0.1",
@@ -547,12 +572,12 @@ def datetime_values(base: datetime, count: int) -> list[datetime]:
 def mysql_restart_drill() -> dict[str, Any]:
     docker_compose(MYSQL_COMPOSE_FILE, "down", "-v")
     docker_compose(MYSQL_COMPOSE_FILE, "up", "-d")
-    wait_mysql_like(57306)
-    with pymysql.connect(host="127.0.0.1", port=57306, user="denotary", password="denotarypw", database="ledger", autocommit=True) as connection:
+    wait_mysql_like(53306)
+    with pymysql.connect(host="127.0.0.1", port=53306, user="denotary", password="denotarypw", database="ledger", autocommit=True) as connection:
         with connection.cursor() as cursor:
             cursor.execute("delete from payments")
             cursor.execute("delete from invoices")
-    admin = pymysql.connect(host="127.0.0.1", port=57306, user="root", password="rootpw", database="ledger", autocommit=True)
+    admin = pymysql.connect(host="127.0.0.1", port=53306, user="root", password="rootpw", database="ledger", autocommit=True)
     try:
         with admin.cursor() as cursor:
             cursor.execute("show binary log status")
@@ -578,7 +603,7 @@ def mysql_restart_drill() -> dict[str, Any]:
                 "include": {"ledger": ["invoices"]},
                 "connection": {
                     "host": "127.0.0.1",
-                    "port": 57306,
+                    "port": 53306,
                     "username": "denotary",
                     "password": "denotarypw",
                     "database": "ledger",
@@ -599,7 +624,7 @@ def mysql_restart_drill() -> dict[str, Any]:
             engine = AgentEngine(load_config(config_path))
             engine.bootstrap("mysql-restart-drill")
             first_times = datetime_values(datetime(2026, 4, 19, 1, 0, 0), 3)
-            with pymysql.connect(host="127.0.0.1", port=57306, user="denotary", password="denotarypw", database="ledger", autocommit=True) as connection:
+            with pymysql.connect(host="127.0.0.1", port=53306, user="denotary", password="denotarypw", database="ledger", autocommit=True) as connection:
                 with connection.cursor() as cursor:
                     for index, stamp in enumerate(first_times, start=1):
                         cursor.execute(
@@ -608,9 +633,9 @@ def mysql_restart_drill() -> dict[str, Any]:
                         )
             first_result = engine.run_once()
             docker_restart(MYSQL_CONTAINER)
-            wait_mysql_like(57306)
+            wait_mysql_like(53306)
             second_times = datetime_values(datetime(2026, 4, 19, 1, 10, 0), 3)
-            with pymysql.connect(host="127.0.0.1", port=57306, user="denotary", password="denotarypw", database="ledger", autocommit=True) as connection:
+            with pymysql.connect(host="127.0.0.1", port=53306, user="denotary", password="denotarypw", database="ledger", autocommit=True) as connection:
                 with connection.cursor() as cursor:
                     for index, stamp in enumerate(second_times, start=1):
                         cursor.execute(
@@ -636,12 +661,12 @@ def mysql_restart_drill() -> dict[str, Any]:
 def mariadb_restart_drill() -> dict[str, Any]:
     docker_compose(MARIADB_COMPOSE_FILE, "down", "-v")
     docker_compose(MARIADB_COMPOSE_FILE, "up", "-d")
-    wait_mysql_like(57307)
-    with pymysql.connect(host="127.0.0.1", port=57307, user="denotary", password="denotarypw", database="ledger", autocommit=True) as connection:
+    wait_mysql_like(53307)
+    with pymysql.connect(host="127.0.0.1", port=53307, user="denotary", password="denotarypw", database="ledger", autocommit=True) as connection:
         with connection.cursor() as cursor:
             cursor.execute("delete from payments")
             cursor.execute("delete from invoices")
-    admin = pymysql.connect(host="127.0.0.1", port=57307, user="root", password="rootpw", database="ledger", autocommit=True)
+    admin = pymysql.connect(host="127.0.0.1", port=53307, user="root", password="rootpw", database="ledger", autocommit=True)
     try:
         with admin.cursor() as cursor:
             row = None
@@ -671,7 +696,7 @@ def mariadb_restart_drill() -> dict[str, Any]:
                 "include": {"ledger": ["invoices"]},
                 "connection": {
                     "host": "127.0.0.1",
-                    "port": 57307,
+                    "port": 53307,
                     "username": "denotary",
                     "password": "denotarypw",
                     "database": "ledger",
@@ -692,7 +717,7 @@ def mariadb_restart_drill() -> dict[str, Any]:
             engine = AgentEngine(load_config(config_path))
             engine.bootstrap("mariadb-restart-drill")
             first_times = datetime_values(datetime(2026, 4, 19, 2, 0, 0), 3)
-            with pymysql.connect(host="127.0.0.1", port=57307, user="denotary", password="denotarypw", database="ledger", autocommit=True) as connection:
+            with pymysql.connect(host="127.0.0.1", port=53307, user="denotary", password="denotarypw", database="ledger", autocommit=True) as connection:
                 with connection.cursor() as cursor:
                     for index, stamp in enumerate(first_times, start=1):
                         cursor.execute(
@@ -701,9 +726,9 @@ def mariadb_restart_drill() -> dict[str, Any]:
                         )
             first_result = engine.run_once()
             docker_restart(MARIADB_CONTAINER)
-            wait_mysql_like(57307)
+            wait_mysql_like(53307)
             second_times = datetime_values(datetime(2026, 4, 19, 2, 10, 0), 3)
-            with pymysql.connect(host="127.0.0.1", port=57307, user="denotary", password="denotarypw", database="ledger", autocommit=True) as connection:
+            with pymysql.connect(host="127.0.0.1", port=53307, user="denotary", password="denotarypw", database="ledger", autocommit=True) as connection:
                 with connection.cursor() as cursor:
                     for index, stamp in enumerate(second_times, start=1):
                         cursor.execute(
@@ -847,6 +872,7 @@ def oracle_restart_drill() -> dict[str, Any]:
     docker_compose(ORACLE_COMPOSE_FILE, "down", "-v")
     docker_compose(ORACLE_COMPOSE_FILE, "up", "-d")
     wait_oracle_root()
+    enable_oracle_archivelog()
     wait_oracle_pdb()
     enable_oracle_root_supplemental_logging()
     apply_oracle_init()
@@ -1022,6 +1048,7 @@ def mongodb_restart_drill() -> dict[str, Any]:
                 client.close()
             time.sleep(1)
             second_result = engine.run_once()
+            engine.close()
             deliveries = engine.store.list_deliveries("mongodb-restart-drill")
             proofs = engine.store.list_proofs("mongodb-restart-drill")
             return {

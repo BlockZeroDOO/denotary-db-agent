@@ -545,11 +545,53 @@ class OracleAdapterTest(unittest.TestCase):
         ), patch.object(adapter, "_read_source_container_name", return_value="FREEPDB1"), patch.object(
             adapter, "_validate_logminer_prerequisites"
         ), patch.object(
-            adapter, "_start_logminer_session", side_effect=ValueError("oracle LogMiner checkpoint is older than the current online redo window")
+            adapter, "_start_logminer_session", side_effect=ValueError("oracle LogMiner checkpoint is older than the current redo window")
         ):
             connect.return_value.__enter__.return_value = FakeConnection([])
             connect.return_value.__exit__.return_value = False
             admin_connect.return_value.__enter__.return_value = FakeConnection([])
             admin_connect.return_value.__exit__.return_value = False
-            with self.assertRaisesRegex(ValueError, "older than the current online redo window"):
+            with self.assertRaisesRegex(ValueError, "older than the current redo window"):
                 list(adapter.start_stream(checkpoint))
+
+    def test_select_logminer_redo_members_prefers_archived_and_current_logs_after_checkpoint(self) -> None:
+        adapter = OracleAdapter(self.config)
+
+        selected = adapter._select_logminer_redo_members(
+            {
+                "archived_redo_members": [
+                    {
+                        "member": "/arch/redo13.arc",
+                        "sequence_no": 13,
+                        "first_change_scn": 1000,
+                        "next_change_scn": 1100,
+                    },
+                    {
+                        "member": "/arch/redo14.arc",
+                        "sequence_no": 14,
+                        "first_change_scn": 1100,
+                        "next_change_scn": 1200,
+                    },
+                ],
+                "redo_members": [
+                    {
+                        "member": "/redo/redo01.log",
+                        "sequence_no": 14,
+                        "first_change_scn": 1200,
+                        "next_change_scn": 1300,
+                    },
+                    {
+                        "member": "/redo/redo02.log",
+                        "sequence_no": 15,
+                        "first_change_scn": 1300,
+                        "next_change_scn": 0,
+                    },
+                ],
+            },
+            start_scn=1150,
+        )
+
+        self.assertEqual(
+            [entry["member"] for entry in selected],
+            ["/arch/redo14.arc", "/redo/redo02.log"],
+        )
