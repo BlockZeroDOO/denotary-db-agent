@@ -7,7 +7,7 @@ from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
-from denotary_db_agent.cli import COMMAND_ALIAS_SPECS, COMMAND_GROUPS, COMMAND_GROUP_ALIASES, COMMAND_GROUP_BUILDERS, COMMAND_GROUP_SPECS, COMMAND_KIND_BEHAVIOR_DEFAULTS, COMMAND_KIND_COMMAND_DEFAULTS, COMMAND_KIND_HANDLERS, COMMAND_KIND_OPTION_LAYOUTS, COMMAND_KIND_PARSER_BUILDERS, COMMAND_KIND_SPECS, COMMAND_SPECS, ENGINE_DISPATCH_COMMANDS, EVIDENCE_COMMANDS, JSON_ENGINE_COMMANDS, LEGACY_EXPORTS, LEGACY_EXPORT_NAMES, LEGACY_EXPORT_SPECS, OPTION_SPECS, RESOLVED_COMMAND_SPECS, SOURCE_ACTION_COMMANDS, build_command_alias, build_command_group, build_command_group_aliases, build_command_group_builders, build_command_groups, build_command_result, build_compatibility_alias_snapshot, build_engine_dispatch_commands, build_exported_legacy_globals, build_kind_component_map, build_kind_registry, build_legacy_export_snapshot, build_legacy_export_surface, build_legacy_exports, build_named_access_snapshot, build_named_snapshot, build_parser, command_uses_engine, emit_command_result, evaluate_command_exit_policy, execute_command, get_command_alias, get_command_behavior, get_command_group, get_command_kind_spec, get_command_spec, get_legacy_export, main, maybe_export_snapshot, select_commands
+from denotary_db_agent.cli import COMMAND_ALIAS_SPECS, COMMAND_GROUPS, COMMAND_GROUP_ALIASES, COMMAND_GROUP_BUILDERS, COMMAND_GROUP_SPECS, COMMAND_KIND_BEHAVIOR_DEFAULTS, COMMAND_KIND_COMMAND_DEFAULTS, COMMAND_KIND_HANDLERS, COMMAND_KIND_OPTION_LAYOUTS, COMMAND_KIND_PARSER_BUILDERS, COMMAND_KIND_SPECS, COMMAND_SPECS, ENGINE_DISPATCH_COMMANDS, EVIDENCE_COMMANDS, JSON_ENGINE_COMMANDS, LEGACY_EXPORTS, LEGACY_EXPORT_NAMES, LEGACY_EXPORT_SPECS, OPTION_SPECS, RESOLVED_COMMAND_SPECS, SOURCE_ACTION_COMMANDS, build_alias_spec_snapshot, build_command_alias, build_command_group, build_command_group_aliases, build_command_group_builders, build_command_groups, build_command_result, build_compatibility_alias_snapshot, build_compatibility_snapshot, build_engine_dispatch_commands, build_exported_legacy_globals, build_kind_component_map, build_kind_registry, build_legacy_export_access_snapshot, build_legacy_export_snapshot, build_legacy_export_surface, build_legacy_exports, build_named_access_snapshot, build_named_snapshot, build_parser, command_uses_engine, emit_command_result, evaluate_command_exit_policy, execute_command, get_command_alias, get_command_behavior, get_command_group, get_command_kind_spec, get_command_spec, get_legacy_export, main, maybe_export_snapshot, select_commands
 from denotary_db_agent.diagnostics_snapshots import (
     artifact_kind,
     build_snapshot_metadata,
@@ -64,6 +64,46 @@ class CliTest(unittest.TestCase):
             },
         )
 
+    def test_build_compatibility_snapshot_uses_getter(self) -> None:
+        result = build_compatibility_snapshot(
+            {"alpha": {}, "beta": {}},
+            lambda name: {"name": name, "upper": name.upper()},
+        )
+
+        self.assertEqual(
+            result,
+            {
+                "alpha": {"name": "alpha", "upper": "ALPHA"},
+                "beta": {"name": "beta", "upper": "BETA"},
+            },
+        )
+
+    def test_build_alias_spec_snapshot_uses_optional_alias_field(self) -> None:
+        with patch("denotary_db_agent.cli.build_command_alias", side_effect=lambda name: {"alias": name}):
+            direct = build_alias_spec_snapshot({"ALPHA": {}, "BETA": {}})
+            redirected = build_alias_spec_snapshot(
+                {
+                    "FIRST": {"alias": "ALPHA"},
+                    "SECOND": {"alias": "BETA"},
+                },
+                alias_field="alias",
+            )
+
+        self.assertEqual(
+            direct,
+            {
+                "ALPHA": {"alias": "ALPHA"},
+                "BETA": {"alias": "BETA"},
+            },
+        )
+        self.assertEqual(
+            redirected,
+            {
+                "FIRST": {"alias": "ALPHA"},
+                "SECOND": {"alias": "BETA"},
+            },
+        )
+
     def test_evidence_commands_registry_declares_engine_methods(self) -> None:
         self.assertEqual(EVIDENCE_COMMANDS["doctor"]["engine_method"], "doctor")
         self.assertEqual(EVIDENCE_COMMANDS["report"]["engine_method"], "report")
@@ -82,6 +122,7 @@ class CliTest(unittest.TestCase):
         self.assertEqual(build_command_group_aliases()["EVIDENCE_COMMANDS"], EVIDENCE_COMMANDS)
         self.assertEqual(build_compatibility_alias_snapshot()["EVIDENCE_COMMANDS"], EVIDENCE_COMMANDS)
         self.assertEqual(build_legacy_export_snapshot()["EVIDENCE_COMMANDS"], EVIDENCE_COMMANDS)
+        self.assertEqual(build_legacy_export_access_snapshot()["EVIDENCE_COMMANDS"], EVIDENCE_COMMANDS)
         self.assertEqual(build_legacy_exports()["EVIDENCE_COMMANDS"], EVIDENCE_COMMANDS)
         self.assertEqual(build_exported_legacy_globals()["EVIDENCE_COMMANDS"], EVIDENCE_COMMANDS)
         self.assertEqual(build_legacy_export_surface()["EVIDENCE_COMMANDS"], EVIDENCE_COMMANDS)
