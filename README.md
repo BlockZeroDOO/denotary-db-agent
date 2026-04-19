@@ -97,6 +97,14 @@ Current Wave 1 short-soak status:
 - Oracle `logminer` short-soak is validated
 - MongoDB `change_streams` short-soak is validated
 
+Current Wave 1 long-soak status:
+
+- MySQL `binlog` long-soak is validated
+- MariaDB `binlog` long-soak is validated
+- SQL Server `change_tracking` long-soak is validated
+- Oracle `logminer` long-soak is validated
+- MongoDB `change_streams` long-soak is validated
+
 Current service-outage recovery status:
 
 - temporary `ingress` prepare outage is validated
@@ -157,6 +165,8 @@ See:
 - [docs/wave1-source-restart-validation-report.md](docs/wave1-source-restart-validation-report.md)
 - [docs/wave1-short-soak-validation.md](docs/wave1-short-soak-validation.md)
 - [docs/wave1-short-soak-validation-report.md](docs/wave1-short-soak-validation-report.md)
+- [docs/wave1-long-soak-validation.md](docs/wave1-long-soak-validation.md)
+- [docs/wave1-long-soak-validation-report.md](docs/wave1-long-soak-validation-report.md)
 - [docs/wave1-service-outage-validation.md](docs/wave1-service-outage-validation.md)
 - [docs/wave1-service-outage-validation-report.md](docs/wave1-service-outage-validation-report.md)
 - [docs/denotary-postgresql-rollout-checklist.md](docs/denotary-postgresql-rollout-checklist.md)
@@ -167,6 +177,7 @@ See:
 - [docs/wave1-recovery-validation.md](docs/wave1-recovery-validation.md)
 - [scripts/run-wave1-source-restart-validation.ps1](scripts/run-wave1-source-restart-validation.ps1)
 - [scripts/run-wave1-short-soak-validation.ps1](scripts/run-wave1-short-soak-validation.ps1)
+- [scripts/run-wave1-long-soak-validation.ps1](scripts/run-wave1-long-soak-validation.ps1)
 - [scripts/run-wave1-service-outage-validation.ps1](scripts/run-wave1-service-outage-validation.ps1)
 - [docs/supported-databases.md](docs/supported-databases.md)
 - [docs/verifbill-permission-model.md](docs/verifbill-permission-model.md)

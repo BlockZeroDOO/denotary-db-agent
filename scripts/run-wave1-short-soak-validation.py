@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import importlib.util
 import json
 import sys
@@ -35,21 +36,23 @@ def _load_restart_helpers():
 
 HELPERS = _load_restart_helpers()
 
-SOAK_CYCLES = 5
-EVENTS_PER_CYCLE = 3
+DEFAULT_SOAK_CYCLES = 5
+DEFAULT_EVENTS_PER_CYCLE = 3
+DEFAULT_MONGODB_SLEEP_AFTER_WRITE = 2.0
 
 
 def _run_cycles(
     *,
     engine: AgentEngine,
     cycle_writer: Callable[[int], None],
+    cycles: int,
     sleep_after_write: float = 0.0,
 ) -> dict[str, Any]:
     baseline = engine.run_once()
     total_processed = baseline["processed"]
     total_failed = baseline["failed"]
     cycle_results: list[dict[str, int]] = []
-    for cycle in range(SOAK_CYCLES):
+    for cycle in range(cycles):
         cycle_writer(cycle)
         if sleep_after_write > 0:
             time.sleep(sleep_after_write)
@@ -65,27 +68,27 @@ def _run_cycles(
     }
 
 
-def _assert_short_soak_counts(result: dict[str, Any]) -> None:
-    expected_total = SOAK_CYCLES * EVENTS_PER_CYCLE
+def _assert_soak_counts(result: dict[str, Any], *, cycles: int, events_per_cycle: int, soak_name: str) -> None:
+    expected_total = cycles * events_per_cycle
     if int(result.get("total_processed") or 0) != expected_total:
         raise RuntimeError(
-            f"{result['adapter']} short soak processed {result.get('total_processed')} events, expected {expected_total}"
+            f"{result['adapter']} {soak_name} processed {result.get('total_processed')} events, expected {expected_total}"
         )
     if int(result.get("total_failed") or 0) != 0:
-        raise RuntimeError(f"{result['adapter']} short soak recorded failures")
+        raise RuntimeError(f"{result['adapter']} {soak_name} recorded failures")
     if int(result.get("delivery_count") or 0) != expected_total:
         raise RuntimeError(
-            f"{result['adapter']} short soak exported {result.get('delivery_count')} deliveries, expected {expected_total}"
+            f"{result['adapter']} {soak_name} exported {result.get('delivery_count')} deliveries, expected {expected_total}"
         )
     if int(result.get("proof_count") or 0) != expected_total:
         raise RuntimeError(
-            f"{result['adapter']} short soak exported {result.get('proof_count')} proofs, expected {expected_total}"
+            f"{result['adapter']} {soak_name} exported {result.get('proof_count')} proofs, expected {expected_total}"
         )
     if int(result.get("dlq_count") or 0) != 0:
-        raise RuntimeError(f"{result['adapter']} short soak pushed events to DLQ")
+        raise RuntimeError(f"{result['adapter']} {soak_name} pushed events to DLQ")
 
 
-def mysql_short_soak() -> dict[str, Any]:
+def mysql_soak(*, cycles: int, events_per_cycle: int, soak_name: str) -> dict[str, Any]:
     HELPERS.docker_compose(HELPERS.MYSQL_COMPOSE_FILE, "down", "-v")
     HELPERS.docker_compose(HELPERS.MYSQL_COMPOSE_FILE, "up", "-d")
     HELPERS.wait_mysql_like(53306)
@@ -148,7 +151,7 @@ def mysql_short_soak() -> dict[str, Any]:
                 engine.bootstrap("mysql-short-soak")
 
                 def write_cycle(cycle: int) -> None:
-                    stamps = HELPERS.datetime_values(datetime(2026, 4, 19, 6, cycle, 0), EVENTS_PER_CYCLE)
+                    stamps = HELPERS.datetime_values(datetime(2026, 4, 19, 6, cycle, 0), events_per_cycle)
                     with pymysql.connect(
                         host="127.0.0.1",
                         port=53306,
@@ -169,7 +172,7 @@ def mysql_short_soak() -> dict[str, Any]:
                                     ),
                                 )
 
-                run = _run_cycles(engine=engine, cycle_writer=write_cycle)
+                run = _run_cycles(engine=engine, cycle_writer=write_cycle, cycles=cycles)
                 deliveries = engine.store.list_deliveries("mysql-short-soak")
                 proofs = engine.store.list_proofs("mysql-short-soak")
                 dlq = engine.store.list_dlq("mysql-short-soak")
@@ -181,7 +184,7 @@ def mysql_short_soak() -> dict[str, Any]:
                     "proof_count": len(proofs),
                     "dlq_count": len(dlq),
                 }
-                _assert_short_soak_counts(result)
+                _assert_soak_counts(result, cycles=cycles, events_per_cycle=events_per_cycle, soak_name=soak_name)
                 return result
             finally:
                 engine.close()
@@ -190,7 +193,7 @@ def mysql_short_soak() -> dict[str, Any]:
         HELPERS.docker_compose(HELPERS.MYSQL_COMPOSE_FILE, "down", "-v")
 
 
-def mariadb_short_soak() -> dict[str, Any]:
+def mariadb_soak(*, cycles: int, events_per_cycle: int, soak_name: str) -> dict[str, Any]:
     HELPERS.docker_compose(HELPERS.MARIADB_COMPOSE_FILE, "down", "-v")
     HELPERS.docker_compose(HELPERS.MARIADB_COMPOSE_FILE, "up", "-d")
     HELPERS.wait_mysql_like(53307)
@@ -253,7 +256,7 @@ def mariadb_short_soak() -> dict[str, Any]:
                 engine.bootstrap("mariadb-short-soak")
 
                 def write_cycle(cycle: int) -> None:
-                    stamps = HELPERS.datetime_values(datetime(2026, 4, 19, 7, cycle, 0), EVENTS_PER_CYCLE)
+                    stamps = HELPERS.datetime_values(datetime(2026, 4, 19, 7, cycle, 0), events_per_cycle)
                     with pymysql.connect(
                         host="127.0.0.1",
                         port=53307,
@@ -274,7 +277,7 @@ def mariadb_short_soak() -> dict[str, Any]:
                                     ),
                                 )
 
-                run = _run_cycles(engine=engine, cycle_writer=write_cycle)
+                run = _run_cycles(engine=engine, cycle_writer=write_cycle, cycles=cycles)
                 deliveries = engine.store.list_deliveries("mariadb-short-soak")
                 proofs = engine.store.list_proofs("mariadb-short-soak")
                 dlq = engine.store.list_dlq("mariadb-short-soak")
@@ -286,7 +289,7 @@ def mariadb_short_soak() -> dict[str, Any]:
                     "proof_count": len(proofs),
                     "dlq_count": len(dlq),
                 }
-                _assert_short_soak_counts(result)
+                _assert_soak_counts(result, cycles=cycles, events_per_cycle=events_per_cycle, soak_name=soak_name)
                 return result
             finally:
                 engine.close()
@@ -295,7 +298,7 @@ def mariadb_short_soak() -> dict[str, Any]:
         HELPERS.docker_compose(HELPERS.MARIADB_COMPOSE_FILE, "down", "-v")
 
 
-def sqlserver_short_soak() -> dict[str, Any]:
+def sqlserver_soak(*, cycles: int, events_per_cycle: int, soak_name: str) -> dict[str, Any]:
     HELPERS.docker_compose(HELPERS.SQLSERVER_COMPOSE_FILE, "down", "-v")
     HELPERS.docker_compose(HELPERS.SQLSERVER_COMPOSE_FILE, "up", "-d")
     HELPERS.wait_sqlserver()
@@ -351,7 +354,7 @@ def sqlserver_short_soak() -> dict[str, Any]:
                 engine.bootstrap("sqlserver-short-soak")
 
                 def write_cycle(cycle: int) -> None:
-                    stamps = HELPERS.datetime_values(datetime(2026, 4, 19, 8, cycle, 0), EVENTS_PER_CYCLE)
+                    stamps = HELPERS.datetime_values(datetime(2026, 4, 19, 8, cycle, 0), events_per_cycle)
                     connection = pytds.connect(
                         dsn="127.0.0.1",
                         port=51433,
@@ -378,7 +381,7 @@ def sqlserver_short_soak() -> dict[str, Any]:
                     finally:
                         connection.close()
 
-                run = _run_cycles(engine=engine, cycle_writer=write_cycle)
+                run = _run_cycles(engine=engine, cycle_writer=write_cycle, cycles=cycles)
                 deliveries = engine.store.list_deliveries("sqlserver-short-soak")
                 proofs = engine.store.list_proofs("sqlserver-short-soak")
                 dlq = engine.store.list_dlq("sqlserver-short-soak")
@@ -390,7 +393,7 @@ def sqlserver_short_soak() -> dict[str, Any]:
                     "proof_count": len(proofs),
                     "dlq_count": len(dlq),
                 }
-                _assert_short_soak_counts(result)
+                _assert_soak_counts(result, cycles=cycles, events_per_cycle=events_per_cycle, soak_name=soak_name)
                 return result
             finally:
                 engine.close()
@@ -399,7 +402,7 @@ def sqlserver_short_soak() -> dict[str, Any]:
         HELPERS.docker_compose(HELPERS.SQLSERVER_COMPOSE_FILE, "down", "-v")
 
 
-def oracle_short_soak() -> dict[str, Any]:
+def oracle_soak(*, cycles: int, events_per_cycle: int, soak_name: str) -> dict[str, Any]:
     HELPERS.docker_compose(HELPERS.ORACLE_COMPOSE_FILE, "down", "-v")
     HELPERS.docker_compose(HELPERS.ORACLE_COMPOSE_FILE, "up", "-d")
     HELPERS.wait_oracle_root()
@@ -459,7 +462,7 @@ def oracle_short_soak() -> dict[str, Any]:
                 engine.bootstrap("oracle-short-soak")
 
                 def write_cycle(cycle: int) -> None:
-                    stamps = HELPERS.datetime_values(datetime(2026, 4, 19, 9, cycle, 0), EVENTS_PER_CYCLE)
+                    stamps = HELPERS.datetime_values(datetime(2026, 4, 19, 9, cycle, 0), events_per_cycle)
                     connection = oracledb.connect(
                         user="denotary",
                         password="denotarypw",
@@ -479,7 +482,7 @@ def oracle_short_soak() -> dict[str, Any]:
                     finally:
                         connection.close()
 
-                run = _run_cycles(engine=engine, cycle_writer=write_cycle)
+                run = _run_cycles(engine=engine, cycle_writer=write_cycle, cycles=cycles)
                 deliveries = engine.store.list_deliveries("oracle-short-soak")
                 proofs = engine.store.list_proofs("oracle-short-soak")
                 dlq = engine.store.list_dlq("oracle-short-soak")
@@ -491,7 +494,7 @@ def oracle_short_soak() -> dict[str, Any]:
                     "proof_count": len(proofs),
                     "dlq_count": len(dlq),
                 }
-                _assert_short_soak_counts(result)
+                _assert_soak_counts(result, cycles=cycles, events_per_cycle=events_per_cycle, soak_name=soak_name)
                 return result
             finally:
                 engine.close()
@@ -500,7 +503,13 @@ def oracle_short_soak() -> dict[str, Any]:
         HELPERS.docker_compose(HELPERS.ORACLE_COMPOSE_FILE, "down", "-v")
 
 
-def mongodb_short_soak() -> dict[str, Any]:
+def mongodb_soak(
+    *,
+    cycles: int,
+    events_per_cycle: int,
+    soak_name: str,
+    mongodb_sleep_after_write: float = DEFAULT_MONGODB_SLEEP_AFTER_WRITE,
+) -> dict[str, Any]:
     HELPERS.docker_compose(HELPERS.MONGODB_COMPOSE_FILE, "down", "-v")
     HELPERS.docker_compose(HELPERS.MONGODB_COMPOSE_FILE, "up", "-d")
     HELPERS.wait_for_mongodb_replica_set()
@@ -548,7 +557,7 @@ def mongodb_short_soak() -> dict[str, Any]:
                     try:
                         db = client["ledger"]
                         for index, stamp in enumerate(
-                            HELPERS.datetime_values(datetime(2026, 4, 19, 10, cycle, 0, tzinfo=timezone.utc), EVENTS_PER_CYCLE),
+                            HELPERS.datetime_values(datetime(2026, 4, 19, 10, cycle, 0, tzinfo=timezone.utc), events_per_cycle),
                             start=1,
                         ):
                             db["invoices"].insert_one(
@@ -561,7 +570,12 @@ def mongodb_short_soak() -> dict[str, Any]:
                     finally:
                         client.close()
 
-                run = _run_cycles(engine=engine, cycle_writer=write_cycle, sleep_after_write=2.0)
+                run = _run_cycles(
+                    engine=engine,
+                    cycle_writer=write_cycle,
+                    cycles=cycles,
+                    sleep_after_write=mongodb_sleep_after_write,
+                )
                 deliveries = engine.store.list_deliveries("mongodb-short-soak")
                 proofs = engine.store.list_proofs("mongodb-short-soak")
                 dlq = engine.store.list_dlq("mongodb-short-soak")
@@ -573,7 +587,7 @@ def mongodb_short_soak() -> dict[str, Any]:
                     "proof_count": len(proofs),
                     "dlq_count": len(dlq),
                 }
-                _assert_short_soak_counts(result)
+                _assert_soak_counts(result, cycles=cycles, events_per_cycle=events_per_cycle, soak_name=soak_name)
                 return result
             finally:
                 engine.close()
@@ -582,23 +596,76 @@ def mongodb_short_soak() -> dict[str, Any]:
         HELPERS.docker_compose(HELPERS.MONGODB_COMPOSE_FILE, "down", "-v")
 
 
-def main() -> None:
-    runners = {
-        "mysql": mysql_short_soak,
-        "mariadb": mariadb_short_soak,
-        "sqlserver": sqlserver_short_soak,
-        "oracle": oracle_short_soak,
-        "mongodb": mongodb_short_soak,
+def build_runners(
+    *,
+    cycles: int,
+    events_per_cycle: int,
+    soak_name: str,
+    mongodb_sleep_after_write: float = DEFAULT_MONGODB_SLEEP_AFTER_WRITE,
+) -> dict[str, Callable[[], dict[str, Any]]]:
+    return {
+        "mysql": lambda: mysql_soak(cycles=cycles, events_per_cycle=events_per_cycle, soak_name=soak_name),
+        "mariadb": lambda: mariadb_soak(cycles=cycles, events_per_cycle=events_per_cycle, soak_name=soak_name),
+        "sqlserver": lambda: sqlserver_soak(cycles=cycles, events_per_cycle=events_per_cycle, soak_name=soak_name),
+        "oracle": lambda: oracle_soak(cycles=cycles, events_per_cycle=events_per_cycle, soak_name=soak_name),
+        "mongodb": lambda: mongodb_soak(
+            cycles=cycles,
+            events_per_cycle=events_per_cycle,
+            soak_name=soak_name,
+            mongodb_sleep_after_write=mongodb_sleep_after_write,
+        ),
     }
+
+
+def run_validation(
+    *,
+    cycles: int = DEFAULT_SOAK_CYCLES,
+    events_per_cycle: int = DEFAULT_EVENTS_PER_CYCLE,
+    soak_name: str = "short soak",
+    adapter: str | None = None,
+    mongodb_sleep_after_write: float = DEFAULT_MONGODB_SLEEP_AFTER_WRITE,
+) -> dict[str, Any]:
+    runners = build_runners(
+        cycles=cycles,
+        events_per_cycle=events_per_cycle,
+        soak_name=soak_name,
+        mongodb_sleep_after_write=mongodb_sleep_after_write,
+    )
+    selected = {adapter: runners[adapter]} if adapter else runners
     results: list[dict[str, Any]] = []
-    for adapter, runner in runners.items():
+    for adapter_name, runner in selected.items():
         try:
             payload = runner()
             payload["status"] = "passed"
             results.append(payload)
         except Exception as exc:  # noqa: BLE001
-            results.append({"adapter": adapter, "status": "failed", "error": str(exc)})
-    print(json.dumps({"cycles": SOAK_CYCLES, "events_per_cycle": EVENTS_PER_CYCLE, "results": results}, indent=2))
+            results.append({"adapter": adapter_name, "status": "failed", "error": str(exc)})
+    return {
+        "cycles": cycles,
+        "events_per_cycle": events_per_cycle,
+        "soak_name": soak_name,
+        "results": results,
+    }
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Run Wave 1 short-soak validation.")
+    parser.add_argument("--cycles", type=int, default=DEFAULT_SOAK_CYCLES)
+    parser.add_argument("--events-per-cycle", type=int, default=DEFAULT_EVENTS_PER_CYCLE)
+    parser.add_argument("--adapter", choices=["mysql", "mariadb", "sqlserver", "oracle", "mongodb"])
+    parser.add_argument("--mongodb-sleep-after-write", type=float, default=DEFAULT_MONGODB_SLEEP_AFTER_WRITE)
+    return parser.parse_args()
+
+
+def main() -> None:
+    args = parse_args()
+    payload = run_validation(
+        cycles=args.cycles,
+        events_per_cycle=args.events_per_cycle,
+        adapter=args.adapter,
+        mongodb_sleep_after_write=args.mongodb_sleep_after_write,
+    )
+    print(json.dumps(payload, indent=2))
 
 
 if __name__ == "__main__":
