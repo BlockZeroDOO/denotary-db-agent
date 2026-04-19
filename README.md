@@ -97,6 +97,13 @@ Current Wave 1 short-soak status:
 - Oracle `logminer` short-soak is validated
 - MongoDB `change_streams` short-soak is validated
 
+Current service-outage recovery status:
+
+- temporary `ingress` prepare outage is validated
+- temporary `watcher` register outage is validated
+- temporary `receipt` fetch outage is validated
+- temporary `audit` fetch outage is validated
+
 ## Quick Start
 
 ```bash
@@ -150,6 +157,8 @@ See:
 - [docs/wave1-source-restart-validation-report.md](docs/wave1-source-restart-validation-report.md)
 - [docs/wave1-short-soak-validation.md](docs/wave1-short-soak-validation.md)
 - [docs/wave1-short-soak-validation-report.md](docs/wave1-short-soak-validation-report.md)
+- [docs/wave1-service-outage-validation.md](docs/wave1-service-outage-validation.md)
+- [docs/wave1-service-outage-validation-report.md](docs/wave1-service-outage-validation-report.md)
 - [docs/denotary-postgresql-rollout-checklist.md](docs/denotary-postgresql-rollout-checklist.md)
 - [docs/jungle4-postgresql-short-soak-report.md](docs/jungle4-postgresql-short-soak-report.md)
 - [docs/jungle4-postgresql-soak-runbook.md](docs/jungle4-postgresql-soak-runbook.md)
@@ -158,6 +167,7 @@ See:
 - [docs/wave1-recovery-validation.md](docs/wave1-recovery-validation.md)
 - [scripts/run-wave1-source-restart-validation.ps1](scripts/run-wave1-source-restart-validation.ps1)
 - [scripts/run-wave1-short-soak-validation.ps1](scripts/run-wave1-short-soak-validation.ps1)
+- [scripts/run-wave1-service-outage-validation.ps1](scripts/run-wave1-service-outage-validation.ps1)
 - [docs/supported-databases.md](docs/supported-databases.md)
 - [docs/verifbill-permission-model.md](docs/verifbill-permission-model.md)
 - [docs/verifbill-permission-commands.md](docs/verifbill-permission-commands.md)
