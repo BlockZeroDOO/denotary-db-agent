@@ -167,6 +167,7 @@ See:
 - [docs/denotary-env-file-runbook.md](docs/denotary-env-file-runbook.md)
 - [docs/denotary-postgresql-validation-report.md](docs/denotary-postgresql-validation-report.md)
 - [docs/denotary-wave1-mainnet-validation-report.md](docs/denotary-wave1-mainnet-validation-report.md)
+- [docs/wave1-readiness-matrix.md](docs/wave1-readiness-matrix.md)
 - [docs/wave1-recovery-validation-report.md](docs/wave1-recovery-validation-report.md)
 - [docs/wave1-source-restart-validation.md](docs/wave1-source-restart-validation.md)
 - [docs/wave1-source-restart-validation-report.md](docs/wave1-source-restart-validation-report.md)

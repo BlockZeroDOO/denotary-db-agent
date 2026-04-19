@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import patch
 
+from denotary_db_agent.canonical import build_batch_external_ref
 from denotary_db_agent.config import load_config
 from denotary_db_agent.engine import AgentEngine, SourceRuntime
 from denotary_db_agent.models import ChangeEvent, DeliveryAttempt, ProofArtifact
@@ -412,6 +413,139 @@ class EngineTest(unittest.TestCase):
         checkpoints = engine.checkpoint_summary()
         self.assertEqual(len(checkpoints), 1)
         self.assertEqual(checkpoints[0]["token"], "lsn:1")
+
+    def test_process_batch_recovers_existing_prepared_request_after_duplicate_submit(self) -> None:
+        config = json.loads(self.config_path.read_text(encoding="utf-8"))
+        config["denotary"]["policy_id"] = 2
+        config["sources"][0]["batch_enabled"] = True
+        config["sources"][0]["batch_size"] = 10
+        config["sources"][0]["options"]["dry_run_events"] = [
+            {
+                "schema_or_namespace": "public",
+                "table_or_collection": "invoices",
+                "operation": "insert",
+                "primary_key": {"id": 1},
+                "change_version": "lsn:1",
+                "checkpoint_token": "lsn:1",
+                "commit_timestamp": "2026-04-17T10:11:12Z",
+                "after": {"id": 1, "status": "issued"},
+                "before": None,
+                "metadata": {"txid": 100},
+            },
+            {
+                "schema_or_namespace": "public",
+                "table_or_collection": "payments",
+                "operation": "insert",
+                "primary_key": {"id": 2},
+                "change_version": "lsn:2",
+                "checkpoint_token": "lsn:2",
+                "commit_timestamp": "2026-04-17T10:11:13Z",
+                "after": {"id": 2, "status": "posted"},
+                "before": None,
+                "metadata": {"txid": 101},
+            },
+        ]
+        self.config_path.write_text(json.dumps(config), encoding="utf-8")
+
+        engine = AgentEngine(load_config(self.config_path))
+        runtime = engine.runtimes()[0]
+        engine.config.denotary.wait_for_finality = True
+        events = [
+            ChangeEvent(
+                source_id=runtime.config.id,
+                source_type="postgresql",
+                source_instance=runtime.config.source_instance,
+                database_name=runtime.config.database_name,
+                **payload,
+            )
+            for payload in engine.config.sources[0].options["dry_run_events"]
+        ]
+
+        envelopes = [
+            SimpleNamespace(
+                source_type="postgresql",
+                source_instance=runtime.config.source_instance,
+                database_name=runtime.config.database_name,
+                schema_or_namespace="public",
+                table_or_collection="invoices" if index == 1 else "payments",
+                operation="insert",
+                primary_key={"id": index},
+                change_version=f"lsn:{index}",
+                commit_timestamp=f"2026-04-18T08:00:0{index}Z",
+                before_hash=None,
+                after_hash=f"{index}" * 64,
+                metadata_hash=f"{index + 1}" * 64,
+                external_ref=f"external-ref-{index}",
+                trace_id=f"trace-live-{index}",
+                to_batch_item=lambda index=index: {"index": index},
+            )
+            for index in (1, 2)
+        ]
+        batch_external_ref = build_batch_external_ref(envelopes)
+        engine.store.upsert_delivery(
+            DeliveryAttempt(
+                request_id="request-existing-batch-1",
+                trace_id="trace-existing-batch-1",
+                source_id=runtime.config.id,
+                external_ref=batch_external_ref,
+                tx_id=None,
+                status="prepared_registered",
+                prepared_action={
+                    "contract": "verifbill",
+                    "action": "submitroot",
+                    "data": {
+                        "payer": "enterpriseac1",
+                        "submitter": "enterpriseac1",
+                        "schema_id": 1,
+                        "policy_id": 2,
+                        "root_hash": "3" * 64,
+                        "manifest_hash": "4" * 64,
+                        "leaf_count": 2,
+                        "external_ref": "5" * 64,
+                    },
+                },
+                last_error=None,
+                updated_at="2026-04-18T08:00:00Z",
+            )
+        )
+
+        prepare_calls: list[dict[str, object]] = []
+        wait_calls: list[str] = []
+        register_calls: list[str] = []
+
+        engine.ingress = SimpleNamespace(
+            prepare_batch=lambda payload: prepare_calls.append(payload) or None
+        )
+
+        class DuplicateBatchChain:
+            def push_prepared_action(self, prepared_action):
+                raise RuntimeError("assertion failure with message: duplicate batch request for submitter")
+
+        engine.chain = DuplicateBatchChain()
+        engine.watcher = SimpleNamespace(
+            register=lambda prepared_obj, envelope: register_calls.append(prepared_obj.request_id),
+            mark_failed=lambda request_id, reason, details=None: None,
+            wait_for_finalized=lambda request_id, timeout_sec, poll_interval_sec: wait_calls.append(request_id),
+        )
+        engine.receipt = SimpleNamespace(
+            get_receipt=lambda request_id: {"request_id": request_id, "tx_id": "c" * 64, "block_num": 888}
+        )
+        engine.audit = SimpleNamespace(get_chain=lambda request_id: {"request_id": request_id, "links": []})
+
+        with patch("denotary_db_agent.engine.canonicalize_event", side_effect=envelopes):
+            engine._process_batch(runtime, events)
+
+        self.assertEqual(prepare_calls, [])
+        self.assertEqual(register_calls, [])
+        self.assertEqual(wait_calls, ["request-existing-batch-1"])
+        proof = engine.store.get_proof("request-existing-batch-1")
+        self.assertIsNotNone(proof)
+        delivery = engine.store.list_deliveries_by_external_ref(runtime.config.id, batch_external_ref)[0]
+        self.assertEqual(delivery["status"], "finalized_exported")
+        self.assertEqual(delivery["tx_id"], "c" * 64)
+        checkpoints = engine.checkpoint_summary()
+        self.assertEqual(len(checkpoints), 1)
+        self.assertEqual(checkpoints[0]["token"], "lsn:2")
 
     def test_health_reports_logical_runtime_warnings(self) -> None:
         engine = AgentEngine(load_config(self.config_path))
