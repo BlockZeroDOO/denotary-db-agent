@@ -112,6 +112,13 @@ Current service-outage recovery status:
 - temporary `receipt` fetch outage is validated
 - temporary `audit` fetch outage is validated
 
+Current Wave 1 mainnet degraded-service status:
+
+- `ingress` outage recovery is validated on real `denotary` mainnet path
+- `watcher` outage recovery is validated on real `denotary` mainnet path
+- `receipt` outage recovery is validated on real `denotary` mainnet path
+- `audit` outage recovery is validated on real `denotary` mainnet path
+
 ## Quick Start
 
 ```bash
@@ -167,6 +174,8 @@ See:
 - [docs/wave1-short-soak-validation-report.md](docs/wave1-short-soak-validation-report.md)
 - [docs/wave1-long-soak-validation.md](docs/wave1-long-soak-validation.md)
 - [docs/wave1-long-soak-validation-report.md](docs/wave1-long-soak-validation-report.md)
+- [docs/wave1-mainnet-service-outage-validation.md](docs/wave1-mainnet-service-outage-validation.md)
+- [docs/wave1-mainnet-service-outage-validation-report.md](docs/wave1-mainnet-service-outage-validation-report.md)
 - [docs/wave1-service-outage-validation.md](docs/wave1-service-outage-validation.md)
 - [docs/wave1-service-outage-validation-report.md](docs/wave1-service-outage-validation-report.md)
 - [docs/denotary-postgresql-rollout-checklist.md](docs/denotary-postgresql-rollout-checklist.md)
@@ -178,6 +187,7 @@ See:
 - [scripts/run-wave1-source-restart-validation.ps1](scripts/run-wave1-source-restart-validation.ps1)
 - [scripts/run-wave1-short-soak-validation.ps1](scripts/run-wave1-short-soak-validation.ps1)
 - [scripts/run-wave1-long-soak-validation.ps1](scripts/run-wave1-long-soak-validation.ps1)
+- [scripts/run-wave1-mainnet-service-outage-validation.ps1](scripts/run-wave1-mainnet-service-outage-validation.ps1)
 - [scripts/run-wave1-service-outage-validation.ps1](scripts/run-wave1-service-outage-validation.ps1)
 - [docs/supported-databases.md](docs/supported-databases.md)
 - [docs/verifbill-permission-model.md](docs/verifbill-permission-model.md)
