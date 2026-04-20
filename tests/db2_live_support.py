@@ -2,9 +2,33 @@ from __future__ import annotations
 
 import os
 import socket
+import site
 import time
 import uuid
 from pathlib import Path
+
+_DB2_DLL_BOOTSTRAPPED = False
+
+
+def _bootstrap_db2_windows_dlls() -> None:
+    global _DB2_DLL_BOOTSTRAPPED
+    if _DB2_DLL_BOOTSTRAPPED or os.name != "nt" or not hasattr(os, "add_dll_directory"):
+        return
+    candidates = [Path(path) for path in site.getsitepackages()] + [Path(site.getusersitepackages())]
+    for base in candidates:
+        clidriver_bin = base / "clidriver" / "bin"
+        if not clidriver_bin.exists():
+            continue
+        os.add_dll_directory(str(clidriver_bin))
+        for extra in ("amd64.VC14.CRT", "amd64.VC12.CRT"):
+            extra_path = clidriver_bin / extra
+            if extra_path.exists():
+                os.add_dll_directory(str(extra_path))
+        _DB2_DLL_BOOTSTRAPPED = True
+        return
+
+
+_bootstrap_db2_windows_dlls()
 
 try:
     import ibm_db_dbi

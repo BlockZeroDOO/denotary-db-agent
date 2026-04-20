@@ -1,14 +1,40 @@
 from __future__ import annotations
 
 import json
+import os
+import site
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import date, datetime, time, timezone
 from decimal import Decimal
+from pathlib import Path
 from typing import Any, Iterator
 
 from denotary_db_agent.adapters.base import AdapterCapabilities, BaseAdapter
 from denotary_db_agent.models import ChangeEvent, SourceCheckpoint
+
+_DB2_DLL_BOOTSTRAPPED = False
+
+
+def _bootstrap_db2_windows_dlls() -> None:
+    global _DB2_DLL_BOOTSTRAPPED
+    if _DB2_DLL_BOOTSTRAPPED or os.name != "nt" or not hasattr(os, "add_dll_directory"):
+        return
+    candidates = [Path(path) for path in site.getsitepackages()] + [Path(site.getusersitepackages())]
+    for base in candidates:
+        clidriver_bin = base / "clidriver" / "bin"
+        if not clidriver_bin.exists():
+            continue
+        os.add_dll_directory(str(clidriver_bin))
+        for extra in ("amd64.VC14.CRT", "amd64.VC12.CRT"):
+            extra_path = clidriver_bin / extra
+            if extra_path.exists():
+                os.add_dll_directory(str(extra_path))
+        _DB2_DLL_BOOTSTRAPPED = True
+        return
+
+
+_bootstrap_db2_windows_dlls()
 
 try:
     import ibm_db_dbi
@@ -279,7 +305,7 @@ class Db2Adapter(BaseAdapter):
                 """,
                 (spec.schema_name, spec.table_name),
             )
-            rows = cursor.fetchall()
+            rows = self._fetchall_rows(cursor)
         columns = [str(self._row_get(row, "colname")) for row in rows if self._row_get(row, "colname") is not None]
         if not columns:
             raise ValueError(f"{self.source_type} table {spec.schema_name}.{spec.table_name} is not visible in syscat.columns")
@@ -302,7 +328,7 @@ class Db2Adapter(BaseAdapter):
                 """,
                 (spec.schema_name, spec.table_name),
             )
-            rows = cursor.fetchall()
+            rows = self._fetchall_rows(cursor)
         return [str(self._row_get(row, "colname")) for row in rows if self._row_get(row, "colname") is not None]
 
     def _primary_key_columns(self) -> list[str]:
@@ -356,7 +382,7 @@ class Db2Adapter(BaseAdapter):
             pk_values = list(table_state.get("pk") or [])
             if len(pk_values) != len(spec.primary_key_columns):
                 raise ValueError(f"{self.source_type} checkpoint for {spec.key} has invalid primary key state")
-            watermark_value = table_state.get("watermark")
+            watermark_value = self._db2_timestamp_param(table_state.get("watermark"))
             sql += (
                 f" and ("
                 f"{self._quote_identifier(spec.watermark_column)} > ? "
@@ -373,8 +399,25 @@ class Db2Adapter(BaseAdapter):
             params.append(row_limit)
         with connection.cursor() as cursor:
             cursor.execute(sql, tuple(params) if params else None)
-            rows = cursor.fetchall()
+            rows = self._fetchall_rows(cursor)
         return list(rows)
+
+    def _fetchall_rows(self, cursor: Any) -> list[Any]:
+        rows = cursor.fetchall()
+        description = getattr(cursor, "description", None) or []
+        column_names = [str(item[0]).lower() for item in description if item and item[0]]
+        if not column_names:
+            return list(rows)
+        normalized: list[Any] = []
+        for row in rows:
+            if isinstance(row, dict):
+                normalized.append(row)
+                continue
+            if isinstance(row, (list, tuple)) and len(row) == len(column_names):
+                normalized.append({name: value for name, value in zip(column_names, row)})
+                continue
+            normalized.append(row)
+        return normalized
 
     def _lexicographic_pk_predicates(self, primary_key_columns: list[str]) -> list[str]:
         predicates: list[str] = []
@@ -409,6 +452,20 @@ class Db2Adapter(BaseAdapter):
         if isinstance(normalized, str):
             return normalized
         return str(normalized)
+
+    def _db2_timestamp_param(self, value: Any) -> Any:
+        if isinstance(value, str):
+            candidate = value.strip()
+            if candidate.endswith("Z"):
+                candidate = candidate[:-1] + "+00:00"
+            try:
+                parsed = datetime.fromisoformat(candidate)
+            except ValueError:
+                return value
+            if parsed.tzinfo is not None:
+                parsed = parsed.astimezone(timezone.utc).replace(tzinfo=None)
+            return parsed
+        return value
 
     def _coerce_pk_value(self, value: Any) -> Any:
         normalized = self._normalize_value(value)
