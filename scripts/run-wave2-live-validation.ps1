@@ -5,6 +5,7 @@ param(
     [switch]$ListRequiredEnv,
     [ValidateSet("json", "text")]
     [string]$ListFormat = "json",
+    [string]$WriteEnvTemplate = "",
     [switch]$CheckEnvOnly,
     [switch]$StrictEnv,
     [string]$OutputRoot = ""
@@ -20,6 +21,9 @@ if ($EnvFile -ne "") {
 if ($ListRequiredEnv) {
     $arguments += "--list-required-env"
     $arguments += @("--list-format", $ListFormat)
+}
+if ($WriteEnvTemplate -ne "") {
+    $arguments += @("--write-env-template", $WriteEnvTemplate)
 }
 if ($CheckEnvOnly) {
     $arguments += "--check-env-only"

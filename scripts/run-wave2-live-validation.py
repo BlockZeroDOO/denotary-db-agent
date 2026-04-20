@@ -71,6 +71,11 @@ def parse_args() -> argparse.Namespace:
         help="Output format for --list-required-env.",
     )
     parser.add_argument(
+        "--write-env-template",
+        default="",
+        help="Write a minimal dotenv template for the selected adapters and exit.",
+    )
+    parser.add_argument(
         "--check-env-only",
         action="store_true",
         help="Only validate environment readiness; do not execute live test suites.",
@@ -164,6 +169,16 @@ def _print_required_env(payload: dict[str, Any], output_format: str) -> None:
     print(json.dumps(payload, indent=2))
 
 
+def _env_template_payload(adapters: list[str]) -> str:
+    sections: list[str] = []
+    for adapter in adapters:
+        required_env = list(ADAPTERS[adapter]["required_env"])
+        lines = [f"# {adapter}"]
+        lines.extend(f"{env_name}=" for env_name in required_env)
+        sections.append("\n".join(lines))
+    return "\n\n".join(sections) + "\n"
+
+
 def main() -> None:
     args = parse_args()
     env_file_values = _load_env_file(args.env_file)
@@ -172,6 +187,12 @@ def main() -> None:
     selected_adapters = _selected_adapters(args.adapter)
     if args.list_required_env:
         _print_required_env(_required_env_payload(selected_adapters), args.list_format)
+        raise SystemExit(0)
+    if args.write_env_template:
+        template_path = Path(args.write_env_template).resolve()
+        template_path.parent.mkdir(parents=True, exist_ok=True)
+        template_path.write_text(_env_template_payload(selected_adapters), encoding="utf-8")
+        print(json.dumps({"template_path": str(template_path), "adapters": selected_adapters}, indent=2))
         raise SystemExit(0)
     run_root = (
         Path(args.output_root).resolve()

@@ -6,6 +6,7 @@ ENV_FILE="${2:-}"
 MODE="${3:-}"
 OUTPUT_ROOT="${4:-}"
 LIST_FORMAT="${5:-json}"
+TEMPLATE_PATH="${6:-}"
 
 ARGS=( "scripts/run-wave2-live-validation.py" "--adapter" "$ADAPTER" )
 if [[ -n "$ENV_FILE" ]]; then
@@ -13,6 +14,9 @@ if [[ -n "$ENV_FILE" ]]; then
 fi
 if [[ "$MODE" == "--list-required-env" ]]; then
   ARGS+=( "--list-required-env" "--list-format" "$LIST_FORMAT" )
+fi
+if [[ "$MODE" == "--write-env-template" && -n "$TEMPLATE_PATH" ]]; then
+  ARGS+=( "--write-env-template" "$TEMPLATE_PATH" )
 fi
 if [[ "$MODE" == "--check-env-only" ]]; then
   ARGS+=( "--check-env-only" )

@@ -21,6 +21,8 @@ Only fill the adapter block you actually plan to validate.
 
 The unified launcher can read that file directly through `--env-file`.
 
+If you want a smaller adapter-specific template first, the launcher can generate one for the selected adapters through `--write-env-template`.
+
 ## 2. Choose Validation Mode
 
 Default mode:
@@ -43,6 +45,8 @@ scripts/run-wave2-live-validation.ps1 snowflake
 scripts/run-wave2-live-validation.ps1 db2
 scripts/run-wave2-live-validation.ps1 cassandra
 scripts/run-wave2-live-validation.ps1 elasticsearch
+scripts/run-wave2-live-validation.ps1 all -ListRequiredEnv
+scripts/run-wave2-live-validation.ps1 snowflake -WriteEnvTemplate .\wave2-snowflake.env
 scripts/run-wave2-live-validation.ps1 all -EnvFile .\wave2-live.env -CheckEnvOnly
 scripts/run-wave2-live-validation.ps1 all -StrictEnv
 scripts/run-wave2-live-validation.ps1 all -OutputRoot data/wave2-live-validation-latest
@@ -56,6 +60,8 @@ scripts/run-wave2-live-validation.sh snowflake
 scripts/run-wave2-live-validation.sh db2
 scripts/run-wave2-live-validation.sh cassandra
 scripts/run-wave2-live-validation.sh elasticsearch
+scripts/run-wave2-live-validation.sh all "" --list-required-env "" text
+scripts/run-wave2-live-validation.sh snowflake "" --write-env-template "" json ./wave2-snowflake.env
 scripts/run-wave2-live-validation.sh all ./wave2-live.env --check-env-only
 scripts/run-wave2-live-validation.sh all ./wave2-live.env --strict-env
 scripts/run-wave2-live-validation.sh all ./wave2-live.env "" data/wave2-live-validation-latest
@@ -66,6 +72,8 @@ Python:
 ```bash
 python scripts/run-wave2-live-validation.py --adapter all
 python scripts/run-wave2-live-validation.py --adapter snowflake
+python scripts/run-wave2-live-validation.py --adapter all --list-required-env
+python scripts/run-wave2-live-validation.py --adapter snowflake --write-env-template .\wave2-snowflake.env
 python scripts/run-wave2-live-validation.py --adapter all --env-file .\wave2-live.env --check-env-only
 python scripts/run-wave2-live-validation.py --adapter all --strict-env
 python scripts/run-wave2-live-validation.py --adapter all --env-file .\wave2-live.env --strict-env
@@ -86,6 +94,16 @@ python scripts/run-wave2-live-validation.py --adapter all --output-root data/wav
 
 - required env variables are missing
 - the output includes the exact variable names that still need to be set
+
+`--list-required-env`
+
+- prints the exact required env names for the selected adapters
+- useful before preparing credentials or CI secrets
+
+`--write-env-template`
+
+- creates a minimal dotenv file for the selected adapters
+- useful when you do not want to start from the full shared example
 
 `failed`
 
