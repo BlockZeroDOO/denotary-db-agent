@@ -11,6 +11,7 @@ Current baseline:
 - deterministic checkpoint resume
 - dry-run snapshot playback
 - local full-cycle proof export
+- env-gated live integration harness
 
 Native Elasticsearch CDC is not implemented yet.
 
@@ -68,4 +69,5 @@ Supported now:
 - tracked documents are read via sorted search requests using the watermark field and `_id`
 - this baseline is useful for validating search-backed evidence, not for replacing a true source-of-truth CDC feed
 - local proof export is already covered with dry-run snapshot playback
+- live validation can be driven through `scripts/run-live-elasticsearch-integration.ps1` once Elasticsearch credentials are available in the environment
 - native Elasticsearch CDC can be added later if commercially justified

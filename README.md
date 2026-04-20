@@ -79,6 +79,7 @@ Current Elasticsearch Wave 2 status:
 - tracked-index introspection is implemented
 - query-based snapshot polling with deterministic resume is implemented
 - local full-cycle proof export is implemented
+- env-gated live integration harness is implemented
 - dry-run snapshot playback is implemented for pipeline validation
 
 This initial implementation focuses on the platform layer and adapter contract. Real CDC transport details per database remain adapter-specific work on top of this package scaffold.
@@ -226,6 +227,7 @@ See:
 - [scripts/run-live-redis-integration.ps1](scripts/run-live-redis-integration.ps1)
 - [scripts/run-live-db2-integration.ps1](scripts/run-live-db2-integration.ps1)
 - [scripts/run-live-cassandra-integration.ps1](scripts/run-live-cassandra-integration.ps1)
+- [scripts/run-live-elasticsearch-integration.ps1](scripts/run-live-elasticsearch-integration.ps1)
 - [docs/architecture.md](docs/architecture.md)
 - [docs/adapter-separation-architecture.md](docs/adapter-separation-architecture.md)
 - [docs/wave2-roadmap.md](docs/wave2-roadmap.md)
