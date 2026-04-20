@@ -4,6 +4,7 @@ import unittest
 
 from denotary_db_agent.adapters.cassandra import CassandraAdapter
 from denotary_db_agent.adapters.db2 import Db2Adapter
+from denotary_db_agent.adapters.elasticsearch import ElasticsearchAdapter
 from denotary_db_agent.adapters.mariadb import MariaDbAdapter
 from denotary_db_agent.adapters.mongodb import MongoDbAdapter
 from denotary_db_agent.adapters.mysql import MySqlAdapter
@@ -29,6 +30,7 @@ class AdapterRegistryContractTest(unittest.TestCase):
             ("redis", RedisAdapter, {"host": "127.0.0.1", "port": 6379}),
             ("db2", Db2Adapter, {"host": "127.0.0.1", "port": 50000, "username": "db2inst1", "password": "secret", "database": "LEDGER"}),
             ("cassandra", CassandraAdapter, {"host": "127.0.0.1", "port": 9042, "username": "cassandra", "password": "secret"}),
+            ("elasticsearch", ElasticsearchAdapter, {"url": "http://127.0.0.1:9200"}),
         ]
 
     def _source_config(self, adapter: str, connection: dict[str, object]) -> SourceConfig:
@@ -128,6 +130,12 @@ class AdapterRegistryContractTest(unittest.TestCase):
                 "default_checkpoint_strategy": "table_watermark",
                 "default_activity_model": "polling",
             },
+            "elasticsearch": {
+                "default_capture_mode": "watermark",
+                "cdc_modes": (),
+                "default_checkpoint_strategy": "document_watermark",
+                "default_activity_model": "polling",
+            },
         }
         for adapter_name, _adapter_class, connection in self.cases:
             with self.subTest(adapter=adapter_name):
@@ -155,6 +163,7 @@ class AdapterRegistryContractTest(unittest.TestCase):
             "redis": {},
             "db2": {},
             "cassandra": {},
+            "elasticsearch": {},
         }
         for adapter_name, _adapter_class, connection in self.cases:
             for capture_mode, expected_values in expected[adapter_name].items():

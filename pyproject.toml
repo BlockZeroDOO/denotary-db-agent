@@ -20,6 +20,7 @@ dependencies = [
   "redis>=5,<7",
   "ibm_db>=3,<4",
   "cassandra-driver>=3,<4",
+  "elasticsearch>=8,<9",
   "python-tds>=1.16,<2",
   "oracledb>=2,<3",
   "snowflake-connector-python>=3,<4",

@@ -120,8 +120,11 @@ Implementation starts now with:
 - `Apache Cassandra` adapter contract registration
 - `Apache Cassandra` configuration reference
 - `Apache Cassandra` live cluster ping, tracked-table introspection, snapshot baseline, local full-cycle proof export, and env-gated live validation harness
+- `Elasticsearch` adapter contract registration
+- `Elasticsearch` configuration reference
+- `Elasticsearch` live cluster ping, tracked-index introspection, and snapshot baseline
 - `Wave 2` planning and documentation
 
 Planned next step:
 
-- move to `Elasticsearch` as the next Wave 2 source after `Snowflake`, `Redis`, `IBM Db2`, and `Apache Cassandra`
+- local full-cycle proof export for `Elasticsearch`, then move to the next Wave 2 source after `Snowflake`, `Redis`, `IBM Db2`, `Apache Cassandra`, and `Elasticsearch`

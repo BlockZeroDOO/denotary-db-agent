@@ -3,6 +3,7 @@ from __future__ import annotations
 from denotary_db_agent.adapters.base import BaseAdapter
 from denotary_db_agent.adapters.cassandra import CassandraAdapter
 from denotary_db_agent.adapters.db2 import Db2Adapter
+from denotary_db_agent.adapters.elasticsearch import ElasticsearchAdapter
 from denotary_db_agent.adapters.mariadb import MariaDbAdapter
 from denotary_db_agent.adapters.mongodb import MongoDbAdapter
 from denotary_db_agent.adapters.mysql import MySqlAdapter
@@ -25,6 +26,7 @@ ADAPTERS: dict[str, type[BaseAdapter]] = {
     "redis": RedisAdapter,
     "db2": Db2Adapter,
     "cassandra": CassandraAdapter,
+    "elasticsearch": ElasticsearchAdapter,
 }
 
 
