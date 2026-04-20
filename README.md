@@ -52,6 +52,14 @@ Current Redis Wave 2 status:
 - Docker-backed live integration and full-cycle harnesses are implemented
 - dry-run snapshot playback is implemented for pipeline validation
 
+Current IBM Db2 Wave 2 status:
+
+- adapter registration and config surface are implemented
+- live readiness ping is implemented
+- tracked-table introspection is implemented
+- watermark snapshot polling with deterministic resume is implemented
+- dry-run snapshot playback is implemented for pipeline validation
+
 This initial implementation focuses on the platform layer and adapter contract. Real CDC transport details per database remain adapter-specific work on top of this package scaffold.
 
 Current PostgreSQL status:
@@ -190,6 +198,7 @@ See:
 - [docs/mongodb-config-reference.md](docs/mongodb-config-reference.md)
 - [docs/snowflake-config-reference.md](docs/snowflake-config-reference.md)
 - [docs/redis-config-reference.md](docs/redis-config-reference.md)
+- [docs/db2-config-reference.md](docs/db2-config-reference.md)
 - [scripts/run-live-snowflake-integration.ps1](scripts/run-live-snowflake-integration.ps1)
 - [scripts/run-live-redis-integration.ps1](scripts/run-live-redis-integration.ps1)
 - [docs/architecture.md](docs/architecture.md)

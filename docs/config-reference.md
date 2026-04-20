@@ -33,6 +33,7 @@ The full agent config is split into:
 - [mongodb-config-reference.md](mongodb-config-reference.md)
 - [snowflake-config-reference.md](snowflake-config-reference.md)
 - [redis-config-reference.md](redis-config-reference.md)
+- [db2-config-reference.md](db2-config-reference.md)
 
 ## Top-Level Shape
 
@@ -133,6 +134,7 @@ Each entry in `sources` is one logical input source.
   - `"mongodb"`
   - `"snowflake"`
   - `"redis"`
+  - `"db2"`
 
 ### `enabled`
 
@@ -231,3 +233,5 @@ Each entry in `sources` is one logical input source.
   - [snowflake-config-reference.md](snowflake-config-reference.md)
 - Redis:
   - [redis-config-reference.md](redis-config-reference.md)
+- IBM Db2:
+  - [db2-config-reference.md](db2-config-reference.md)

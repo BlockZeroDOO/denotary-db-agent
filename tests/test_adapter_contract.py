@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import unittest
 
+from denotary_db_agent.adapters.db2 import Db2Adapter
 from denotary_db_agent.adapters.mariadb import MariaDbAdapter
 from denotary_db_agent.adapters.mongodb import MongoDbAdapter
 from denotary_db_agent.adapters.mysql import MySqlAdapter
@@ -25,6 +26,7 @@ class AdapterRegistryContractTest(unittest.TestCase):
             ("mongodb", MongoDbAdapter, {"uri": "mongodb://127.0.0.1:27017"}),
             ("snowflake", SnowflakeAdapter, {"account": "acme-org.eu-central-1", "username": "denotary", "database": "ANALYTICS", "schema": "PUBLIC", "warehouse": "NOTARY_WH"}),
             ("redis", RedisAdapter, {"host": "127.0.0.1", "port": 6379}),
+            ("db2", Db2Adapter, {"host": "127.0.0.1", "port": 50000, "username": "db2inst1", "password": "secret", "database": "LEDGER"}),
         ]
 
     def _source_config(self, adapter: str, connection: dict[str, object]) -> SourceConfig:
@@ -112,6 +114,12 @@ class AdapterRegistryContractTest(unittest.TestCase):
                 "default_checkpoint_strategy": "key_lexicographic",
                 "default_activity_model": "polling",
             },
+            "db2": {
+                "default_capture_mode": "watermark",
+                "cdc_modes": (),
+                "default_checkpoint_strategy": "table_watermark",
+                "default_activity_model": "polling",
+            },
         }
         for adapter_name, _adapter_class, connection in self.cases:
             with self.subTest(adapter=adapter_name):
@@ -137,6 +145,7 @@ class AdapterRegistryContractTest(unittest.TestCase):
             "mongodb": {"change_streams": ("resume_token", "stream")},
             "snowflake": {},
             "redis": {},
+            "db2": {},
         }
         for adapter_name, _adapter_class, connection in self.cases:
             for capture_mode, expected_values in expected[adapter_name].items():
