@@ -1,5 +1,5 @@
 {
-  "agent_name": "snowflake-agent",
+  "agent_name": "scylladb-agent",
   "log_level": "INFO",
   "denotary": {
     "ingress_url": "http://127.0.0.1:8080",
@@ -10,45 +10,43 @@
     "chain_rpc_url": "https://history.denotary.io",
     "submitter": "dbagentstest",
     "submitter_permission": "dnanchor",
+    "broadcast_backend": "private_key_env",
     "submitter_private_key_env": "DENOTARY_SUBMITTER_PRIVATE_KEY",
     "env_file": "/etc/denotary-db-agent/agent.secrets.env",
     "schema_id": 1,
     "policy_id": 1,
+    "billing_account": "verifbill",
     "wait_for_finality": true,
-    "finality_timeout_sec": 30,
-    "finality_poll_interval_sec": 2
+    "finality_timeout_sec": 120,
+    "finality_poll_interval_sec": 1.0
   },
   "storage": {
-    "state_db": "/var/lib/denotary-db-agent/snowflake-agent-state.sqlite3",
+    "state_db": "/var/lib/denotary-db-agent/scylladb-agent-state.sqlite3",
     "proof_dir": "/var/lib/denotary-db-agent/proofs"
   },
   "sources": [
     {
-      "id": "snowflake-analytics-core",
-      "adapter": "snowflake",
+      "id": "scylladb-core-ledger",
+      "adapter": "scylladb",
       "enabled": true,
-      "source_instance": "analytics-us-1",
-      "database_name": "analytics",
+      "source_instance": "cluster-eu-1",
+      "database_name": "ledger",
       "include": {
-        "PUBLIC": ["ORDERS", "INVOICES"]
+        "ledger": ["invoices"]
       },
       "checkpoint_policy": "after_ack",
       "backfill_mode": "full",
       "connection": {
-        "account": "acme-org.eu-central-1",
-        "username": "denotary",
-        "password": "replace-me",
-        "database": "ANALYTICS",
-        "schema": "PUBLIC",
-        "warehouse": "NOTARY_WH",
-        "role": "NOTARY_ROLE"
+        "host": "127.0.0.1",
+        "port": 9042,
+        "username": "scylla",
+        "password": "secret"
       },
       "options": {
         "capture_mode": "watermark",
-        "tracked_object_type": "table",
-        "watermark_column": "UPDATED_AT",
-        "commit_timestamp_column": "UPDATED_AT",
-        "primary_key_columns": ["ID"],
+        "watermark_column": "updated_at",
+        "commit_timestamp_column": "updated_at",
+        "primary_key_columns": ["id"],
         "row_limit": 1000
       }
     }

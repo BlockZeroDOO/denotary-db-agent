@@ -28,14 +28,12 @@
 - Elasticsearch / OpenSearch
 - Cassandra
 - native in-database extensions
-- Snowflake
-
 ## Wave 2 Targets
 
 | Adapter | Initial target path | Planned capture path | Current status |
 | --- | --- | --- | --- |
-| Snowflake | enterprise analytics | query-based snapshot / watermark baseline, then local full-cycle proof export | adapter contract, config surface, live ping, configured-object introspection, snapshot baseline, local full-cycle validation, env-gated live harness, and unified live-validation checklist coverage implemented |
 | Redis | operational state | explicit key-pattern snapshot baseline, then local full-cycle proof export; later keyspace notifications where justified | adapter contract, config surface, live ping, snapshot baseline, local full-cycle validation, Docker-backed live validation, restart recovery, and short-soak validation implemented |
+| ScyllaDB | distributed wide-column | Cassandra-compatible snapshot / watermark baseline, later optional Scylla-specific CDC | adapter contract, config surface, shared Cassandra-compatible snapshot baseline, dedicated adapter alias, and deployment/runbook layer implemented |
 | IBM Db2 | enterprise | snapshot / watermark baseline, later native change capture if justified | adapter contract, config surface, live ping, tracked-table introspection, snapshot baseline, local full-cycle proof export, env-gated live validation harness, and unified live-validation checklist coverage implemented |
 | Apache Cassandra | distributed wide-column | partition-aware snapshot baseline, later optional CDC | adapter contract, config surface, live ping, tracked-table introspection, snapshot baseline, local full-cycle proof export, env-gated live validation harness, and unified live-validation checklist coverage implemented |
 | Elasticsearch | search / operational index | query-based snapshot and incremental baseline | adapter contract, config surface, live ping, tracked-index introspection, snapshot baseline, local full-cycle proof export, env-gated live validation harness, and unified live-validation checklist coverage implemented |

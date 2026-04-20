@@ -23,7 +23,6 @@ dependencies = [
   "elasticsearch>=8,<9",
   "python-tds>=1.16,<2",
   "oracledb>=2,<3",
-  "snowflake-connector-python>=3,<4",
   "eosapi==1.0.2"
 ]
 

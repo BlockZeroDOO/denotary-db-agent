@@ -12,7 +12,7 @@ from denotary_db_agent.adapters.oracle import OracleAdapter
 from denotary_db_agent.adapters.postgres import PostgresAdapter
 from denotary_db_agent.adapters.redis import RedisAdapter
 from denotary_db_agent.adapters.registry import ADAPTERS, build_adapter
-from denotary_db_agent.adapters.snowflake import SnowflakeAdapter
+from denotary_db_agent.adapters.scylladb import ScyllaDbAdapter
 from denotary_db_agent.adapters.sqlite import SqliteAdapter
 from denotary_db_agent.adapters.sqlserver import SqlServerAdapter
 from denotary_db_agent.config import SourceConfig
@@ -27,8 +27,8 @@ class AdapterRegistryContractTest(unittest.TestCase):
             ("sqlserver", SqlServerAdapter, {"host": "127.0.0.1", "port": 1433, "username": "sa", "database": "ledger"}),
             ("oracle", OracleAdapter, {"host": "127.0.0.1", "port": 1521, "username": "denotary", "service_name": "XEPDB1"}),
             ("mongodb", MongoDbAdapter, {"uri": "mongodb://127.0.0.1:27017"}),
-            ("snowflake", SnowflakeAdapter, {"account": "acme-org.eu-central-1", "username": "denotary", "database": "ANALYTICS", "schema": "PUBLIC", "warehouse": "NOTARY_WH"}),
             ("redis", RedisAdapter, {"host": "127.0.0.1", "port": 6379}),
+            ("scylladb", ScyllaDbAdapter, {"host": "127.0.0.1", "port": 9042, "username": "scylla", "password": "secret"}),
             ("db2", Db2Adapter, {"host": "127.0.0.1", "port": 50000, "username": "db2inst1", "password": "secret", "database": "LEDGER"}),
             ("cassandra", CassandraAdapter, {"host": "127.0.0.1", "port": 9042, "username": "cassandra", "password": "secret"}),
             ("elasticsearch", ElasticsearchAdapter, {"url": "http://127.0.0.1:9200"}),
@@ -108,16 +108,16 @@ class AdapterRegistryContractTest(unittest.TestCase):
                 "default_checkpoint_strategy": "document_watermark",
                 "default_activity_model": "polling",
             },
-            "snowflake": {
-                "default_capture_mode": "watermark",
-                "cdc_modes": (),
-                "default_checkpoint_strategy": "table_watermark",
-                "default_activity_model": "polling",
-            },
             "redis": {
                 "default_capture_mode": "scan",
                 "cdc_modes": (),
                 "default_checkpoint_strategy": "key_lexicographic",
+                "default_activity_model": "polling",
+            },
+            "scylladb": {
+                "default_capture_mode": "watermark",
+                "cdc_modes": (),
+                "default_checkpoint_strategy": "table_watermark",
                 "default_activity_model": "polling",
             },
             "db2": {
@@ -167,8 +167,8 @@ class AdapterRegistryContractTest(unittest.TestCase):
             "sqlserver": {"change_tracking": ("change_tracking_version", "polling")},
             "oracle": {"logminer": ("logminer_scn", "polling")},
             "mongodb": {"change_streams": ("resume_token", "stream")},
-            "snowflake": {},
             "redis": {},
+            "scylladb": {},
             "db2": {},
             "cassandra": {},
             "elasticsearch": {},

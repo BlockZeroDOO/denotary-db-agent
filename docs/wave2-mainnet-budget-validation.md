@@ -91,4 +91,4 @@ It does not yet mean:
 
 - `Wave 2` has full `Wave 1`-depth soak coverage
 - every `Wave 2` adapter is mainnet-batch-validated
-- `Snowflake`, `Db2`, `Cassandra`, or `Elasticsearch` are already confirmed on mainnet
+- `Db2`, `Cassandra`, or `Elasticsearch` are already confirmed on mainnet

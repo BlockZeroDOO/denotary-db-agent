@@ -95,4 +95,4 @@ It does not yet mean:
 
 - every `Wave 2` adapter is mainnet-validated
 - restart, soak, and outage depth already matches `Wave 1`
-- `Snowflake`, `Db2`, `Cassandra`, or `Elasticsearch` are already confirmed on mainnet
+- `Db2`, `Cassandra`, or `Elasticsearch` are already confirmed on mainnet

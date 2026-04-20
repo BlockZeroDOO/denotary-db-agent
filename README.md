@@ -26,21 +26,12 @@ The first wave of database targets is:
 
 Wave 2 planning is now defined for:
 
-- Snowflake
 - Redis
+- ScyllaDB
 - IBM Db2
 - Apache Cassandra
 - Elasticsearch
 - SQLite
-
-Current Snowflake Wave 2 status:
-
-- adapter registration and config surface are implemented
-- live warehouse ping and configured-object introspection are implemented
-- query-based snapshot polling with watermark resume is implemented
-- local full-cycle proof export is implemented for the snapshot baseline
-- env-gated live integration and full-cycle harnesses are implemented
-- dry-run snapshot playback is implemented for pipeline validation
 
 Current Redis Wave 2 status:
 
@@ -57,6 +48,13 @@ Current Redis Wave 2 status:
 - bounded `denotary` mainnet batch validation is implemented
 - real `denotary` mainnet degraded-service recovery validation is implemented
 - dry-run snapshot playback is implemented for pipeline validation
+
+Current ScyllaDB Wave 2 status:
+
+- adapter registration and config surface are implemented
+- shared Cassandra-compatible snapshot / watermark baseline is implemented
+- deterministic checkpoint resume is implemented
+- deployment starter config and operator runbook are implemented
 
 Current IBM Db2 Wave 2 status:
 
@@ -240,13 +238,12 @@ See:
 - [docs/sqlserver-config-reference.md](docs/sqlserver-config-reference.md)
 - [docs/oracle-config-reference.md](docs/oracle-config-reference.md)
 - [docs/mongodb-config-reference.md](docs/mongodb-config-reference.md)
-- [docs/snowflake-config-reference.md](docs/snowflake-config-reference.md)
 - [docs/redis-config-reference.md](docs/redis-config-reference.md)
+- [docs/scylladb-config-reference.md](docs/scylladb-config-reference.md)
 - [docs/db2-config-reference.md](docs/db2-config-reference.md)
 - [docs/cassandra-config-reference.md](docs/cassandra-config-reference.md)
 - [docs/elasticsearch-config-reference.md](docs/elasticsearch-config-reference.md)
 - [docs/sqlite-config-reference.md](docs/sqlite-config-reference.md)
-- [scripts/run-live-snowflake-integration.ps1](scripts/run-live-snowflake-integration.ps1)
 - [scripts/run-live-redis-integration.ps1](scripts/run-live-redis-integration.ps1)
 - [scripts/run-live-db2-integration.ps1](scripts/run-live-db2-integration.ps1)
 - [scripts/run-live-cassandra-integration.ps1](scripts/run-live-cassandra-integration.ps1)
@@ -260,6 +257,8 @@ See:
 - [scripts/run-wave2-redis-validation.ps1](scripts/run-wave2-redis-validation.ps1)
 - [docs/wave2-redis-runbook.md](docs/wave2-redis-runbook.md)
 - [deploy/config/redis-agent.example.json](deploy/config/redis-agent.example.json)
+- [docs/wave2-scylladb-runbook.md](docs/wave2-scylladb-runbook.md)
+- [deploy/config/scylladb-agent.example.json](deploy/config/scylladb-agent.example.json)
 - [docs/wave2-denotary-validation.md](docs/wave2-denotary-validation.md)
 - [docs/wave2-denotary-validation-report.md](docs/wave2-denotary-validation-report.md)
 - [scripts/run-wave2-denotary-validation.ps1](scripts/run-wave2-denotary-validation.ps1)
@@ -272,7 +271,6 @@ See:
 - [docs/wave2-live-validation-checklist.md](docs/wave2-live-validation-checklist.md)
 - [docs/wave2-live-validation-runbook.md](docs/wave2-live-validation-runbook.md)
 - [examples/wave2-live.env.example](examples/wave2-live.env.example)
-- [examples/wave2-snowflake.env.example](examples/wave2-snowflake.env.example)
 - [examples/wave2-db2.env.example](examples/wave2-db2.env.example)
 - [examples/wave2-cassandra.env.example](examples/wave2-cassandra.env.example)
 - [examples/wave2-elasticsearch.env.example](examples/wave2-elasticsearch.env.example)
@@ -289,8 +287,6 @@ See:
 - [scripts/run-wave2-elasticsearch-validation.ps1](scripts/run-wave2-elasticsearch-validation.ps1)
 - [docs/wave2-elasticsearch-runbook.md](docs/wave2-elasticsearch-runbook.md)
 - [deploy/config/elasticsearch-agent.example.json](deploy/config/elasticsearch-agent.example.json)
-- [docs/wave2-snowflake-runbook.md](docs/wave2-snowflake-runbook.md)
-- [deploy/config/snowflake-agent.example.json](deploy/config/snowflake-agent.example.json)
 - [docs/wave2-db2-runbook.md](docs/wave2-db2-runbook.md)
 - [deploy/config/db2-agent.example.json](deploy/config/db2-agent.example.json)
 - [docs/wave2-cassandra-runbook.md](docs/wave2-cassandra-runbook.md)

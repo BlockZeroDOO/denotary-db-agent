@@ -10,7 +10,7 @@ from denotary_db_agent.adapters.mysql import MySqlAdapter
 from denotary_db_agent.adapters.oracle import OracleAdapter
 from denotary_db_agent.adapters.postgres import PostgresAdapter
 from denotary_db_agent.adapters.redis import RedisAdapter
-from denotary_db_agent.adapters.snowflake import SnowflakeAdapter
+from denotary_db_agent.adapters.scylladb import ScyllaDbAdapter
 from denotary_db_agent.adapters.sqlite import SqliteAdapter
 from denotary_db_agent.adapters.sqlserver import SqlServerAdapter
 from denotary_db_agent.config import SourceConfig
@@ -23,8 +23,8 @@ ADAPTERS: dict[str, type[BaseAdapter]] = {
     "sqlserver": SqlServerAdapter,
     "oracle": OracleAdapter,
     "mongodb": MongoDbAdapter,
-    "snowflake": SnowflakeAdapter,
     "redis": RedisAdapter,
+    "scylladb": ScyllaDbAdapter,
     "db2": Db2Adapter,
     "cassandra": CassandraAdapter,
     "elasticsearch": ElasticsearchAdapter,

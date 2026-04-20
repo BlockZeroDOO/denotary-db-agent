@@ -81,6 +81,29 @@ def create_connection():
     return ibm_db_dbi.connect(db2_dsn(), "", "")
 
 
+def wait_for_db2_ready(timeout_sec: float = 240.0, consecutive_successes: int = 3, success_interval_sec: float = 5.0) -> None:
+    deadline = time.time() + timeout_sec
+    successes = 0
+    while time.time() < deadline:
+        try:
+            connection = create_connection()
+            try:
+                with connection.cursor() as cursor:
+                    cursor.execute("select 1 from sysibm.sysdummy1")
+                    cursor.fetchone()
+            finally:
+                connection.close()
+            successes += 1
+            if successes >= consecutive_successes:
+                return
+            time.sleep(success_interval_sec)
+            continue
+        except Exception:
+            successes = 0
+            time.sleep(2)
+    raise RuntimeError("db2 did not become ready in time")
+
+
 def agent_connection_config() -> dict[str, object]:
     return {
         "host": os.environ["DENOTARY_DB2_HOST"],

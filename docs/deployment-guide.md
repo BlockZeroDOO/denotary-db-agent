@@ -28,17 +28,17 @@ For a `Redis` operational-state deployment baseline, use:
 - [wave2-redis-runbook.md](wave2-redis-runbook.md)
 - [deploy/config/redis-agent.example.json](../deploy/config/redis-agent.example.json)
 
+For a `ScyllaDB` distributed wide-column deployment baseline, use:
+
+- [scylladb-config-reference.md](scylladb-config-reference.md)
+- [wave2-scylladb-runbook.md](wave2-scylladb-runbook.md)
+- [deploy/config/scylladb-agent.example.json](../deploy/config/scylladb-agent.example.json)
+
 For an `Elasticsearch` search-index deployment baseline, use:
 
 - [elasticsearch-config-reference.md](elasticsearch-config-reference.md)
 - [wave2-elasticsearch-runbook.md](wave2-elasticsearch-runbook.md)
 - [deploy/config/elasticsearch-agent.example.json](../deploy/config/elasticsearch-agent.example.json)
-
-For a `Snowflake` warehouse deployment baseline, use:
-
-- [snowflake-config-reference.md](snowflake-config-reference.md)
-- [wave2-snowflake-runbook.md](wave2-snowflake-runbook.md)
-- [deploy/config/snowflake-agent.example.json](../deploy/config/snowflake-agent.example.json)
 
 For an `IBM Db2` enterprise SQL deployment baseline, use:
 

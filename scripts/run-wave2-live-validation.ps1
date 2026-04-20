@@ -1,5 +1,5 @@
 param(
-    [ValidateSet("snowflake", "db2", "cassandra", "elasticsearch", "all")]
+    [ValidateSet("db2", "cassandra", "elasticsearch", "all")]
     [string]$Adapter = "all",
     [string]$EnvFile = "",
     [switch]$ListRequiredEnv,

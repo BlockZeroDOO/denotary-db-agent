@@ -8,11 +8,11 @@ It is intentionally narrower than the `Wave 1` readiness matrix: most `Wave 2` s
 
 | Adapter | Snapshot baseline | Local full-cycle proof export | Live validation harness | Mainnet happy path | Mainnet budget run | Mainnet degraded-service | Native CDC | Current readiness summary |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Snowflake | yes | yes | yes, env-gated | no | no | no | no | good enterprise analytics baseline with watermark polling and live warehouse/object validation |
 | Redis | yes | yes | yes, Docker-backed | yes | yes | yes | no | strong operational-state baseline with scan polling, resume, live full-cycle validation, restart recovery, short-soak validation, local service-outage recovery, real `denotary` mainnet validation, bounded mainnet batch validation, and real mainnet degraded-service recovery |
-| IBM Db2 | yes | yes | yes, env-gated | no | no | no | no | strong enterprise SQL baseline with tracked-table introspection and local full-cycle proof export |
-| Apache Cassandra | yes | yes | yes, env-gated | no | no | no | no | strong distributed wide-column baseline with tracked-table introspection and local full-cycle proof export |
-| Elasticsearch | yes | yes | yes, env-gated | no | no | no | no | strong search/index baseline with tracked-index introspection, query-based polling, and env-gated restart/short-soak harness |
+| ScyllaDB | yes | shared Cassandra-compatible baseline | no | no | no | no | no | dedicated adapter alias over the Cassandra-compatible snapshot baseline with deployment guidance, ready for deeper validation later |
+| IBM Db2 | yes | yes | yes, env-gated and local Docker-backed | yes | no | no | no | strong enterprise SQL baseline with tracked-table introspection, local full-cycle proof export, local Docker live validation, and real `denotary` mainnet happy-path validation |
+| Apache Cassandra | yes | yes | yes, env-gated and local Docker-backed | yes | no | no | no | strong distributed wide-column baseline with tracked-table introspection, local full-cycle proof export, local Docker live validation, and real `denotary` mainnet happy-path validation |
+| Elasticsearch | yes | yes | yes, env-gated and local Docker-backed | yes | no | no | no | strong search/index baseline with tracked-index introspection, query-based polling, local Docker live validation, restart/short-soak validation, and real `denotary` mainnet happy-path validation |
 | SQLite | yes | yes | file-backed adapter tests | yes | yes | yes | no | strong edge and embedded baseline with file-backed validation, local full-cycle proof export, cold restart recovery, short-soak validation, local service-outage recovery, real `denotary` mainnet validation, bounded mainnet batch validation, and real mainnet degraded-service recovery |
 
 ## Implemented Scope
@@ -34,6 +34,7 @@ Additionally implemented where applicable:
 - live connection or cluster validation
 - tracked-object introspection
 - env-gated or Docker-backed live harnesses
+- real `denotary` mainnet happy-path validation for `IBM Db2`, `Apache Cassandra`, and `Elasticsearch`
 - local service-outage recovery validation for `SQLite` and `Redis`
 - real `denotary` mainnet validation for `SQLite` and `Redis`
 - bounded `denotary` mainnet batch validation for `SQLite` and `Redis`
@@ -55,9 +56,8 @@ The following layers still remain open for most `Wave 2` adapters:
 Priority after the baseline phase:
 
 1. run the env-gated `Elasticsearch` restart and short-soak validation in a real environment
-2. `Snowflake` live validation in a real account
-3. `IBM Db2` and `Apache Cassandra` live validation in real environments
-4. `Wave 2` service-outage validation beyond `SQLite` and `Redis`
+2. bounded budget validation for `IBM Db2`, `Apache Cassandra`, and `Elasticsearch`
+3. `Wave 2` service-outage validation beyond `SQLite` and `Redis`
 
 Mainnet-confirmed references:
 

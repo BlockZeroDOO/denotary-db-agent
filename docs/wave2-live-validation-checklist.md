@@ -4,7 +4,6 @@ This checklist provides one operator-facing entry point for the `Wave 2` adapter
 
 Current scope:
 
-- `Snowflake`
 - `IBM Db2`
 - `Apache Cassandra`
 - `Elasticsearch`
@@ -15,7 +14,6 @@ For a copy-ready env template and step-by-step operator flow, also see:
 
 - [wave2-live-validation-runbook.md](wave2-live-validation-runbook.md)
 - [../examples/wave2-live.env.example](../examples/wave2-live.env.example)
-- [../examples/wave2-snowflake.env.example](../examples/wave2-snowflake.env.example)
 - [../examples/wave2-db2.env.example](../examples/wave2-db2.env.example)
 - [../examples/wave2-cassandra.env.example](../examples/wave2-cassandra.env.example)
 - [../examples/wave2-elasticsearch.env.example](../examples/wave2-elasticsearch.env.example)
@@ -26,7 +24,6 @@ PowerShell:
 
 ```powershell
 scripts/run-wave2-live-validation.ps1 all
-scripts/run-wave2-live-validation.ps1 snowflake
 scripts/run-wave2-live-validation.ps1 db2
 scripts/run-wave2-live-validation.ps1 cassandra
 scripts/run-wave2-live-validation.ps1 elasticsearch
@@ -40,7 +37,6 @@ Shell:
 
 ```bash
 scripts/run-wave2-live-validation.sh all
-scripts/run-wave2-live-validation.sh snowflake
 scripts/run-wave2-live-validation.sh db2
 scripts/run-wave2-live-validation.sh cassandra
 scripts/run-wave2-live-validation.sh elasticsearch
@@ -54,7 +50,6 @@ Python:
 
 ```bash
 python scripts/run-wave2-live-validation.py --adapter all
-python scripts/run-wave2-live-validation.py --adapter snowflake
 python scripts/run-wave2-live-validation.py --adapter all --list-required-env
 python scripts/run-wave2-live-validation.py --adapter cassandra --write-env-template .\wave2-cassandra.env
 python scripts/run-wave2-live-validation.py --adapter all --env-file .\wave2-live.env --check-env-only
@@ -80,19 +75,6 @@ By default the launcher stores a persistent summary under:
 That summary now includes top-level `status_counts` so operators and CI can read one compact readiness view without scanning every adapter result first.
 
 ## Required Environment
-
-### Snowflake
-
-- `DENOTARY_SNOWFLAKE_ACCOUNT`
-- `DENOTARY_SNOWFLAKE_USERNAME`
-- `DENOTARY_SNOWFLAKE_PASSWORD`
-- `DENOTARY_SNOWFLAKE_DATABASE`
-- `DENOTARY_SNOWFLAKE_SCHEMA`
-- `DENOTARY_SNOWFLAKE_WAREHOUSE`
-
-Optional:
-
-- `DENOTARY_SNOWFLAKE_ROLE`
 
 ### IBM Db2
 

@@ -15,17 +15,6 @@ DATA_ROOT = PROJECT_ROOT / "data"
 PYTHON_EXE = Path(sys.executable)
 
 ADAPTERS: dict[str, dict[str, Any]] = {
-    "snowflake": {
-        "pattern": "test_snowflake*_integration.py",
-        "required_env": [
-            "DENOTARY_SNOWFLAKE_ACCOUNT",
-            "DENOTARY_SNOWFLAKE_USERNAME",
-            "DENOTARY_SNOWFLAKE_PASSWORD",
-            "DENOTARY_SNOWFLAKE_DATABASE",
-            "DENOTARY_SNOWFLAKE_SCHEMA",
-            "DENOTARY_SNOWFLAKE_WAREHOUSE",
-        ],
-    },
     "db2": {
         "pattern": "test_db2*_integration.py",
         "required_env": [

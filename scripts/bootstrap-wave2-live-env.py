@@ -9,7 +9,6 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 EXAMPLES_ROOT = PROJECT_ROOT / "examples"
 
 ADAPTER_EXAMPLES = {
-    "snowflake": EXAMPLES_ROOT / "wave2-snowflake.env.example",
     "db2": EXAMPLES_ROOT / "wave2-db2.env.example",
     "cassandra": EXAMPLES_ROOT / "wave2-cassandra.env.example",
     "elasticsearch": EXAMPLES_ROOT / "wave2-elasticsearch.env.example",

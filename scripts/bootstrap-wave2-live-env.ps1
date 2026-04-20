@@ -1,5 +1,5 @@
 param(
-    [ValidateSet("snowflake", "db2", "cassandra", "elasticsearch")]
+    [ValidateSet("db2", "cassandra", "elasticsearch")]
     [string]$Adapter,
     [string]$Output,
     [switch]$Force

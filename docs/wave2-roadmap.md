@@ -1,22 +1,21 @@
 # Wave 2 Database Roadmap
 
-`Wave 2` expands `denotary-db-agent` beyond the current `Wave 1` production set and targets the next commercially relevant database classes.
+`Wave 2` expands `denotary-db-agent` beyond the current `Wave 1` production set and targets the next commercially relevant database classes that remain in active scope.
 
 ## Goal
 
 Extend coverage into:
 
-- cloud analytics platforms
 - fast operational state stores
 - legacy enterprise SQL estates
 - distributed wide-column systems
 - search-backed operational evidence
 - embedded and edge databases
 
-## Recommended Order
+## Active Order
 
-1. `Snowflake`
-2. `Redis`
+1. `Redis`
+2. `ScyllaDB`
 3. `IBM Db2`
 4. `Apache Cassandra`
 5. `Elasticsearch`
@@ -24,22 +23,22 @@ Extend coverage into:
 
 ## Why This Order
 
-### 1. Snowflake
-
-- strongest next enterprise target for analytics and warehouse evidence
-- high commercial value
-- good fit for snapshot and query-based incremental capture
-
-### 2. Redis
+### 1. Redis
 
 - strong operational relevance
 - useful for session, cache, and application-state proofing
-- good candidate for a fast baseline after `Snowflake`
+- good candidate for a fast baseline with real mainnet validation
+
+### 2. ScyllaDB
+
+- relevant for high-throughput Cassandra-compatible deployments
+- commercially useful where customers standardize on Scylla instead of Apache Cassandra
+- lets us reuse the proven wide-column baseline without inventing a new core model
 
 ### 3. IBM Db2
 
 - important for large enterprise and regulated environments
-- strengthens the “serious enterprise SQL” positioning of the agent
+- strengthens the serious enterprise SQL positioning of the agent
 
 ### 4. Apache Cassandra
 
@@ -60,8 +59,8 @@ Extend coverage into:
 
 ## Phase 1: Highest Commercial Value
 
-- `Snowflake`
 - `Redis`
+- `ScyllaDB`
 - `IBM Db2`
 
 Target outcome:
@@ -87,7 +86,7 @@ Target outcome:
 
 ## Validation Standard
 
-Every `Wave 2` adapter should eventually pass the same validation ladder:
+Every active `Wave 2` adapter should eventually pass the same validation ladder:
 
 1. snapshot / watermark baseline
 2. native CDC path where practical
@@ -98,43 +97,37 @@ Every `Wave 2` adapter should eventually pass the same validation ladder:
 7. mainnet happy-path
 8. bounded budget run when commercially important
 
-## Current Implementation Start
+## Current Implementation Scope
 
-Implementation starts now with:
+Implementation currently covers:
 
-- `Snowflake` adapter contract registration
-- `Snowflake` configuration reference
-- `Snowflake` tracked-object bootstrap and inspect baseline
-- `Snowflake` live warehouse ping and configured object introspection
-- `Snowflake` query-based snapshot polling with watermark resume
-- `Snowflake` local full-cycle proof export
-- `Snowflake` env-gated live integration and full-cycle harnesses
-- `Snowflake` starter deployment config and runbook
 - `Redis` adapter contract registration
 - `Redis` configuration reference
 - `Redis` live ping and explicit key-pattern snapshot baseline
 - `Redis` local full-cycle proof export
 - `Redis` Docker-backed live integration and full-cycle harnesses
 - `Redis` restart recovery and short-soak validation
+- `ScyllaDB` adapter contract registration
+- `ScyllaDB` configuration reference
+- `ScyllaDB` Cassandra-compatible snapshot baseline and deployment/runbook layer
 - `IBM Db2` adapter contract registration
 - `IBM Db2` configuration reference
-- `IBM Db2` live ping, tracked-table introspection, snapshot baseline, local full-cycle proof export, and env-gated live validation harness
+- `IBM Db2` live ping, tracked-table introspection, snapshot baseline, local full-cycle proof export, env-gated live validation harness, local Docker live validation, and real `denotary` mainnet happy-path validation
 - `IBM Db2` starter deployment config and runbook
 - `Apache Cassandra` adapter contract registration
 - `Apache Cassandra` configuration reference
-- `Apache Cassandra` live cluster ping, tracked-table introspection, snapshot baseline, local full-cycle proof export, and env-gated live validation harness
+- `Apache Cassandra` live cluster ping, tracked-table introspection, snapshot baseline, local full-cycle proof export, env-gated live validation harness, local Docker live validation, and real `denotary` mainnet happy-path validation
 - `Apache Cassandra` starter deployment config and runbook
 - `Elasticsearch` adapter contract registration
 - `Elasticsearch` configuration reference
-- `Elasticsearch` live cluster ping, tracked-index introspection, snapshot baseline, local full-cycle proof export, and env-gated live validation harness
-- `Elasticsearch` env-gated restart and short-soak validation harness
+- `Elasticsearch` live cluster ping, tracked-index introspection, snapshot baseline, local full-cycle proof export, env-gated live validation harness, local Docker live validation, restart and short-soak validation, and real `denotary` mainnet happy-path validation
 - `SQLite` adapter contract registration
 - `SQLite` configuration reference
-- `SQLite` file-backed readiness validation, tracked-table introspection, snapshot baseline, and local full-cycle proof export
-- `SQLite` cold restart recovery and short-soak validation
+- `SQLite` file-backed readiness validation, tracked-table introspection, snapshot baseline, local full-cycle proof export, cold restart recovery, short-soak validation, and real `denotary` mainnet validation
 - `Wave 2` planning and documentation
 
-Planned next step:
+## Planned Next Step
 
-- execute the new `Elasticsearch` restart and short-soak harness in a real environment
-- use the unified `Wave 2` live validation checklist to drive real-environment validation for `Snowflake`, `Db2`, `Cassandra`, and `Elasticsearch`
+- bounded mainnet budget validation for `IBM Db2`, `Apache Cassandra`, and `Elasticsearch`
+- service-outage and deeper restart validation beyond `SQLite` and `Redis`
+- use the unified `Wave 2` live validation checklist to drive real-environment validation for `Db2`, `Cassandra`, and `Elasticsearch`
