@@ -6,14 +6,14 @@ It is intentionally narrower than the `Wave 1` readiness matrix: most `Wave 2` s
 
 ## Current Matrix
 
-| Adapter | Snapshot baseline | Local full-cycle proof export | Live validation harness | Native CDC | Current readiness summary |
-| --- | --- | --- | --- | --- | --- |
-| Snowflake | yes | yes | yes, env-gated | no | good enterprise analytics baseline with watermark polling and live warehouse/object validation |
-| Redis | yes | yes | yes, Docker-backed | no | strong operational-state baseline with scan polling, resume, live full-cycle validation, restart recovery, short-soak validation, and local service-outage recovery |
-| IBM Db2 | yes | yes | yes, env-gated | no | strong enterprise SQL baseline with tracked-table introspection and local full-cycle proof export |
-| Apache Cassandra | yes | yes | yes, env-gated | no | strong distributed wide-column baseline with tracked-table introspection and local full-cycle proof export |
-| Elasticsearch | yes | yes | yes, env-gated | no | strong search/index baseline with tracked-index introspection, query-based polling, and env-gated restart/short-soak harness |
-| SQLite | yes | yes | file-backed adapter tests | no | strong edge and embedded baseline with file-backed validation, local full-cycle proof export, cold restart recovery, short-soak validation, and local service-outage recovery |
+| Adapter | Snapshot baseline | Local full-cycle proof export | Live validation harness | Mainnet happy path | Native CDC | Current readiness summary |
+| --- | --- | --- | --- | --- | --- | --- |
+| Snowflake | yes | yes | yes, env-gated | no | no | good enterprise analytics baseline with watermark polling and live warehouse/object validation |
+| Redis | yes | yes | yes, Docker-backed | yes | no | strong operational-state baseline with scan polling, resume, live full-cycle validation, restart recovery, short-soak validation, local service-outage recovery, and real `denotary` mainnet validation |
+| IBM Db2 | yes | yes | yes, env-gated | no | no | strong enterprise SQL baseline with tracked-table introspection and local full-cycle proof export |
+| Apache Cassandra | yes | yes | yes, env-gated | no | no | strong distributed wide-column baseline with tracked-table introspection and local full-cycle proof export |
+| Elasticsearch | yes | yes | yes, env-gated | no | no | strong search/index baseline with tracked-index introspection, query-based polling, and env-gated restart/short-soak harness |
+| SQLite | yes | yes | file-backed adapter tests | yes | no | strong edge and embedded baseline with file-backed validation, local full-cycle proof export, cold restart recovery, short-soak validation, local service-outage recovery, and real `denotary` mainnet validation |
 
 ## Implemented Scope
 
@@ -35,6 +35,7 @@ Additionally implemented where applicable:
 - tracked-object introspection
 - env-gated or Docker-backed live harnesses
 - local service-outage recovery validation for `SQLite` and `Redis`
+- real `denotary` mainnet validation for `SQLite` and `Redis`
 
 ## Remaining Validation Layers
 
@@ -44,7 +45,7 @@ The following layers still remain open for most `Wave 2` adapters:
 2. short soak validation
 3. long soak validation
 4. service outage validation beyond `SQLite` and `Redis`
-5. mainnet `denotary` happy-path validation
+5. mainnet `denotary` happy-path validation beyond `SQLite` and `Redis`
 6. bounded budget validation where commercially justified
 
 ## Suggested Next Steps
@@ -55,6 +56,11 @@ Priority after the baseline phase:
 2. `Snowflake` live validation in a real account
 3. `IBM Db2` and `Apache Cassandra` live validation in real environments
 4. `Wave 2` service-outage validation beyond `SQLite` and `Redis`
+
+Mainnet-confirmed references:
+
+- [wave2-denotary-validation.md](wave2-denotary-validation.md)
+- [wave2-denotary-validation-report.md](wave2-denotary-validation-report.md)
 
 ## Interpretation
 

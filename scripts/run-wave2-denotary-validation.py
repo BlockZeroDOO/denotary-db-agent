@@ -5,7 +5,6 @@ import json
 import sqlite3
 import subprocess
 import sys
-import tempfile
 import time
 import urllib.error
 import urllib.request
@@ -36,6 +35,7 @@ ENV_FILE = PROJECT_ROOT / "data" / "denotary-live-wallet" / "agent.secrets.env"
 SCHEMA_ID = 1
 POLICY_ID = 1
 WATCHER_TOKEN = "wave2-denotary-token"
+DATA_ROOT = PROJECT_ROOT / "data"
 
 
 def _healthcheck(url: str, timeout_sec: float = 2.0) -> bool:
@@ -267,6 +267,10 @@ def load_proof_bundle(proof_entry: dict[str, Any]) -> dict[str, Any]:
     return json.loads(export_path.read_text(encoding="utf-8"))
 
 
+def utc_stamp() -> str:
+    return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+
+
 def build_denotary_config_for_stack(stack: OffchainStack) -> dict[str, Any]:
     return {
         "ingress_url": stack.ingress_url,
@@ -357,135 +361,142 @@ def build_redis_config(temp_dir: Path, stack: OffchainStack) -> Path:
     return path
 
 
-def run_sqlite_validation() -> dict[str, Any]:
-    with tempfile.TemporaryDirectory() as temp:
-        temp_dir = Path(temp)
-        database_path = temp_dir / "ledger.sqlite3"
-        state_db = temp_dir / "offchain-state.sqlite3"
-        initialize_sqlite(database_path)
-        stack = OffchainStack(state_db)
-        stack.start()
+def run_sqlite_validation(temp_dir: Path) -> dict[str, Any]:
+    temp_dir.mkdir(parents=True, exist_ok=True)
+    database_path = temp_dir / "ledger.sqlite3"
+    state_db = temp_dir / "offchain-state.sqlite3"
+    initialize_sqlite(database_path)
+    stack = OffchainStack(state_db)
+    stack.start()
+    try:
+        config_path = build_sqlite_config(temp_dir, database_path, stack)
+        engine = AgentEngine(load_config(config_path))
         try:
-            config_path = build_sqlite_config(temp_dir, database_path, stack)
-            engine = AgentEngine(load_config(config_path))
-            try:
-                marker = build_run_marker("sqlite-denotary")
-                doctor = engine.doctor("sqlite-wave2-denotary")
-                if doctor["overall"]["severity"] == "critical":
-                    raise RuntimeError(f"sqlite denotary doctor failed: {doctor['errors']}")
-                baseline = engine.run_once()
-                insert_sqlite_invoice(
-                    database_path,
-                    record_id=int(marker["record_id"]),
-                    status=str(marker["status"]),
-                    updated_at=str(marker["timestamp"]),
-                )
-                result = engine.run_once()
-                proofs = engine.store.list_proofs("sqlite-wave2-denotary")
-                deliveries = engine.store.list_deliveries("sqlite-wave2-denotary")
-                if result["processed"] != 1 or result["failed"] != 0:
-                    raise RuntimeError("sqlite denotary run did not process exactly one event")
-                if len(proofs) != 1 or len(deliveries) != 1:
-                    raise RuntimeError("sqlite denotary run did not export exactly one proof bundle")
-                proof = proofs[0]
-                proof_bundle = load_proof_bundle(proof)
-                receipt = dict(proof_bundle.get("receipt") or {})
-                delivery = deliveries[0]
-                return {
-                    "adapter": "sqlite",
-                    "status": "passed",
-                    "baseline_processed": baseline["processed"],
-                    "processed": result["processed"],
-                    "failed": result["failed"],
-                    "request_id": str(proof["request_id"]),
-                    "tx_id": str(delivery["tx_id"] or receipt.get("tx_id") or ""),
-                    "block_num": int(receipt.get("block_num") or 0),
-                    "proof_path": proof["export_path"],
-                    "broadcast_backend": doctor["signer"]["effective_broadcast_backend"],
-                    "finality_mode": "finalized_exported",
-                }
-            finally:
-                engine.close()
+            marker = build_run_marker("sqlite-denotary")
+            doctor = engine.doctor("sqlite-wave2-denotary")
+            if doctor["overall"]["severity"] == "critical":
+                raise RuntimeError(f"sqlite denotary doctor failed: {doctor['errors']}")
+            baseline = engine.run_once()
+            insert_sqlite_invoice(
+                database_path,
+                record_id=int(marker["record_id"]),
+                status=str(marker["status"]),
+                updated_at=str(marker["timestamp"]),
+            )
+            result = engine.run_once()
+            proofs = engine.store.list_proofs("sqlite-wave2-denotary")
+            deliveries = engine.store.list_deliveries("sqlite-wave2-denotary")
+            if result["processed"] != 1 or result["failed"] != 0:
+                raise RuntimeError("sqlite denotary run did not process exactly one event")
+            if len(proofs) != 1 or len(deliveries) != 1:
+                raise RuntimeError("sqlite denotary run did not export exactly one proof bundle")
+            proof = proofs[0]
+            proof_bundle = load_proof_bundle(proof)
+            receipt = dict(proof_bundle.get("receipt") or {})
+            delivery = deliveries[0]
+            return {
+                "adapter": "sqlite",
+                "status": "passed",
+                "baseline_processed": baseline["processed"],
+                "processed": result["processed"],
+                "failed": result["failed"],
+                "request_id": str(proof["request_id"]),
+                "tx_id": str(delivery["tx_id"] or receipt.get("tx_id") or ""),
+                "block_num": int(receipt.get("block_num") or 0),
+                "proof_path": proof["export_path"],
+                "broadcast_backend": doctor["signer"]["effective_broadcast_backend"],
+                "finality_mode": "finalized_exported",
+            }
         finally:
-            stack.stop()
+            engine.close()
+    finally:
+        stack.stop()
 
 
-def run_redis_validation() -> dict[str, Any]:
+def run_redis_validation(temp_dir: Path) -> dict[str, Any]:
+    temp_dir.mkdir(parents=True, exist_ok=True)
     run_redis_compose("down", "-v")
     run_redis_compose("up", "-d")
     wait_for_redis()
     flush_redis()
-    with tempfile.TemporaryDirectory() as temp:
-        temp_dir = Path(temp)
-        state_db = temp_dir / "offchain-state.sqlite3"
-        stack = OffchainStack(state_db)
-        stack.start()
+    state_db = temp_dir / "offchain-state.sqlite3"
+    stack = OffchainStack(state_db)
+    stack.start()
+    try:
+        config_path = build_redis_config(temp_dir, stack)
+        engine = AgentEngine(load_config(config_path))
         try:
-            config_path = build_redis_config(temp_dir, stack)
-            engine = AgentEngine(load_config(config_path))
-            try:
-                marker = build_run_marker("orders")
-                doctor = engine.doctor("redis-wave2-denotary")
-                if doctor["overall"]["severity"] == "critical":
-                    raise RuntimeError(f"redis denotary doctor failed: {doctor['errors']}")
-                baseline = engine.run_once()
-                write_redis_key(str(marker["key"]), str(marker["value"]))
-                result = engine.run_once()
-                proofs = engine.store.list_proofs("redis-wave2-denotary")
-                deliveries = engine.store.list_deliveries("redis-wave2-denotary")
-                if result["processed"] != 1 or result["failed"] != 0:
-                    raise RuntimeError("redis denotary run did not process exactly one event")
-                if len(proofs) != 1 or len(deliveries) != 1:
-                    raise RuntimeError("redis denotary run did not export exactly one proof bundle")
-                proof = proofs[0]
-                proof_bundle = load_proof_bundle(proof)
-                receipt = dict(proof_bundle.get("receipt") or {})
-                delivery = deliveries[0]
-                return {
-                    "adapter": "redis",
-                    "status": "passed",
-                    "baseline_processed": baseline["processed"],
-                    "processed": result["processed"],
-                    "failed": result["failed"],
-                    "request_id": str(proof["request_id"]),
-                    "tx_id": str(delivery["tx_id"] or receipt.get("tx_id") or ""),
-                    "block_num": int(receipt.get("block_num") or 0),
-                    "proof_path": proof["export_path"],
-                    "broadcast_backend": doctor["signer"]["effective_broadcast_backend"],
-                    "finality_mode": "finalized_exported",
-                }
-            finally:
-                engine.close()
+            marker = build_run_marker("orders")
+            doctor = engine.doctor("redis-wave2-denotary")
+            if doctor["overall"]["severity"] == "critical":
+                raise RuntimeError(f"redis denotary doctor failed: {doctor['errors']}")
+            baseline = engine.run_once()
+            write_redis_key(str(marker["key"]), str(marker["value"]))
+            result = engine.run_once()
+            proofs = engine.store.list_proofs("redis-wave2-denotary")
+            deliveries = engine.store.list_deliveries("redis-wave2-denotary")
+            if result["processed"] != 1 or result["failed"] != 0:
+                raise RuntimeError("redis denotary run did not process exactly one event")
+            if len(proofs) != 1 or len(deliveries) != 1:
+                raise RuntimeError("redis denotary run did not export exactly one proof bundle")
+            proof = proofs[0]
+            proof_bundle = load_proof_bundle(proof)
+            receipt = dict(proof_bundle.get("receipt") or {})
+            delivery = deliveries[0]
+            return {
+                "adapter": "redis",
+                "status": "passed",
+                "baseline_processed": baseline["processed"],
+                "processed": result["processed"],
+                "failed": result["failed"],
+                "request_id": str(proof["request_id"]),
+                "tx_id": str(delivery["tx_id"] or receipt.get("tx_id") or ""),
+                "block_num": int(receipt.get("block_num") or 0),
+                "proof_path": proof["export_path"],
+                "broadcast_backend": doctor["signer"]["effective_broadcast_backend"],
+                "finality_mode": "finalized_exported",
+            }
         finally:
-            stack.stop()
-            run_redis_compose("down", "-v")
+            engine.close()
+    finally:
+        stack.stop()
+        run_redis_compose("down", "-v")
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run Wave 2 denotary validation")
     parser.add_argument("--adapter", choices=("sqlite", "redis", "all"), default="all")
+    parser.add_argument("--output-root", default="", help="Optional directory for persistent run artifacts.")
     args = parser.parse_args()
 
     adapters = ["sqlite", "redis"] if args.adapter == "all" else [args.adapter]
+    run_root = (
+        Path(args.output_root).resolve()
+        if args.output_root
+        else (DATA_ROOT / f"wave2-denotary-validation-{utc_stamp().lower()}").resolve()
+    )
+    run_root.mkdir(parents=True, exist_ok=True)
     results: list[dict[str, Any]] = []
     for adapter in adapters:
         try:
-            payload = run_sqlite_validation() if adapter == "sqlite" else run_redis_validation()
+            adapter_root = run_root / adapter
+            payload = run_sqlite_validation(adapter_root) if adapter == "sqlite" else run_redis_validation(adapter_root)
             results.append(payload)
         except Exception as exc:  # noqa: BLE001
             results.append({"adapter": adapter, "status": "failed", "error": str(exc)})
-    print(
-        json.dumps(
-            {
-                "network": "denotary",
-                "rpc_url": DENOTARY_RPC_URL,
-                "submitter": SUBMITTER,
-                "submitter_permission": SUBMITTER_PERMISSION,
-                "results": results,
-            },
-            indent=2,
-        )
+    summary = {
+        "network": "denotary",
+        "rpc_url": DENOTARY_RPC_URL,
+        "submitter": SUBMITTER,
+        "submitter_permission": SUBMITTER_PERMISSION,
+        "run_root": str(run_root),
+        "results": results,
+    }
+    (run_root / "summary.json").write_text(
+        json.dumps(summary, indent=2),
+        encoding="utf-8",
     )
+    print(json.dumps(summary, indent=2))
 
 
 if __name__ == "__main__":
