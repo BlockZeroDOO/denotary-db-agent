@@ -13,7 +13,7 @@ It is intentionally narrower than the `Wave 1` readiness matrix: most `Wave 2` s
 | IBM Db2 | yes | yes | yes, env-gated | no | strong enterprise SQL baseline with tracked-table introspection and local full-cycle proof export |
 | Apache Cassandra | yes | yes | yes, env-gated | no | strong distributed wide-column baseline with tracked-table introspection and local full-cycle proof export |
 | Elasticsearch | yes | yes | yes, env-gated | no | strong search/index baseline with tracked-index introspection and query-based polling |
-| SQLite | yes | yes | file-backed adapter tests | no | strong edge and embedded baseline with file-backed validation and local full-cycle proof export |
+| SQLite | yes | yes | file-backed adapter tests | no | strong edge and embedded baseline with file-backed validation, local full-cycle proof export, cold restart recovery, and short-soak validation |
 
 ## Implemented Scope
 
@@ -50,8 +50,7 @@ The following layers still remain open for most `Wave 2` adapters:
 
 Priority after the baseline phase:
 
-1. `SQLite` edge-focused validation and runbooks
-2. `Elasticsearch` restart and short-soak validation
+1. `Elasticsearch` restart and short-soak validation
 4. `Snowflake` live validation in a real account
 5. `IBM Db2` and `Apache Cassandra` live validation in real environments
 

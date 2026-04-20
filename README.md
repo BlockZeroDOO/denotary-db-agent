@@ -91,6 +91,8 @@ Current SQLite Wave 2 status:
 - tracked-table introspection is implemented
 - watermark snapshot polling with deterministic resume is implemented
 - local full-cycle proof export is implemented
+- cold restart recovery validation is implemented
+- short-soak validation is implemented
 - dry-run snapshot playback is implemented for pipeline validation
 
 This initial implementation focuses on the platform layer and adapter contract. Real CDC transport details per database remain adapter-specific work on top of this package scaffold.
@@ -247,6 +249,9 @@ See:
 - [docs/wave2-redis-validation.md](docs/wave2-redis-validation.md)
 - [docs/wave2-redis-validation-report.md](docs/wave2-redis-validation-report.md)
 - [scripts/run-wave2-redis-validation.ps1](scripts/run-wave2-redis-validation.ps1)
+- [docs/wave2-sqlite-validation.md](docs/wave2-sqlite-validation.md)
+- [docs/wave2-sqlite-validation-report.md](docs/wave2-sqlite-validation-report.md)
+- [scripts/run-wave2-sqlite-validation.ps1](scripts/run-wave2-sqlite-validation.ps1)
 - [docs/operator-guide.md](docs/operator-guide.md)
 - [docs/deployment-guide.md](docs/deployment-guide.md)
 - [docs/denotary-env-file-runbook.md](docs/denotary-env-file-runbook.md)

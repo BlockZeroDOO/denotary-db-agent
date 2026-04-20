@@ -127,8 +127,9 @@ Implementation starts now with:
 - `SQLite` adapter contract registration
 - `SQLite` configuration reference
 - `SQLite` file-backed readiness validation, tracked-table introspection, snapshot baseline, and local full-cycle proof export
+- `SQLite` cold restart recovery and short-soak validation
 - `Wave 2` planning and documentation
 
 Planned next step:
 
-- extend `SQLite` into edge-oriented validation and then continue with the next Wave 2 hardening layer
+- extend the next `Wave 2` sources beyond baseline depth, starting with `Elasticsearch` restart and short-soak validation
