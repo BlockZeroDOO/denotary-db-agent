@@ -269,6 +269,8 @@ See:
 - [docs/wave2-mainnet-service-outage-validation.md](docs/wave2-mainnet-service-outage-validation.md)
 - [docs/wave2-mainnet-service-outage-validation-report.md](docs/wave2-mainnet-service-outage-validation-report.md)
 - [scripts/run-wave2-mainnet-service-outage-validation.ps1](scripts/run-wave2-mainnet-service-outage-validation.ps1)
+- [docs/wave2-live-validation-checklist.md](docs/wave2-live-validation-checklist.md)
+- [scripts/run-wave2-live-validation.ps1](scripts/run-wave2-live-validation.ps1)
 - [docs/wave2-sqlite-validation.md](docs/wave2-sqlite-validation.md)
 - [docs/wave2-sqlite-validation-report.md](docs/wave2-sqlite-validation-report.md)
 - [scripts/run-wave2-sqlite-validation.ps1](scripts/run-wave2-sqlite-validation.ps1)

@@ -137,3 +137,4 @@ Implementation starts now with:
 Planned next step:
 
 - execute the new `Elasticsearch` restart and short-soak harness in a real environment
+- use the unified `Wave 2` live validation checklist to drive real-environment validation for `Snowflake`, `Db2`, `Cassandra`, and `Elasticsearch`
