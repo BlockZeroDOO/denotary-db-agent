@@ -116,9 +116,9 @@ Implementation starts now with:
 - `Redis` Docker-backed live integration and full-cycle harnesses
 - `IBM Db2` adapter contract registration
 - `IBM Db2` configuration reference
-- `IBM Db2` live ping, tracked-table introspection, snapshot baseline, and local full-cycle proof export
+- `IBM Db2` live ping, tracked-table introspection, snapshot baseline, local full-cycle proof export, and env-gated live validation harness
 - `Wave 2` planning and documentation
 
 Planned next step:
 
-- live validation for `IBM Db2`, then move to the next Wave 2 source after `Snowflake` and `Redis`
+- credential-backed live execution for `Snowflake` / `IBM Db2`, then move to the next Wave 2 source after `Snowflake`, `Redis`, and `IBM Db2`

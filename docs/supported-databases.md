@@ -36,7 +36,7 @@
 | --- | --- | --- | --- |
 | Snowflake | enterprise analytics | query-based snapshot / watermark baseline, then local full-cycle proof export | adapter contract, config surface, live ping, configured-object introspection, snapshot baseline, local full-cycle validation, and env-gated live harness implemented |
 | Redis | operational state | explicit key-pattern snapshot baseline, then local full-cycle proof export; later keyspace notifications where justified | adapter contract, config surface, live ping, snapshot baseline, local full-cycle validation, and Docker-backed live validation implemented |
-| IBM Db2 | enterprise | snapshot / watermark baseline, later native change capture if justified | adapter contract, config surface, live ping, tracked-table introspection, snapshot baseline, and local full-cycle proof export implemented |
+| IBM Db2 | enterprise | snapshot / watermark baseline, later native change capture if justified | adapter contract, config surface, live ping, tracked-table introspection, snapshot baseline, local full-cycle proof export, and env-gated live validation harness implemented |
 | Apache Cassandra | distributed wide-column | partition-aware snapshot baseline, later optional CDC | planned |
 | Elasticsearch | search / operational index | query-based snapshot and incremental baseline | planned |
 | SQLite | embedded / edge | local snapshot / watermark baseline | planned |
