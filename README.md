@@ -49,6 +49,7 @@ Current Redis Wave 2 status:
 - explicit key-pattern snapshot polling is implemented
 - deterministic lexicographic key resume is implemented
 - local full-cycle proof export is implemented for the snapshot baseline
+- Docker-backed live integration and full-cycle harnesses are implemented
 - dry-run snapshot playback is implemented for pipeline validation
 
 This initial implementation focuses on the platform layer and adapter contract. Real CDC transport details per database remain adapter-specific work on top of this package scaffold.
@@ -190,6 +191,7 @@ See:
 - [docs/snowflake-config-reference.md](docs/snowflake-config-reference.md)
 - [docs/redis-config-reference.md](docs/redis-config-reference.md)
 - [scripts/run-live-snowflake-integration.ps1](scripts/run-live-snowflake-integration.ps1)
+- [scripts/run-live-redis-integration.ps1](scripts/run-live-redis-integration.ps1)
 - [docs/architecture.md](docs/architecture.md)
 - [docs/adapter-separation-architecture.md](docs/adapter-separation-architecture.md)
 - [docs/wave2-roadmap.md](docs/wave2-roadmap.md)

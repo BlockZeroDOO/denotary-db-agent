@@ -139,8 +139,8 @@ Implemented now:
 - snapshot polling baseline
 - deterministic checkpoint resume
 - local full-cycle proof export
+- Docker-backed live integration and full-cycle harnesses
 
 Planned next:
 
-- local full-cycle proof export
 - optional keyspace notification CDC path if justified

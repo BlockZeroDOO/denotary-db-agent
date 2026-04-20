@@ -113,8 +113,9 @@ Implementation starts now with:
 - `Redis` configuration reference
 - `Redis` live ping and explicit key-pattern snapshot baseline
 - `Redis` local full-cycle proof export
+- `Redis` Docker-backed live integration and full-cycle harnesses
 - `Wave 2` planning and documentation
 
 Planned next step:
 
-- credential-backed Snowflake live validation, then live Redis baseline validation
+- credential-backed Snowflake live validation, then the next Wave 2 adapter after `Snowflake` and `Redis`
