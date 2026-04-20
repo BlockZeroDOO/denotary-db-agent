@@ -179,6 +179,14 @@ def _env_template_payload(adapters: list[str]) -> str:
     return "\n\n".join(sections) + "\n"
 
 
+def _status_counts(results: list[dict[str, Any]]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for item in results:
+        status = str(item.get("status", "unknown"))
+        counts[status] = counts.get(status, 0) + 1
+    return counts
+
+
 def main() -> None:
     args = parse_args()
     env_file_values = _load_env_file(args.env_file)
@@ -253,6 +261,7 @@ def main() -> None:
         "env_file": str(Path(args.env_file).resolve()) if args.env_file else "",
         "check_env_only": bool(args.check_env_only),
         "strict_env": bool(args.strict_env),
+        "status_counts": _status_counts(results),
         "results": results,
     }
     (run_root / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")

@@ -113,6 +113,7 @@ python scripts/run-wave2-live-validation.py --adapter all --output-root data/wav
 Every run also stores:
 
 - `summary.json`
+- `status_counts`
 
 under either:
 

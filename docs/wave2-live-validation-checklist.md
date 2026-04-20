@@ -71,6 +71,8 @@ By default the launcher stores a persistent summary under:
 
 - `data/wave2-live-validation-<timestamp>/summary.json`
 
+That summary now includes top-level `status_counts` so operators and CI can read one compact readiness view without scanning every adapter result first.
+
 ## Required Environment
 
 ### Snowflake
