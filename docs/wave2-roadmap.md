@@ -111,8 +111,9 @@ Implementation starts now with:
 - `Redis` adapter contract registration
 - `Redis` configuration reference
 - `Redis` live ping and explicit key-pattern snapshot baseline
+- `Redis` local full-cycle proof export
 - `Wave 2` planning and documentation
 
 Planned next step:
 
-- local full-cycle proof export for Redis, then live Snowflake harness and validation
+- live Snowflake harness and validation, then live Redis baseline validation

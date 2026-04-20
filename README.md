@@ -47,6 +47,7 @@ Current Redis Wave 2 status:
 - live readiness ping is implemented
 - explicit key-pattern snapshot polling is implemented
 - deterministic lexicographic key resume is implemented
+- local full-cycle proof export is implemented for the snapshot baseline
 - dry-run snapshot playback is implemented for pipeline validation
 
 This initial implementation focuses on the platform layer and adapter contract. Real CDC transport details per database remain adapter-specific work on top of this package scaffold.

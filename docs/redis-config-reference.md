@@ -138,6 +138,7 @@ Implemented now:
 - live readiness ping
 - snapshot polling baseline
 - deterministic checkpoint resume
+- local full-cycle proof export
 
 Planned next:
 
