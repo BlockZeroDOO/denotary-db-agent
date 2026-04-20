@@ -54,6 +54,7 @@ Current ScyllaDB Wave 2 status:
 - adapter registration and config surface are implemented
 - shared Cassandra-compatible snapshot / watermark baseline is implemented
 - deterministic checkpoint resume is implemented
+- local full-cycle proof export is implemented
 - deployment starter config and operator runbook are implemented
 
 Current IBM Db2 Wave 2 status:
