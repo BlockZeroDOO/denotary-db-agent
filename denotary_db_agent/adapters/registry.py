@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from denotary_db_agent.adapters.base import BaseAdapter
+from denotary_db_agent.adapters.cassandra import CassandraAdapter
 from denotary_db_agent.adapters.db2 import Db2Adapter
 from denotary_db_agent.adapters.mariadb import MariaDbAdapter
 from denotary_db_agent.adapters.mongodb import MongoDbAdapter
@@ -23,6 +24,7 @@ ADAPTERS: dict[str, type[BaseAdapter]] = {
     "snowflake": SnowflakeAdapter,
     "redis": RedisAdapter,
     "db2": Db2Adapter,
+    "cassandra": CassandraAdapter,
 }
 
 

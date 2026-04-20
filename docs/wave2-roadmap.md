@@ -117,8 +117,11 @@ Implementation starts now with:
 - `IBM Db2` adapter contract registration
 - `IBM Db2` configuration reference
 - `IBM Db2` live ping, tracked-table introspection, snapshot baseline, local full-cycle proof export, and env-gated live validation harness
+- `Apache Cassandra` adapter contract registration
+- `Apache Cassandra` configuration reference
+- `Apache Cassandra` live cluster ping, tracked-table introspection, and snapshot baseline
 - `Wave 2` planning and documentation
 
 Planned next step:
 
-- credential-backed live execution for `Snowflake` / `IBM Db2`, then move to the next Wave 2 source after `Snowflake`, `Redis`, and `IBM Db2`
+- local full-cycle proof export for `Apache Cassandra`, then live validation after `Snowflake`, `Redis`, and `IBM Db2`

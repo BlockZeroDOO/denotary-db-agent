@@ -34,6 +34,7 @@ The full agent config is split into:
 - [snowflake-config-reference.md](snowflake-config-reference.md)
 - [redis-config-reference.md](redis-config-reference.md)
 - [db2-config-reference.md](db2-config-reference.md)
+- [cassandra-config-reference.md](cassandra-config-reference.md)
 
 ## Top-Level Shape
 
@@ -135,6 +136,7 @@ Each entry in `sources` is one logical input source.
   - `"snowflake"`
   - `"redis"`
   - `"db2"`
+  - `"cassandra"`
 
 ### `enabled`
 
@@ -235,3 +237,5 @@ Each entry in `sources` is one logical input source.
   - [redis-config-reference.md](redis-config-reference.md)
 - IBM Db2:
   - [db2-config-reference.md](db2-config-reference.md)
+- Apache Cassandra:
+  - [cassandra-config-reference.md](cassandra-config-reference.md)
