@@ -6,14 +6,14 @@ It is intentionally narrower than the `Wave 1` readiness matrix: most `Wave 2` s
 
 ## Current Matrix
 
-| Adapter | Snapshot baseline | Local full-cycle proof export | Live validation harness | Mainnet happy path | Mainnet budget run | Native CDC | Current readiness summary |
-| --- | --- | --- | --- | --- | --- | --- |
-| Snowflake | yes | yes | yes, env-gated | no | no | no | good enterprise analytics baseline with watermark polling and live warehouse/object validation |
-| Redis | yes | yes | yes, Docker-backed | yes | yes | no | strong operational-state baseline with scan polling, resume, live full-cycle validation, restart recovery, short-soak validation, local service-outage recovery, real `denotary` mainnet validation, and bounded mainnet batch validation |
-| IBM Db2 | yes | yes | yes, env-gated | no | no | no | strong enterprise SQL baseline with tracked-table introspection and local full-cycle proof export |
-| Apache Cassandra | yes | yes | yes, env-gated | no | no | no | strong distributed wide-column baseline with tracked-table introspection and local full-cycle proof export |
-| Elasticsearch | yes | yes | yes, env-gated | no | no | no | strong search/index baseline with tracked-index introspection, query-based polling, and env-gated restart/short-soak harness |
-| SQLite | yes | yes | file-backed adapter tests | yes | yes | no | strong edge and embedded baseline with file-backed validation, local full-cycle proof export, cold restart recovery, short-soak validation, local service-outage recovery, real `denotary` mainnet validation, and bounded mainnet batch validation |
+| Adapter | Snapshot baseline | Local full-cycle proof export | Live validation harness | Mainnet happy path | Mainnet budget run | Mainnet degraded-service | Native CDC | Current readiness summary |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Snowflake | yes | yes | yes, env-gated | no | no | no | no | good enterprise analytics baseline with watermark polling and live warehouse/object validation |
+| Redis | yes | yes | yes, Docker-backed | yes | yes | yes | no | strong operational-state baseline with scan polling, resume, live full-cycle validation, restart recovery, short-soak validation, local service-outage recovery, real `denotary` mainnet validation, bounded mainnet batch validation, and real mainnet degraded-service recovery |
+| IBM Db2 | yes | yes | yes, env-gated | no | no | no | no | strong enterprise SQL baseline with tracked-table introspection and local full-cycle proof export |
+| Apache Cassandra | yes | yes | yes, env-gated | no | no | no | no | strong distributed wide-column baseline with tracked-table introspection and local full-cycle proof export |
+| Elasticsearch | yes | yes | yes, env-gated | no | no | no | no | strong search/index baseline with tracked-index introspection, query-based polling, and env-gated restart/short-soak harness |
+| SQLite | yes | yes | file-backed adapter tests | yes | yes | yes | no | strong edge and embedded baseline with file-backed validation, local full-cycle proof export, cold restart recovery, short-soak validation, local service-outage recovery, real `denotary` mainnet validation, bounded mainnet batch validation, and real mainnet degraded-service recovery |
 
 ## Implemented Scope
 
@@ -37,6 +37,7 @@ Additionally implemented where applicable:
 - local service-outage recovery validation for `SQLite` and `Redis`
 - real `denotary` mainnet validation for `SQLite` and `Redis`
 - bounded `denotary` mainnet batch validation for `SQLite` and `Redis`
+- real `denotary` mainnet degraded-service recovery validation for `SQLite` and `Redis`
 
 ## Remaining Validation Layers
 
@@ -64,6 +65,8 @@ Mainnet-confirmed references:
 - [wave2-denotary-validation-report.md](wave2-denotary-validation-report.md)
 - [wave2-mainnet-budget-validation.md](wave2-mainnet-budget-validation.md)
 - [wave2-mainnet-budget-validation-report.md](wave2-mainnet-budget-validation-report.md)
+- [wave2-mainnet-service-outage-validation.md](wave2-mainnet-service-outage-validation.md)
+- [wave2-mainnet-service-outage-validation-report.md](wave2-mainnet-service-outage-validation-report.md)
 
 ## Interpretation
 
