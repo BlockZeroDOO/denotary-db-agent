@@ -361,7 +361,7 @@ class CassandraAdapter(BaseAdapter):
             sql += f" where {self._quote_identifier(spec.watermark_column)} >= %s"
             params.append(watermark_value)
         row_limit = int(self.config.options.get("row_limit", self.config.batch_size))
-        if row_limit > 0:
+        if row_limit > 0 and table_state is None:
             sql += " limit %s"
             params.append(row_limit)
         if table_state:
@@ -374,6 +374,9 @@ class CassandraAdapter(BaseAdapter):
                 for row in normalized_rows
                 if self._row_after_checkpoint(spec, row, table_state)
             ]
+        normalized_rows.sort(key=lambda row: self._sort_key(spec, row))
+        if row_limit > 0:
+            normalized_rows = normalized_rows[:row_limit]
         return normalized_rows
 
     def _row_after_checkpoint(self, spec: CassandraTableSpec, row: dict[str, Any], table_state: dict[str, Any]) -> bool:
