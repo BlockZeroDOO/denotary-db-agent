@@ -10,6 +10,7 @@ Current baseline:
 - watermark snapshot polling
 - deterministic checkpoint resume
 - dry-run snapshot playback
+- local full-cycle proof export
 
 Native Db2 CDC is not implemented yet.
 
@@ -66,4 +67,5 @@ Supported now:
 
 - schemas and table names are normalized to uppercase for the baseline implementation
 - current work focuses on a snapshot / watermark baseline first
+- local proof export is already covered with dry-run snapshot playback
 - native Db2 change capture can be added later if commercially justified
