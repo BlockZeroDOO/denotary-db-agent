@@ -28,3 +28,15 @@
 - Elasticsearch / OpenSearch
 - Cassandra
 - native in-database extensions
+- Snowflake
+
+## Wave 2 Targets
+
+| Adapter | Initial target path | Planned capture path | Current status |
+| --- | --- | --- | --- |
+| Snowflake | enterprise analytics | query-based snapshot / watermark baseline, then local full-cycle proof export | adapter contract, config surface, live ping, configured-object introspection, snapshot baseline, and local full-cycle validation implemented |
+| Redis | operational state | explicit key-pattern snapshot baseline, later keyspace notifications where justified | adapter contract, config surface, live ping, and snapshot baseline implemented |
+| IBM Db2 | enterprise | snapshot / watermark baseline, later native change capture if justified | planned |
+| Apache Cassandra | distributed wide-column | partition-aware snapshot baseline, later optional CDC | planned |
+| Elasticsearch | search / operational index | query-based snapshot and incremental baseline | planned |
+| SQLite | embedded / edge | local snapshot / watermark baseline | planned |

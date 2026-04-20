@@ -31,6 +31,8 @@ The full agent config is split into:
 - [sqlserver-config-reference.md](sqlserver-config-reference.md)
 - [oracle-config-reference.md](oracle-config-reference.md)
 - [mongodb-config-reference.md](mongodb-config-reference.md)
+- [snowflake-config-reference.md](snowflake-config-reference.md)
+- [redis-config-reference.md](redis-config-reference.md)
 
 ## Top-Level Shape
 
@@ -129,6 +131,8 @@ Each entry in `sources` is one logical input source.
   - `"sqlserver"`
   - `"oracle"`
   - `"mongodb"`
+  - `"snowflake"`
+  - `"redis"`
 
 ### `enabled`
 
@@ -223,3 +227,7 @@ Each entry in `sources` is one logical input source.
   - [oracle-config-reference.md](oracle-config-reference.md)
 - MongoDB:
   - [mongodb-config-reference.md](mongodb-config-reference.md)
+- Snowflake:
+  - [snowflake-config-reference.md](snowflake-config-reference.md)
+- Redis:
+  - [redis-config-reference.md](redis-config-reference.md)

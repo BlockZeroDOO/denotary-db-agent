@@ -7,7 +7,9 @@ from denotary_db_agent.adapters.mongodb import MongoDbAdapter
 from denotary_db_agent.adapters.mysql import MySqlAdapter
 from denotary_db_agent.adapters.oracle import OracleAdapter
 from denotary_db_agent.adapters.postgres import PostgresAdapter
+from denotary_db_agent.adapters.redis import RedisAdapter
 from denotary_db_agent.adapters.registry import ADAPTERS, build_adapter
+from denotary_db_agent.adapters.snowflake import SnowflakeAdapter
 from denotary_db_agent.adapters.sqlserver import SqlServerAdapter
 from denotary_db_agent.config import SourceConfig
 
@@ -21,9 +23,12 @@ class AdapterRegistryContractTest(unittest.TestCase):
             ("sqlserver", SqlServerAdapter, {"host": "127.0.0.1", "port": 1433, "username": "sa", "database": "ledger"}),
             ("oracle", OracleAdapter, {"host": "127.0.0.1", "port": 1521, "username": "denotary", "service_name": "XEPDB1"}),
             ("mongodb", MongoDbAdapter, {"uri": "mongodb://127.0.0.1:27017"}),
+            ("snowflake", SnowflakeAdapter, {"account": "acme-org.eu-central-1", "username": "denotary", "database": "ANALYTICS", "schema": "PUBLIC", "warehouse": "NOTARY_WH"}),
+            ("redis", RedisAdapter, {"host": "127.0.0.1", "port": 6379}),
         ]
 
     def _source_config(self, adapter: str, connection: dict[str, object]) -> SourceConfig:
+        default_capture_mode = "scan" if adapter == "redis" else "watermark"
         return SourceConfig(
             id=f"{adapter}-source",
             adapter=adapter,
@@ -32,7 +37,7 @@ class AdapterRegistryContractTest(unittest.TestCase):
             database_name="ledger",
             include={"ledger": ["invoices"]},
             connection=connection,
-            options={"capture_mode": "watermark"},
+            options={"capture_mode": default_capture_mode},
         )
 
     def _source_config_with_mode(self, adapter: str, connection: dict[str, object], capture_mode: str) -> SourceConfig:
@@ -95,6 +100,18 @@ class AdapterRegistryContractTest(unittest.TestCase):
                 "default_checkpoint_strategy": "document_watermark",
                 "default_activity_model": "polling",
             },
+            "snowflake": {
+                "default_capture_mode": "watermark",
+                "cdc_modes": (),
+                "default_checkpoint_strategy": "table_watermark",
+                "default_activity_model": "polling",
+            },
+            "redis": {
+                "default_capture_mode": "scan",
+                "cdc_modes": (),
+                "default_checkpoint_strategy": "key_lexicographic",
+                "default_activity_model": "polling",
+            },
         }
         for adapter_name, _adapter_class, connection in self.cases:
             with self.subTest(adapter=adapter_name):
@@ -118,6 +135,8 @@ class AdapterRegistryContractTest(unittest.TestCase):
             "sqlserver": {"change_tracking": ("change_tracking_version", "polling")},
             "oracle": {"logminer": ("logminer_scn", "polling")},
             "mongodb": {"change_streams": ("resume_token", "stream")},
+            "snowflake": {},
+            "redis": {},
         }
         for adapter_name, _adapter_class, connection in self.cases:
             for capture_mode, expected_values in expected[adapter_name].items():

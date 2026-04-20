@@ -17,8 +17,10 @@ dependencies = [
   "PyMySQL>=1,<2",
   "mysql-replication>=1,<2",
   "pymongo>=4,<5",
+  "redis>=5,<7",
   "python-tds>=1.16,<2",
   "oracledb>=2,<3",
+  "snowflake-connector-python>=3,<4",
   "eosapi==1.0.2"
 ]
 

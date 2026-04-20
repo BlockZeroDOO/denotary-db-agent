@@ -24,6 +24,31 @@ The first wave of database targets is:
 - Oracle Database
 - MongoDB
 
+Wave 2 planning is now defined for:
+
+- Snowflake
+- Redis
+- IBM Db2
+- Apache Cassandra
+- Elasticsearch
+- SQLite
+
+Current Snowflake Wave 2 status:
+
+- adapter registration and config surface are implemented
+- live warehouse ping and configured-object introspection are implemented
+- query-based snapshot polling with watermark resume is implemented
+- local full-cycle proof export is implemented for the snapshot baseline
+- dry-run snapshot playback is implemented for pipeline validation
+
+Current Redis Wave 2 status:
+
+- adapter registration and config surface are implemented
+- live readiness ping is implemented
+- explicit key-pattern snapshot polling is implemented
+- deterministic lexicographic key resume is implemented
+- dry-run snapshot playback is implemented for pipeline validation
+
 This initial implementation focuses on the platform layer and adapter contract. Real CDC transport details per database remain adapter-specific work on top of this package scaffold.
 
 Current PostgreSQL status:
@@ -160,8 +185,11 @@ See:
 - [docs/sqlserver-config-reference.md](docs/sqlserver-config-reference.md)
 - [docs/oracle-config-reference.md](docs/oracle-config-reference.md)
 - [docs/mongodb-config-reference.md](docs/mongodb-config-reference.md)
+- [docs/snowflake-config-reference.md](docs/snowflake-config-reference.md)
+- [docs/redis-config-reference.md](docs/redis-config-reference.md)
 - [docs/architecture.md](docs/architecture.md)
 - [docs/adapter-separation-architecture.md](docs/adapter-separation-architecture.md)
+- [docs/wave2-roadmap.md](docs/wave2-roadmap.md)
 - [docs/operator-guide.md](docs/operator-guide.md)
 - [docs/deployment-guide.md](docs/deployment-guide.md)
 - [docs/denotary-env-file-runbook.md](docs/denotary-env-file-runbook.md)
