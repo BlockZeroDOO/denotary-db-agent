@@ -54,6 +54,7 @@ Current Redis Wave 2 status:
 - short-soak validation is implemented
 - local service-outage recovery validation is implemented
 - real `denotary` mainnet validation is implemented
+- bounded `denotary` mainnet batch validation is implemented
 - dry-run snapshot playback is implemented for pipeline validation
 
 Current IBM Db2 Wave 2 status:
@@ -98,6 +99,7 @@ Current SQLite Wave 2 status:
 - short-soak validation is implemented
 - local service-outage recovery validation is implemented
 - real `denotary` mainnet validation is implemented
+- bounded `denotary` mainnet batch validation is implemented
 - dry-run snapshot playback is implemented for pipeline validation
 
 This initial implementation focuses on the platform layer and adapter contract. Real CDC transport details per database remain adapter-specific work on top of this package scaffold.
@@ -259,6 +261,9 @@ See:
 - [docs/wave2-denotary-validation.md](docs/wave2-denotary-validation.md)
 - [docs/wave2-denotary-validation-report.md](docs/wave2-denotary-validation-report.md)
 - [scripts/run-wave2-denotary-validation.ps1](scripts/run-wave2-denotary-validation.ps1)
+- [docs/wave2-mainnet-budget-validation.md](docs/wave2-mainnet-budget-validation.md)
+- [docs/wave2-mainnet-budget-validation-report.md](docs/wave2-mainnet-budget-validation-report.md)
+- [scripts/run-wave2-mainnet-budget-validation.py](scripts/run-wave2-mainnet-budget-validation.py)
 - [docs/wave2-sqlite-validation.md](docs/wave2-sqlite-validation.md)
 - [docs/wave2-sqlite-validation-report.md](docs/wave2-sqlite-validation-report.md)
 - [scripts/run-wave2-sqlite-validation.ps1](scripts/run-wave2-sqlite-validation.ps1)
