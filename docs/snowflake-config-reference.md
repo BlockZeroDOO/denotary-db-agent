@@ -18,12 +18,14 @@ Implemented now:
 - query-based snapshot polling over configured objects
 - deterministic checkpoint resume by watermark + primary key
 - deterministic runtime signature for tracked-object configuration
+- local full-cycle proof export for the snapshot baseline
+- env-gated live integration and full-cycle harnesses
 - dry-run snapshot playback for pipeline validation
 - declared snapshot / watermark baseline capabilities
 
 Planned next:
 
-- local full-cycle proof export
+- live Snowflake validation with real credentials
 - mainnet happy-path validation
 - next `Wave 2` adapter after `Snowflake`
 
@@ -105,4 +107,4 @@ Planned next:
 - current `Wave 2` work already provides live ping, configured object introspection, and snapshot polling baseline
 - `Snowflake` is not yet production-validated
 - native Snowflake streams/tasks are not part of this first implementation slice
-- local full-cycle proof export is the next implementation step
+- live credential-backed validation is the next implementation step

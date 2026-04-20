@@ -39,6 +39,7 @@ Current Snowflake Wave 2 status:
 - live warehouse ping and configured-object introspection are implemented
 - query-based snapshot polling with watermark resume is implemented
 - local full-cycle proof export is implemented for the snapshot baseline
+- env-gated live integration and full-cycle harnesses are implemented
 - dry-run snapshot playback is implemented for pipeline validation
 
 Current Redis Wave 2 status:
@@ -188,6 +189,7 @@ See:
 - [docs/mongodb-config-reference.md](docs/mongodb-config-reference.md)
 - [docs/snowflake-config-reference.md](docs/snowflake-config-reference.md)
 - [docs/redis-config-reference.md](docs/redis-config-reference.md)
+- [scripts/run-live-snowflake-integration.ps1](scripts/run-live-snowflake-integration.ps1)
 - [docs/architecture.md](docs/architecture.md)
 - [docs/adapter-separation-architecture.md](docs/adapter-separation-architecture.md)
 - [docs/wave2-roadmap.md](docs/wave2-roadmap.md)

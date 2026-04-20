@@ -34,7 +34,7 @@
 
 | Adapter | Initial target path | Planned capture path | Current status |
 | --- | --- | --- | --- |
-| Snowflake | enterprise analytics | query-based snapshot / watermark baseline, then local full-cycle proof export | adapter contract, config surface, live ping, configured-object introspection, snapshot baseline, and local full-cycle validation implemented |
+| Snowflake | enterprise analytics | query-based snapshot / watermark baseline, then local full-cycle proof export | adapter contract, config surface, live ping, configured-object introspection, snapshot baseline, local full-cycle validation, and env-gated live harness implemented |
 | Redis | operational state | explicit key-pattern snapshot baseline, then local full-cycle proof export; later keyspace notifications where justified | adapter contract, config surface, live ping, snapshot baseline, and local full-cycle validation implemented |
 | IBM Db2 | enterprise | snapshot / watermark baseline, later native change capture if justified | planned |
 | Apache Cassandra | distributed wide-column | partition-aware snapshot baseline, later optional CDC | planned |

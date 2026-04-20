@@ -108,6 +108,7 @@ Implementation starts now with:
 - `Snowflake` live warehouse ping and configured object introspection
 - `Snowflake` query-based snapshot polling with watermark resume
 - `Snowflake` local full-cycle proof export
+- `Snowflake` env-gated live integration and full-cycle harnesses
 - `Redis` adapter contract registration
 - `Redis` configuration reference
 - `Redis` live ping and explicit key-pattern snapshot baseline
@@ -116,4 +117,4 @@ Implementation starts now with:
 
 Planned next step:
 
-- live Snowflake harness and validation, then live Redis baseline validation
+- credential-backed Snowflake live validation, then live Redis baseline validation
