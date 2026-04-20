@@ -10,6 +10,7 @@ Current baseline:
 - watermark snapshot polling
 - deterministic checkpoint resume
 - dry-run snapshot playback
+- local full-cycle proof export
 
 Native Cassandra CDC is not implemented yet.
 
@@ -66,4 +67,5 @@ Supported now:
 - the current baseline is intentionally snapshot-first
 - live reads use tracked tables and a watermark field with deterministic client-side resume
 - the baseline query path may rely on `ALLOW FILTERING`, so it is aimed at validation and early production rollout rather than high-throughput CDC
+- local proof export is already covered with dry-run snapshot playback
 - native Cassandra CDC can be added later if commercially justified
