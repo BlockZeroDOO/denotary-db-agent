@@ -10,6 +10,7 @@ Current baseline:
 - query-based snapshot polling
 - deterministic checkpoint resume
 - dry-run snapshot playback
+- local full-cycle proof export
 
 Native Elasticsearch CDC is not implemented yet.
 
@@ -66,4 +67,5 @@ Supported now:
 - the current baseline is intentionally snapshot-first
 - tracked documents are read via sorted search requests using the watermark field and `_id`
 - this baseline is useful for validating search-backed evidence, not for replacing a true source-of-truth CDC feed
+- local proof export is already covered with dry-run snapshot playback
 - native Elasticsearch CDC can be added later if commercially justified

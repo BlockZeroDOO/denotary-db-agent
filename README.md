@@ -78,6 +78,7 @@ Current Elasticsearch Wave 2 status:
 - live cluster ping is implemented
 - tracked-index introspection is implemented
 - query-based snapshot polling with deterministic resume is implemented
+- local full-cycle proof export is implemented
 - dry-run snapshot playback is implemented for pipeline validation
 
 This initial implementation focuses on the platform layer and adapter contract. Real CDC transport details per database remain adapter-specific work on top of this package scaffold.
