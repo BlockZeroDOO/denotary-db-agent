@@ -2,11 +2,18 @@
 set -euo pipefail
 
 ADAPTER="${1:-all}"
-STRICT_ENV="${2:-}"
-OUTPUT_ROOT="${3:-}"
+ENV_FILE="${2:-}"
+MODE="${3:-}"
+OUTPUT_ROOT="${4:-}"
 
 ARGS=( "scripts/run-wave2-live-validation.py" "--adapter" "$ADAPTER" )
-if [[ "$STRICT_ENV" == "--strict-env" ]]; then
+if [[ -n "$ENV_FILE" ]]; then
+  ARGS+=( "--env-file" "$ENV_FILE" )
+fi
+if [[ "$MODE" == "--check-env-only" ]]; then
+  ARGS+=( "--check-env-only" )
+fi
+if [[ "$MODE" == "--strict-env" ]]; then
   ARGS+=( "--strict-env" )
 fi
 if [[ -n "$OUTPUT_ROOT" ]]; then

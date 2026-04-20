@@ -26,6 +26,7 @@ scripts/run-wave2-live-validation.ps1 snowflake
 scripts/run-wave2-live-validation.ps1 db2
 scripts/run-wave2-live-validation.ps1 cassandra
 scripts/run-wave2-live-validation.ps1 elasticsearch
+scripts/run-wave2-live-validation.ps1 all -EnvFile .\wave2-live.env -CheckEnvOnly
 scripts/run-wave2-live-validation.ps1 all -OutputRoot data/wave2-live-validation-latest
 ```
 
@@ -37,7 +38,8 @@ scripts/run-wave2-live-validation.sh snowflake
 scripts/run-wave2-live-validation.sh db2
 scripts/run-wave2-live-validation.sh cassandra
 scripts/run-wave2-live-validation.sh elasticsearch
-scripts/run-wave2-live-validation.sh all "" data/wave2-live-validation-latest
+scripts/run-wave2-live-validation.sh all ./wave2-live.env --check-env-only
+scripts/run-wave2-live-validation.sh all ./wave2-live.env "" data/wave2-live-validation-latest
 ```
 
 Python:
@@ -45,10 +47,15 @@ Python:
 ```bash
 python scripts/run-wave2-live-validation.py --adapter all
 python scripts/run-wave2-live-validation.py --adapter snowflake
+python scripts/run-wave2-live-validation.py --adapter all --env-file .\wave2-live.env --check-env-only
 python scripts/run-wave2-live-validation.py --adapter all --output-root data/wave2-live-validation-latest
 ```
 
 Use `--strict-env` when missing credentials should fail the run instead of being reported as `skipped`.
+
+Use `--env-file` to load adapter credentials from a dotenv-style file instead of exporting them into the shell first.
+
+Use `--check-env-only` to verify readiness without executing the live suites.
 
 By default the launcher stores a persistent summary under:
 
@@ -107,7 +114,9 @@ For each adapter:
 2. if env is missing:
    - default mode reports `skipped`
    - `--strict-env` reports `failed`
-3. if env is present:
+3. with `--check-env-only`:
+   - complete adapter bundles report `ready`
+4. if env is present and suites are enabled:
    - the corresponding live integration suite is executed
    - the result is reported as `passed` or `failed`
 

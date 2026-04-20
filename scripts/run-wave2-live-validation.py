@@ -57,7 +57,13 @@ ADAPTERS: dict[str, dict[str, Any]] = {
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run unified Wave 2 live validation suites.")
     parser.add_argument("--adapter", choices=tuple(list(ADAPTERS) + ["all"]), default="all")
+    parser.add_argument("--env-file", default="", help="Optional dotenv-style file with adapter credentials.")
     parser.add_argument("--output-root", default="", help="Optional directory for persistent summary output.")
+    parser.add_argument(
+        "--check-env-only",
+        action="store_true",
+        help="Only validate environment readiness; do not execute live test suites.",
+    )
     parser.add_argument(
         "--strict-env",
         action="store_true",
@@ -74,7 +80,31 @@ def _missing_env(required_env: list[str]) -> list[str]:
     return [env_name for env_name in required_env if not os.environ.get(env_name, "").strip()]
 
 
-def _run_suite(pattern: str) -> subprocess.CompletedProcess[str]:
+def _load_env_file(env_file: str) -> dict[str, str]:
+    if not env_file:
+        return {}
+    payload: dict[str, str] = {}
+    path = Path(env_file).resolve()
+    for line in path.read_text(encoding="utf-8-sig").splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or "=" not in stripped:
+            continue
+        key, value = stripped.split("=", 1)
+        key = key.strip().lstrip("\ufeff")
+        value = value.strip()
+        if not key:
+            continue
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+            value = value[1:-1]
+        payload[key] = value
+    return payload
+
+
+def _missing_env_from(required_env: list[str], env_map: dict[str, str]) -> list[str]:
+    return [env_name for env_name in required_env if not env_map.get(env_name, "").strip()]
+
+
+def _run_suite(pattern: str, env_map: dict[str, str]) -> subprocess.CompletedProcess[str]:
     command = [
         str(PYTHON_EXE),
         "-m",
@@ -91,6 +121,7 @@ def _run_suite(pattern: str) -> subprocess.CompletedProcess[str]:
         cwd=str(PROJECT_ROOT),
         text=True,
         capture_output=True,
+        env=env_map,
         check=False,
     )
 
@@ -101,6 +132,9 @@ def utc_stamp() -> str:
 
 def main() -> None:
     args = parse_args()
+    env_file_values = _load_env_file(args.env_file)
+    effective_env = dict(os.environ)
+    effective_env.update(env_file_values)
     run_root = (
         Path(args.output_root).resolve()
         if args.output_root
@@ -111,7 +145,7 @@ def main() -> None:
     overall_exit = 0
     for adapter in _selected_adapters(args.adapter):
         spec = ADAPTERS[adapter]
-        missing_env = _missing_env(spec["required_env"])
+        missing_env = _missing_env_from(spec["required_env"], effective_env)
         if missing_env and not args.strict_env:
             results.append(
                 {
@@ -124,7 +158,22 @@ def main() -> None:
             )
             continue
 
-        process = _run_suite(spec["pattern"])
+        if args.check_env_only:
+            status = "ready" if not missing_env else "failed"
+            if missing_env:
+                overall_exit = overall_exit or 1
+            results.append(
+                {
+                    "adapter": adapter,
+                    "status": status,
+                    "missing_env": missing_env,
+                    "pattern": spec["pattern"],
+                    "checked_only": True,
+                }
+            )
+            continue
+
+        process = _run_suite(spec["pattern"], effective_env)
         status = "passed" if process.returncode == 0 else "failed"
         if process.returncode != 0:
             overall_exit = process.returncode
@@ -142,6 +191,8 @@ def main() -> None:
 
     summary = {
         "run_root": str(run_root),
+        "env_file": str(Path(args.env_file).resolve()) if args.env_file else "",
+        "check_env_only": bool(args.check_env_only),
         "strict_env": bool(args.strict_env),
         "results": results,
     }

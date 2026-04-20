@@ -19,6 +19,8 @@ Create a local secret env file outside version control, or export variables dire
 
 Only fill the adapter block you actually plan to validate.
 
+The unified launcher can read that file directly through `--env-file`.
+
 ## 2. Choose Validation Mode
 
 Default mode:
@@ -41,6 +43,7 @@ scripts/run-wave2-live-validation.ps1 snowflake
 scripts/run-wave2-live-validation.ps1 db2
 scripts/run-wave2-live-validation.ps1 cassandra
 scripts/run-wave2-live-validation.ps1 elasticsearch
+scripts/run-wave2-live-validation.ps1 all -EnvFile .\wave2-live.env -CheckEnvOnly
 scripts/run-wave2-live-validation.ps1 all -StrictEnv
 scripts/run-wave2-live-validation.ps1 all -OutputRoot data/wave2-live-validation-latest
 ```
@@ -53,8 +56,9 @@ scripts/run-wave2-live-validation.sh snowflake
 scripts/run-wave2-live-validation.sh db2
 scripts/run-wave2-live-validation.sh cassandra
 scripts/run-wave2-live-validation.sh elasticsearch
-scripts/run-wave2-live-validation.sh all --strict-env
-scripts/run-wave2-live-validation.sh all "" data/wave2-live-validation-latest
+scripts/run-wave2-live-validation.sh all ./wave2-live.env --check-env-only
+scripts/run-wave2-live-validation.sh all ./wave2-live.env --strict-env
+scripts/run-wave2-live-validation.sh all ./wave2-live.env "" data/wave2-live-validation-latest
 ```
 
 Python:
@@ -62,7 +66,9 @@ Python:
 ```bash
 python scripts/run-wave2-live-validation.py --adapter all
 python scripts/run-wave2-live-validation.py --adapter snowflake
+python scripts/run-wave2-live-validation.py --adapter all --env-file .\wave2-live.env --check-env-only
 python scripts/run-wave2-live-validation.py --adapter all --strict-env
+python scripts/run-wave2-live-validation.py --adapter all --env-file .\wave2-live.env --strict-env
 python scripts/run-wave2-live-validation.py --adapter all --output-root data/wave2-live-validation-latest
 ```
 
@@ -71,6 +77,10 @@ python scripts/run-wave2-live-validation.py --adapter all --output-root data/wav
 `passed`
 
 - the live integration suite ran successfully for that adapter
+
+`ready`
+
+- `--check-env-only` confirmed that the required env bundle is complete
 
 `skipped`
 
