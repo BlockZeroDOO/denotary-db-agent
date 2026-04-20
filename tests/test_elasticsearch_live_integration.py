@@ -129,6 +129,7 @@ class ElasticsearchLiveIntegrationTest(unittest.TestCase):
                 index=self.index_name,
                 mappings={
                     "properties": {
+                        "record_id": {"type": "keyword"},
                         "status": {"type": "keyword"},
                         "updated_at": {"type": "date"},
                     }
@@ -179,7 +180,7 @@ class ElasticsearchLiveIntegrationTest(unittest.TestCase):
                         "capture_mode": "watermark",
                         "watermark_field": "updated_at",
                         "commit_timestamp_field": "updated_at",
-                        "primary_key_field": "_id",
+                        "primary_key_field": "record_id",
                         "row_limit": row_limit,
                     },
                 }
@@ -190,8 +191,8 @@ class ElasticsearchLiveIntegrationTest(unittest.TestCase):
     def _seed_initial_rows(self) -> None:
         client = create_client()
         try:
-            client.index(index=self.index_name, id="1001", document={"status": "draft", "updated_at": "2026-04-20T12:00:01Z"})
-            client.index(index=self.index_name, id="1002", document={"status": "issued", "updated_at": "2026-04-20T12:00:03Z"})
+            client.index(index=self.index_name, id="1001", document={"record_id": "1001", "status": "draft", "updated_at": "2026-04-20T12:00:01Z"})
+            client.index(index=self.index_name, id="1002", document={"record_id": "1002", "status": "issued", "updated_at": "2026-04-20T12:00:03Z"})
             client.indices.refresh(index=self.index_name)
         finally:
             client.close()
@@ -199,7 +200,7 @@ class ElasticsearchLiveIntegrationTest(unittest.TestCase):
     def _insert_incremental_row(self) -> None:
         client = create_client()
         try:
-            client.index(index=self.index_name, id="1003", document={"status": "paid", "updated_at": "2026-04-20T12:00:04Z"})
+            client.index(index=self.index_name, id="1003", document={"record_id": "1003", "status": "paid", "updated_at": "2026-04-20T12:00:04Z"})
             client.indices.refresh(index=self.index_name)
         finally:
             client.close()

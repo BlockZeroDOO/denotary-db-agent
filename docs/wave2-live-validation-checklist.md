@@ -71,6 +71,8 @@ Use `--list-required-env` to print only the required credential names for the se
 
 Use `--write-env-template` to generate a minimal dotenv file just for the selected adapters.
 
+Use `scripts/bootstrap-wave2-live-env.ps1` or `scripts/bootstrap-wave2-live-env.sh` when you want to create a local adapter-specific env file from the committed examples first.
+
 By default the launcher stores a persistent summary under:
 
 - `data/wave2-live-validation-<timestamp>/summary.json`

@@ -294,6 +294,7 @@ def create_index(index_name: str) -> None:
             index=index_name,
             mappings={
                 "properties": {
+                    "record_id": {"type": "keyword"},
                     "status": {"type": "keyword"},
                     "updated_at": {"type": "date"},
                 }
@@ -317,7 +318,11 @@ def drop_index(index_name: str) -> None:
 def index_document(index_name: str, *, record_id: str, status: str, updated_at: str) -> None:
     client = create_client()
     try:
-        client.index(index=index_name, id=record_id, document={"status": status, "updated_at": updated_at})
+        client.index(
+            index=index_name,
+            id=record_id,
+            document={"record_id": record_id, "status": status, "updated_at": updated_at},
+        )
         client.indices.refresh(index=index_name)
     finally:
         client.close()
@@ -364,7 +369,7 @@ def build_config(temp_dir: Path, stack: MockServiceStack, *, source_id: str, ind
                     "capture_mode": "watermark",
                     "watermark_field": "updated_at",
                     "commit_timestamp_field": "updated_at",
-                    "primary_key_field": "_id",
+                    "primary_key_field": "record_id",
                     "row_limit": 100,
                 },
             }

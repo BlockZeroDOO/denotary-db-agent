@@ -353,19 +353,19 @@ class CassandraAdapter(BaseAdapter):
         select_columns = ", ".join(self._quote_identifier(column) for column in spec.selected_columns)
         sql = (
             f"select {select_columns} "
-            f"from {self._qualified_table(spec.keyspace_name, spec.table_name)} "
-            f"where {self._quote_identifier(spec.watermark_column)} is not null"
+            f"from {self._qualified_table(spec.keyspace_name, spec.table_name)}"
         )
         params: list[Any] = []
         if table_state:
             watermark_value = table_state.get("watermark")
-            sql += f" and {self._quote_identifier(spec.watermark_column)} >= %s"
+            sql += f" where {self._quote_identifier(spec.watermark_column)} >= %s"
             params.append(watermark_value)
         row_limit = int(self.config.options.get("row_limit", self.config.batch_size))
         if row_limit > 0:
             sql += " limit %s"
             params.append(row_limit)
-        sql += " allow filtering"
+        if table_state:
+            sql += " allow filtering"
         rows = list(session.execute(sql, tuple(params) if params else None))
         normalized_rows = [self._normalize_row(row) for row in rows]
         if table_state:

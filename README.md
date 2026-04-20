@@ -276,6 +276,8 @@ See:
 - [examples/wave2-db2.env.example](examples/wave2-db2.env.example)
 - [examples/wave2-cassandra.env.example](examples/wave2-cassandra.env.example)
 - [examples/wave2-elasticsearch.env.example](examples/wave2-elasticsearch.env.example)
+- [scripts/bootstrap-wave2-live-env.ps1](scripts/bootstrap-wave2-live-env.ps1)
+- [scripts/bootstrap-wave2-live-env.sh](scripts/bootstrap-wave2-live-env.sh)
 - [scripts/run-wave2-live-validation.ps1](scripts/run-wave2-live-validation.ps1)
 - [docs/wave2-sqlite-validation.md](docs/wave2-sqlite-validation.md)
 - [docs/wave2-sqlite-validation-report.md](docs/wave2-sqlite-validation-report.md)

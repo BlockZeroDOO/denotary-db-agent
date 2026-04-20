@@ -270,6 +270,10 @@ class ElasticsearchAdapter(BaseAdapter):
                 raise ValueError(
                     f"{self.source_type} index {item.index_name} does not contain commit timestamp field {item.commit_timestamp_field}"
                 )
+            if item.primary_key_field != "_id" and item.primary_key_field not in available_fields:
+                raise ValueError(
+                    f"{self.source_type} index {item.index_name} does not contain primary key field {item.primary_key_field}"
+                )
             selected_fields = [item.primary_key_field, *available_fields]
             if item.commit_timestamp_field not in selected_fields:
                 selected_fields.append(item.commit_timestamp_field)
@@ -321,7 +325,7 @@ class ElasticsearchAdapter(BaseAdapter):
             size=row_limit if row_limit > 0 else 100,
             sort=[
                 {spec.watermark_field: {"order": "asc"}},
-                {"_id": {"order": "asc"}},
+                {spec.primary_key_field: {"order": "asc"}},
             ],
             query=query,
         )
@@ -333,7 +337,8 @@ class ElasticsearchAdapter(BaseAdapter):
 
     def _normalize_hit(self, hit: dict[str, Any], spec: ElasticsearchIndexSpec) -> dict[str, Any]:
         payload = dict(hit.get("_source") or {})
-        payload[spec.primary_key_field] = hit.get("_id")
+        if spec.primary_key_field == "_id":
+            payload[spec.primary_key_field] = hit.get("_id")
         return payload
 
     def _document_after_checkpoint(self, spec: ElasticsearchIndexSpec, document: dict[str, Any], index_state: dict[str, Any]) -> bool:

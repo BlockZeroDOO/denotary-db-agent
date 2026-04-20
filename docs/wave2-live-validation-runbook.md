@@ -27,6 +27,20 @@ The unified launcher can read that file directly through `--env-file`.
 
 If you want a smaller adapter-specific template first, the launcher can generate one for the selected adapters through `--write-env-template`.
 
+If you prefer a file-first flow, you can also bootstrap a local env file directly from one committed adapter example.
+
+PowerShell:
+
+```powershell
+scripts/bootstrap-wave2-live-env.ps1 snowflake .\wave2-snowflake.env
+```
+
+Shell:
+
+```bash
+scripts/bootstrap-wave2-live-env.sh snowflake ./wave2-snowflake.env
+```
+
 ## 2. Choose Validation Mode
 
 Default mode:
@@ -108,6 +122,11 @@ python scripts/run-wave2-live-validation.py --adapter all --output-root data/wav
 
 - creates a minimal dotenv file for the selected adapters
 - useful when you do not want to start from the full shared example
+
+`bootstrap-wave2-live-env.*`
+
+- copies one of the committed adapter-specific examples into a local working env file
+- useful when you want a file-first setup before filling credentials
 
 `failed`
 
