@@ -1,5 +1,5 @@
 param(
-    [ValidateSet("sqlite", "redis", "all")]
+    [ValidateSet("sqlite", "redis", "scylladb", "all")]
     [string]$Adapter = "all",
     [ValidateSet("ingress", "watcher", "receipt", "audit")]
     [string]$Scenario = "",

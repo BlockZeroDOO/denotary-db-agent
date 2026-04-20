@@ -6,6 +6,7 @@ Current scope:
 
 - `SQLite`
 - `Redis`
+- `ScyllaDB`
 
 The validation keeps:
 
@@ -32,6 +33,7 @@ PowerShell:
 scripts/run-wave2-mainnet-service-outage-validation.ps1 all
 scripts/run-wave2-mainnet-service-outage-validation.ps1 sqlite ingress
 scripts/run-wave2-mainnet-service-outage-validation.ps1 redis watcher
+scripts/run-wave2-mainnet-service-outage-validation.ps1 scylladb receipt
 ```
 
 Shell:
@@ -40,6 +42,7 @@ Shell:
 scripts/run-wave2-mainnet-service-outage-validation.sh all
 scripts/run-wave2-mainnet-service-outage-validation.sh sqlite ingress
 scripts/run-wave2-mainnet-service-outage-validation.sh redis watcher
+scripts/run-wave2-mainnet-service-outage-validation.sh scylladb receipt
 ```
 
 Python:
@@ -48,6 +51,7 @@ Python:
 python scripts/run-wave2-mainnet-service-outage-validation.py --adapter all
 python scripts/run-wave2-mainnet-service-outage-validation.py --adapter sqlite --scenario ingress
 python scripts/run-wave2-mainnet-service-outage-validation.py --adapter redis --scenario watcher
+python scripts/run-wave2-mainnet-service-outage-validation.py --adapter scylladb --scenario receipt
 ```
 
 To persist a stable artifact root:
@@ -85,12 +89,12 @@ This is expected for the current drill because the first failed attempt is retai
 
 Passing this validation means:
 
-- `SQLite` and `Redis` recover cleanly from temporary off-chain pipeline outages on the real `denotary` mainnet path
+- `SQLite`, `Redis`, and `ScyllaDB` recover cleanly from temporary off-chain pipeline outages on the real `denotary` mainnet path
 - the event is not lost after the first failed attempt
 - a second run with healthy service URLs still reaches finalized proof export
 
 It does not yet mean:
 
 - every `Wave 2` adapter has mainnet degraded-service coverage
-- `Wave 2` already matches full `Wave 1` validation depth
+- `Wave 2` already matches full `Wave 1` validation depth across every adapter
 - long outage behavior is fully characterized
