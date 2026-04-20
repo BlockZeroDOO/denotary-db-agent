@@ -6,6 +6,7 @@ Current scope:
 
 - `SQLite`
 - `Redis`
+- `ScyllaDB`
 
 The budget validation uses:
 
@@ -43,6 +44,7 @@ PowerShell:
 python scripts/run-wave2-mainnet-budget-validation.py --adapter all --target-kib 25 --batch-size 100
 python scripts/run-wave2-mainnet-budget-validation.py --adapter sqlite --target-kib 25 --batch-size 100
 python scripts/run-wave2-mainnet-budget-validation.py --adapter redis --target-kib 25 --batch-size 100
+python scripts/run-wave2-mainnet-budget-validation.py --adapter scylladb --target-kib 25 --batch-size 100
 ```
 
 Shell:
@@ -51,6 +53,7 @@ Shell:
 python scripts/run-wave2-mainnet-budget-validation.py --adapter all --target-kib 25 --batch-size 100
 python scripts/run-wave2-mainnet-budget-validation.py --adapter sqlite --target-kib 25 --batch-size 100
 python scripts/run-wave2-mainnet-budget-validation.py --adapter redis --target-kib 25 --batch-size 100
+python scripts/run-wave2-mainnet-budget-validation.py --adapter scylladb --target-kib 25 --batch-size 100
 ```
 
 To persist a stable artifact root:
@@ -91,4 +94,4 @@ It does not yet mean:
 
 - `Wave 2` has full `Wave 1`-depth soak coverage
 - every `Wave 2` adapter is mainnet-batch-validated
-- `Db2`, `Cassandra`, or `Elasticsearch` are already confirmed on mainnet
+- `Db2`, `Cassandra`, and `Elasticsearch` are already mainnet-batch-validated
