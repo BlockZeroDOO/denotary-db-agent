@@ -55,6 +55,7 @@ Current ScyllaDB Wave 2 status:
 - shared Cassandra-compatible snapshot / watermark baseline is implemented
 - deterministic checkpoint resume is implemented
 - local full-cycle proof export is implemented
+- Docker-backed live integration is implemented
 - deployment starter config and operator runbook are implemented
 
 Current IBM Db2 Wave 2 status:
@@ -246,6 +247,7 @@ See:
 - [docs/elasticsearch-config-reference.md](docs/elasticsearch-config-reference.md)
 - [docs/sqlite-config-reference.md](docs/sqlite-config-reference.md)
 - [scripts/run-live-redis-integration.ps1](scripts/run-live-redis-integration.ps1)
+- [scripts/run-live-scylladb-integration.ps1](scripts/run-live-scylladb-integration.ps1)
 - [scripts/run-live-db2-integration.ps1](scripts/run-live-db2-integration.ps1)
 - [scripts/run-live-cassandra-integration.ps1](scripts/run-live-cassandra-integration.ps1)
 - [scripts/run-live-elasticsearch-integration.ps1](scripts/run-live-elasticsearch-integration.ps1)

@@ -10,6 +10,8 @@ Current baseline:
 - watermark snapshot polling
 - deterministic checkpoint resume
 - dry-run snapshot playback
+- local full-cycle proof export
+- Docker-backed live integration harness
 
 Current implementation note:
 
@@ -70,6 +72,7 @@ Supported now:
 - live reads use tracked tables and a watermark field with deterministic client-side resume
 - the baseline query path may rely on `ALLOW FILTERING`, so it is aimed at validation and early production rollout rather than high-throughput CDC
 - native Scylla-specific CDC can be added later if commercially justified
+- local validation can be driven through `scripts/run-live-scylladb-integration.ps1`
 
 Deployment guidance:
 

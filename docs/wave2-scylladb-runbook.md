@@ -65,7 +65,9 @@ The current `ScyllaDB` implementation confirms:
 - Cassandra-compatible cluster validation
 - tracked-table introspection baseline
 - deterministic checkpoint resume
+- local full-cycle proof export
+- Docker-backed live integration harness
 
 Current gap:
 
-- dedicated Scylla live Docker harness and deeper restart / soak validation still remain future work
+- deeper restart and soak validation still remain future work

@@ -111,6 +111,7 @@ Implementation currently covers:
 - `ScyllaDB` configuration reference
 - `ScyllaDB` Cassandra-compatible snapshot baseline and deployment/runbook layer
 - `ScyllaDB` local full-cycle proof export
+- `ScyllaDB` Docker-backed live integration harness
 - `IBM Db2` adapter contract registration
 - `IBM Db2` configuration reference
 - `IBM Db2` live ping, tracked-table introspection, snapshot baseline, local full-cycle proof export, env-gated live validation harness, local Docker live validation, and real `denotary` mainnet happy-path validation
