@@ -241,6 +241,7 @@ See:
 - [docs/architecture.md](docs/architecture.md)
 - [docs/adapter-separation-architecture.md](docs/adapter-separation-architecture.md)
 - [docs/wave2-roadmap.md](docs/wave2-roadmap.md)
+- [docs/wave2-readiness-matrix.md](docs/wave2-readiness-matrix.md)
 - [docs/operator-guide.md](docs/operator-guide.md)
 - [docs/deployment-guide.md](docs/deployment-guide.md)
 - [docs/denotary-env-file-runbook.md](docs/denotary-env-file-runbook.md)
