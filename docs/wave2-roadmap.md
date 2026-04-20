@@ -124,6 +124,7 @@ Implementation starts now with:
 - `Elasticsearch` adapter contract registration
 - `Elasticsearch` configuration reference
 - `Elasticsearch` live cluster ping, tracked-index introspection, snapshot baseline, local full-cycle proof export, and env-gated live validation harness
+- `Elasticsearch` env-gated restart and short-soak validation harness
 - `SQLite` adapter contract registration
 - `SQLite` configuration reference
 - `SQLite` file-backed readiness validation, tracked-table introspection, snapshot baseline, and local full-cycle proof export
@@ -132,4 +133,4 @@ Implementation starts now with:
 
 Planned next step:
 
-- extend the next `Wave 2` sources beyond baseline depth, starting with `Elasticsearch` restart and short-soak validation
+- execute the new `Elasticsearch` restart and short-soak harness in a real environment

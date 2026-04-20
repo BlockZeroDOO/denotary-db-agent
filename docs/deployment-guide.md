@@ -28,6 +28,12 @@ For a `Redis` operational-state deployment baseline, use:
 - [wave2-redis-runbook.md](wave2-redis-runbook.md)
 - [deploy/config/redis-agent.example.json](../deploy/config/redis-agent.example.json)
 
+For an `Elasticsearch` search-index deployment baseline, use:
+
+- [elasticsearch-config-reference.md](elasticsearch-config-reference.md)
+- [wave2-elasticsearch-runbook.md](wave2-elasticsearch-runbook.md)
+- [deploy/config/elasticsearch-agent.example.json](../deploy/config/elasticsearch-agent.example.json)
+
 ## Recommended Modes
 
 - `systemd` on Linux servers

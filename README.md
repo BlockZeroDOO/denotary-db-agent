@@ -83,6 +83,7 @@ Current Elasticsearch Wave 2 status:
 - query-based snapshot polling with deterministic resume is implemented
 - local full-cycle proof export is implemented
 - env-gated live integration harness is implemented
+- env-gated restart and short-soak validation harness is implemented
 - dry-run snapshot playback is implemented for pipeline validation
 
 Current SQLite Wave 2 status:
@@ -259,6 +260,10 @@ See:
 - [docs/wave2-service-outage-validation.md](docs/wave2-service-outage-validation.md)
 - [docs/wave2-service-outage-validation-report.md](docs/wave2-service-outage-validation-report.md)
 - [scripts/run-wave2-service-outage-validation.ps1](scripts/run-wave2-service-outage-validation.ps1)
+- [docs/wave2-elasticsearch-validation.md](docs/wave2-elasticsearch-validation.md)
+- [scripts/run-wave2-elasticsearch-validation.ps1](scripts/run-wave2-elasticsearch-validation.ps1)
+- [docs/wave2-elasticsearch-runbook.md](docs/wave2-elasticsearch-runbook.md)
+- [deploy/config/elasticsearch-agent.example.json](deploy/config/elasticsearch-agent.example.json)
 - [docs/wave2-sqlite-edge-runbook.md](docs/wave2-sqlite-edge-runbook.md)
 - [deploy/config/sqlite-edge-agent.example.json](deploy/config/sqlite-edge-agent.example.json)
 - [docs/operator-guide.md](docs/operator-guide.md)

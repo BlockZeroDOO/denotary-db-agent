@@ -12,6 +12,7 @@ Current baseline:
 - dry-run snapshot playback
 - local full-cycle proof export
 - env-gated live integration harness
+- env-gated restart and short-soak validation harness
 
 Native Elasticsearch CDC is not implemented yet.
 
@@ -70,4 +71,10 @@ Supported now:
 - this baseline is useful for validating search-backed evidence, not for replacing a true source-of-truth CDC feed
 - local proof export is already covered with dry-run snapshot playback
 - live validation can be driven through `scripts/run-live-elasticsearch-integration.ps1` once Elasticsearch credentials are available in the environment
+- deeper restart and short-soak validation can be driven through `scripts/run-wave2-elasticsearch-validation.ps1`
 - native Elasticsearch CDC can be added later if commercially justified
+
+Deployment guidance:
+
+- [wave2-elasticsearch-runbook.md](wave2-elasticsearch-runbook.md)
+- [../deploy/config/elasticsearch-agent.example.json](../deploy/config/elasticsearch-agent.example.json)
