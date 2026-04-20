@@ -9,11 +9,11 @@ It is intentionally narrower than the `Wave 1` readiness matrix: most `Wave 2` s
 | Adapter | Snapshot baseline | Local full-cycle proof export | Live validation harness | Native CDC | Current readiness summary |
 | --- | --- | --- | --- | --- | --- |
 | Snowflake | yes | yes | yes, env-gated | no | good enterprise analytics baseline with watermark polling and live warehouse/object validation |
-| Redis | yes | yes | yes, Docker-backed | no | strong operational-state baseline with scan polling, resume, live full-cycle validation, restart recovery, and short-soak validation |
+| Redis | yes | yes | yes, Docker-backed | no | strong operational-state baseline with scan polling, resume, live full-cycle validation, restart recovery, short-soak validation, and local service-outage recovery |
 | IBM Db2 | yes | yes | yes, env-gated | no | strong enterprise SQL baseline with tracked-table introspection and local full-cycle proof export |
 | Apache Cassandra | yes | yes | yes, env-gated | no | strong distributed wide-column baseline with tracked-table introspection and local full-cycle proof export |
 | Elasticsearch | yes | yes | yes, env-gated | no | strong search/index baseline with tracked-index introspection and query-based polling |
-| SQLite | yes | yes | file-backed adapter tests | no | strong edge and embedded baseline with file-backed validation, local full-cycle proof export, cold restart recovery, and short-soak validation |
+| SQLite | yes | yes | file-backed adapter tests | no | strong edge and embedded baseline with file-backed validation, local full-cycle proof export, cold restart recovery, short-soak validation, and local service-outage recovery |
 
 ## Implemented Scope
 
@@ -34,6 +34,7 @@ Additionally implemented where applicable:
 - live connection or cluster validation
 - tracked-object introspection
 - env-gated or Docker-backed live harnesses
+- local service-outage recovery validation for `SQLite` and `Redis`
 
 ## Remaining Validation Layers
 
@@ -42,7 +43,7 @@ The following layers still remain open for most `Wave 2` adapters:
 1. restart recovery validation
 2. short soak validation
 3. long soak validation
-4. service outage validation
+4. service outage validation beyond `SQLite` and `Redis`
 5. mainnet `denotary` happy-path validation
 6. bounded budget validation where commercially justified
 
@@ -51,8 +52,9 @@ The following layers still remain open for most `Wave 2` adapters:
 Priority after the baseline phase:
 
 1. `Elasticsearch` restart and short-soak validation
-4. `Snowflake` live validation in a real account
-5. `IBM Db2` and `Apache Cassandra` live validation in real environments
+2. `Snowflake` live validation in a real account
+3. `IBM Db2` and `Apache Cassandra` live validation in real environments
+4. `Wave 2` service-outage validation beyond `SQLite` and `Redis`
 
 ## Interpretation
 

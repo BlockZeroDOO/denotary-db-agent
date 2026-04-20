@@ -52,6 +52,7 @@ Current Redis Wave 2 status:
 - Docker-backed live integration and full-cycle harnesses are implemented
 - restart recovery validation is implemented
 - short-soak validation is implemented
+- local service-outage recovery validation is implemented
 - dry-run snapshot playback is implemented for pipeline validation
 
 Current IBM Db2 Wave 2 status:
@@ -93,6 +94,7 @@ Current SQLite Wave 2 status:
 - local full-cycle proof export is implemented
 - cold restart recovery validation is implemented
 - short-soak validation is implemented
+- local service-outage recovery validation is implemented
 - dry-run snapshot playback is implemented for pipeline validation
 
 This initial implementation focuses on the platform layer and adapter contract. Real CDC transport details per database remain adapter-specific work on top of this package scaffold.
@@ -254,6 +256,9 @@ See:
 - [docs/wave2-sqlite-validation.md](docs/wave2-sqlite-validation.md)
 - [docs/wave2-sqlite-validation-report.md](docs/wave2-sqlite-validation-report.md)
 - [scripts/run-wave2-sqlite-validation.ps1](scripts/run-wave2-sqlite-validation.ps1)
+- [docs/wave2-service-outage-validation.md](docs/wave2-service-outage-validation.md)
+- [docs/wave2-service-outage-validation-report.md](docs/wave2-service-outage-validation-report.md)
+- [scripts/run-wave2-service-outage-validation.ps1](scripts/run-wave2-service-outage-validation.ps1)
 - [docs/wave2-sqlite-edge-runbook.md](docs/wave2-sqlite-edge-runbook.md)
 - [deploy/config/sqlite-edge-agent.example.json](deploy/config/sqlite-edge-agent.example.json)
 - [docs/operator-guide.md](docs/operator-guide.md)
