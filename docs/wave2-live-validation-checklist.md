@@ -11,6 +11,11 @@ Current scope:
 
 The goal is to make live validation repeatable without having to remember four different script names and four different env bundles.
 
+For a copy-ready env template and step-by-step operator flow, also see:
+
+- [wave2-live-validation-runbook.md](wave2-live-validation-runbook.md)
+- [../examples/wave2-live.env.example](../examples/wave2-live.env.example)
+
 ## Unified Commands
 
 PowerShell:
