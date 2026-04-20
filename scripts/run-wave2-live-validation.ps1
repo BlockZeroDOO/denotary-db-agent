@@ -2,6 +2,9 @@ param(
     [ValidateSet("snowflake", "db2", "cassandra", "elasticsearch", "all")]
     [string]$Adapter = "all",
     [string]$EnvFile = "",
+    [switch]$ListRequiredEnv,
+    [ValidateSet("json", "text")]
+    [string]$ListFormat = "json",
     [switch]$CheckEnvOnly,
     [switch]$StrictEnv,
     [string]$OutputRoot = ""
@@ -13,6 +16,10 @@ $scriptPath = Join-Path $PSScriptRoot "run-wave2-live-validation.py"
 $arguments = @($scriptPath, "--adapter", $Adapter)
 if ($EnvFile -ne "") {
     $arguments += @("--env-file", $EnvFile)
+}
+if ($ListRequiredEnv) {
+    $arguments += "--list-required-env"
+    $arguments += @("--list-format", $ListFormat)
 }
 if ($CheckEnvOnly) {
     $arguments += "--check-env-only"

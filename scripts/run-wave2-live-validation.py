@@ -60,6 +60,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--env-file", default="", help="Optional dotenv-style file with adapter credentials.")
     parser.add_argument("--output-root", default="", help="Optional directory for persistent summary output.")
     parser.add_argument(
+        "--list-required-env",
+        action="store_true",
+        help="Print required env variables for the selected adapters and exit.",
+    )
+    parser.add_argument(
+        "--list-format",
+        choices=("json", "text"),
+        default="json",
+        help="Output format for --list-required-env.",
+    )
+    parser.add_argument(
         "--check-env-only",
         action="store_true",
         help="Only validate environment readiness; do not execute live test suites.",
@@ -130,11 +141,38 @@ def utc_stamp() -> str:
     return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
 
 
+def _required_env_payload(adapters: list[str]) -> dict[str, Any]:
+    return {
+        "adapters": [
+            {
+                "adapter": adapter,
+                "required_env": list(ADAPTERS[adapter]["required_env"]),
+                "pattern": ADAPTERS[adapter]["pattern"],
+            }
+            for adapter in adapters
+        ]
+    }
+
+
+def _print_required_env(payload: dict[str, Any], output_format: str) -> None:
+    if output_format == "text":
+        for item in payload["adapters"]:
+            print(f"{item['adapter']}:")
+            for env_name in item["required_env"]:
+                print(f"  {env_name}")
+        return
+    print(json.dumps(payload, indent=2))
+
+
 def main() -> None:
     args = parse_args()
     env_file_values = _load_env_file(args.env_file)
     effective_env = dict(os.environ)
     effective_env.update(env_file_values)
+    selected_adapters = _selected_adapters(args.adapter)
+    if args.list_required_env:
+        _print_required_env(_required_env_payload(selected_adapters), args.list_format)
+        raise SystemExit(0)
     run_root = (
         Path(args.output_root).resolve()
         if args.output_root
@@ -143,7 +181,7 @@ def main() -> None:
     run_root.mkdir(parents=True, exist_ok=True)
     results: list[dict[str, Any]] = []
     overall_exit = 0
-    for adapter in _selected_adapters(args.adapter):
+    for adapter in selected_adapters:
         spec = ADAPTERS[adapter]
         missing_env = _missing_env_from(spec["required_env"], effective_env)
         if missing_env and not args.strict_env:
