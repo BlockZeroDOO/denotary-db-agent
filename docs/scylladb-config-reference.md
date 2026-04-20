@@ -72,9 +72,12 @@ Supported now:
 - live reads use tracked tables and a watermark field with deterministic client-side resume
 - the baseline query path may rely on `ALLOW FILTERING`, so it is aimed at validation and early production rollout rather than high-throughput CDC
 - native Scylla-specific CDC can be added later if commercially justified
-- local validation can be driven through `scripts/run-live-scylladb-integration.ps1`
+- local validation can be driven through:
+  - `scripts/run-live-scylladb-integration.ps1`
+  - `scripts/run-wave2-scylladb-validation.ps1`
 
 Deployment guidance:
 
 - [wave2-scylladb-runbook.md](wave2-scylladb-runbook.md)
+- [wave2-scylladb-validation.md](wave2-scylladb-validation.md)
 - [../deploy/config/scylladb-agent.example.json](../deploy/config/scylladb-agent.example.json)

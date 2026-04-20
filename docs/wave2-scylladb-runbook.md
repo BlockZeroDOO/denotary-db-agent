@@ -67,7 +67,14 @@ The current `ScyllaDB` implementation confirms:
 - deterministic checkpoint resume
 - local full-cycle proof export
 - Docker-backed live integration harness
+- restart recovery validation
+- short-soak validation
+
+Reference:
+
+- [wave2-scylladb-validation.md](wave2-scylladb-validation.md)
+- [wave2-scylladb-validation-report.md](wave2-scylladb-validation-report.md)
 
 Current gap:
 
-- deeper restart and soak validation still remain future work
+- mainnet `denotary` validation still remains future work

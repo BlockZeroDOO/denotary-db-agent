@@ -56,6 +56,8 @@ Current ScyllaDB Wave 2 status:
 - deterministic checkpoint resume is implemented
 - local full-cycle proof export is implemented
 - Docker-backed live integration is implemented
+- restart recovery validation is implemented
+- short-soak validation is implemented
 - deployment starter config and operator runbook are implemented
 
 Current IBM Db2 Wave 2 status:
@@ -262,6 +264,9 @@ See:
 - [deploy/config/redis-agent.example.json](deploy/config/redis-agent.example.json)
 - [docs/wave2-scylladb-runbook.md](docs/wave2-scylladb-runbook.md)
 - [deploy/config/scylladb-agent.example.json](deploy/config/scylladb-agent.example.json)
+- [docs/wave2-scylladb-validation.md](docs/wave2-scylladb-validation.md)
+- [docs/wave2-scylladb-validation-report.md](docs/wave2-scylladb-validation-report.md)
+- [scripts/run-wave2-scylladb-validation.ps1](scripts/run-wave2-scylladb-validation.ps1)
 - [docs/wave2-denotary-validation.md](docs/wave2-denotary-validation.md)
 - [docs/wave2-denotary-validation-report.md](docs/wave2-denotary-validation-report.md)
 - [scripts/run-wave2-denotary-validation.ps1](scripts/run-wave2-denotary-validation.ps1)
