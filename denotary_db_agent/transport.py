@@ -432,17 +432,36 @@ class CleosWalletChainClient:
             "-j",
         ]
         result = subprocess.run(command, capture_output=True, text=True, check=False)
-        if result.returncode != 0:
-            raise RuntimeError(result.stderr.strip() or result.stdout.strip() or f"wallet broadcast failed with exit code {result.returncode}")
         try:
             payload = json.loads(result.stdout)
         except json.JSONDecodeError as exc:
+            if result.returncode != 0:
+                raise RuntimeError(
+                    result.stderr.strip() or result.stdout.strip() or f"wallet broadcast failed with exit code {result.returncode}"
+                ) from exc
             raise RuntimeError(f"wallet broadcast returned non-JSON output: {result.stdout}") from exc
+        if result.returncode != 0 and not self._is_recoverable_subjective_success(payload):
+            raise RuntimeError(result.stderr.strip() or result.stdout.strip() or f"wallet broadcast failed with exit code {result.returncode}")
         tx_id = str(payload.get("transaction_id") or "").lower()
         block_num = int(payload.get("processed", {}).get("block_num") or 0)
         if len(tx_id) != 64 or block_num <= 0:
             raise RuntimeError(f"unexpected wallet push output: {payload}")
         return BroadcastResult(tx_id=tx_id, block_num=block_num, raw=payload)
+
+    def _is_recoverable_subjective_success(self, payload: dict[str, Any]) -> bool:
+        tx_id = str(payload.get("transaction_id") or "").lower()
+        processed = dict(payload.get("processed") or {})
+        block_num = int(processed.get("block_num") or 0)
+        action_traces = list(processed.get("action_traces") or [])
+        processed_except = processed.get("except")
+
+        if len(tx_id) != 64 or block_num <= 0 or not action_traces:
+            return False
+        if not isinstance(processed_except, dict):
+            return False
+        if str(processed_except.get("name") or "") != "tx_cpu_usage_exceeded":
+            return False
+        return all(not isinstance(trace, dict) or trace.get("except") is None for trace in action_traces)
 
     def _ordered_action_args(self, action: str, data: dict[str, Any]) -> list[Any]:
         if action == "submit":
