@@ -144,3 +144,9 @@ Implemented now:
 Planned next:
 
 - optional keyspace notification CDC path if justified
+
+See also:
+
+- [wave2-redis-validation.md](wave2-redis-validation.md)
+- [wave2-redis-validation-report.md](wave2-redis-validation-report.md)
+- [wave2-redis-runbook.md](wave2-redis-runbook.md)

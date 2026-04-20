@@ -22,6 +22,12 @@ For an edge or embedded `SQLite` deployment baseline, use:
 - [wave2-sqlite-edge-runbook.md](wave2-sqlite-edge-runbook.md)
 - [deploy/config/sqlite-edge-agent.example.json](../deploy/config/sqlite-edge-agent.example.json)
 
+For a `Redis` operational-state deployment baseline, use:
+
+- [redis-config-reference.md](redis-config-reference.md)
+- [wave2-redis-runbook.md](wave2-redis-runbook.md)
+- [deploy/config/redis-agent.example.json](../deploy/config/redis-agent.example.json)
+
 ## Recommended Modes
 
 - `systemd` on Linux servers

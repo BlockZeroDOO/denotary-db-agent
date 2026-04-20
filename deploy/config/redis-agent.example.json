@@ -1,0 +1,66 @@
+{
+  "agent_name": "denotary-db-agent-redis",
+  "log_level": "INFO",
+  "denotary": {
+    "ingress_url": "http://127.0.0.1:8080",
+    "watcher_url": "http://127.0.0.1:8081",
+    "watcher_auth_token": "REPLACE_WITH_WATCHER_TOKEN",
+    "receipt_url": "http://127.0.0.1:8082",
+    "audit_url": "http://127.0.0.1:8083",
+    "chain_rpc_url": "https://history.denotary.io",
+    "submitter": "enterpriseac1",
+    "submitter_permission": "dnanchor",
+    "broadcast_backend": "private_key_env",
+    "submitter_private_key_env": "DENOTARY_SUBMITTER_PRIVATE_KEY",
+    "env_file": "/etc/denotary-db-agent/agent.secrets.env",
+    "submitter_private_key": "",
+    "schema_id": 1,
+    "policy_id": 1,
+    "billing_account": "verifbill",
+    "wait_for_finality": true,
+    "finality_timeout_sec": 180,
+    "finality_poll_interval_sec": 3.0
+  },
+  "storage": {
+    "state_db": "/var/lib/denotary-db-agent/redis-agent-state.sqlite3",
+    "proof_dir": "/var/lib/denotary-db-agent/proofs",
+    "proof_retention": 500,
+    "delivery_retention": 2000,
+    "dlq_retention": 500,
+    "diagnostics_snapshot_interval_sec": 900,
+    "diagnostics_snapshot_retention": 20
+  },
+  "sources": [
+    {
+      "id": "redis-cache-core",
+      "adapter": "redis",
+      "enabled": true,
+      "source_instance": "cache-eu-1",
+      "database_name": "db0",
+      "include": {
+        "0": [
+          "orders:*",
+          "payments:*"
+        ]
+      },
+      "exclude": {},
+      "checkpoint_policy": "after_ack",
+      "backfill_mode": "full",
+      "batch_enabled": false,
+      "batch_size": 100,
+      "flush_interval_ms": 1000,
+      "connection": {
+        "host": "127.0.0.1",
+        "port": 6379,
+        "db": 0,
+        "ssl": false,
+        "socket_timeout_sec": 10
+      },
+      "options": {
+        "capture_mode": "scan",
+        "row_limit": 250,
+        "scan_count": 250
+      }
+    }
+  ]
+}

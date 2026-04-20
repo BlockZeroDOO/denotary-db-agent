@@ -249,6 +249,8 @@ See:
 - [docs/wave2-redis-validation.md](docs/wave2-redis-validation.md)
 - [docs/wave2-redis-validation-report.md](docs/wave2-redis-validation-report.md)
 - [scripts/run-wave2-redis-validation.ps1](scripts/run-wave2-redis-validation.ps1)
+- [docs/wave2-redis-runbook.md](docs/wave2-redis-runbook.md)
+- [deploy/config/redis-agent.example.json](deploy/config/redis-agent.example.json)
 - [docs/wave2-sqlite-validation.md](docs/wave2-sqlite-validation.md)
 - [docs/wave2-sqlite-validation-report.md](docs/wave2-sqlite-validation-report.md)
 - [scripts/run-wave2-sqlite-validation.ps1](scripts/run-wave2-sqlite-validation.ps1)
