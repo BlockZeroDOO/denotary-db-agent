@@ -71,3 +71,8 @@ Supported now:
 - local proof export is already covered with dry-run snapshot playback
 - live validation can be driven through `scripts/run-live-cassandra-integration.ps1` once Cassandra credentials are available in the environment
 - native Cassandra CDC can be added later if commercially justified
+
+Deployment guidance:
+
+- [wave2-cassandra-runbook.md](wave2-cassandra-runbook.md)
+- [../deploy/config/cassandra-agent.example.json](../deploy/config/cassandra-agent.example.json)

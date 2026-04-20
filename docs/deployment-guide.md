@@ -34,6 +34,24 @@ For an `Elasticsearch` search-index deployment baseline, use:
 - [wave2-elasticsearch-runbook.md](wave2-elasticsearch-runbook.md)
 - [deploy/config/elasticsearch-agent.example.json](../deploy/config/elasticsearch-agent.example.json)
 
+For a `Snowflake` warehouse deployment baseline, use:
+
+- [snowflake-config-reference.md](snowflake-config-reference.md)
+- [wave2-snowflake-runbook.md](wave2-snowflake-runbook.md)
+- [deploy/config/snowflake-agent.example.json](../deploy/config/snowflake-agent.example.json)
+
+For an `IBM Db2` enterprise SQL deployment baseline, use:
+
+- [db2-config-reference.md](db2-config-reference.md)
+- [wave2-db2-runbook.md](wave2-db2-runbook.md)
+- [deploy/config/db2-agent.example.json](../deploy/config/db2-agent.example.json)
+
+For an `Apache Cassandra` wide-column deployment baseline, use:
+
+- [cassandra-config-reference.md](cassandra-config-reference.md)
+- [wave2-cassandra-runbook.md](wave2-cassandra-runbook.md)
+- [deploy/config/cassandra-agent.example.json](../deploy/config/cassandra-agent.example.json)
+
 ## Recommended Modes
 
 - `systemd` on Linux servers

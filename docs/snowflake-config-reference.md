@@ -22,6 +22,7 @@ Implemented now:
 - env-gated live integration and full-cycle harnesses
 - dry-run snapshot playback for pipeline validation
 - declared snapshot / watermark baseline capabilities
+- starter deployment config and runbook
 
 Planned next:
 
@@ -108,3 +109,8 @@ Planned next:
 - `Snowflake` is not yet production-validated
 - native Snowflake streams/tasks are not part of this first implementation slice
 - live credential-backed validation is the next implementation step
+
+Deployment guidance:
+
+- [wave2-snowflake-runbook.md](wave2-snowflake-runbook.md)
+- [../deploy/config/snowflake-agent.example.json](../deploy/config/snowflake-agent.example.json)

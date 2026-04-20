@@ -109,6 +109,7 @@ Implementation starts now with:
 - `Snowflake` query-based snapshot polling with watermark resume
 - `Snowflake` local full-cycle proof export
 - `Snowflake` env-gated live integration and full-cycle harnesses
+- `Snowflake` starter deployment config and runbook
 - `Redis` adapter contract registration
 - `Redis` configuration reference
 - `Redis` live ping and explicit key-pattern snapshot baseline
@@ -118,9 +119,11 @@ Implementation starts now with:
 - `IBM Db2` adapter contract registration
 - `IBM Db2` configuration reference
 - `IBM Db2` live ping, tracked-table introspection, snapshot baseline, local full-cycle proof export, and env-gated live validation harness
+- `IBM Db2` starter deployment config and runbook
 - `Apache Cassandra` adapter contract registration
 - `Apache Cassandra` configuration reference
 - `Apache Cassandra` live cluster ping, tracked-table introspection, snapshot baseline, local full-cycle proof export, and env-gated live validation harness
+- `Apache Cassandra` starter deployment config and runbook
 - `Elasticsearch` adapter contract registration
 - `Elasticsearch` configuration reference
 - `Elasticsearch` live cluster ping, tracked-index introspection, snapshot baseline, local full-cycle proof export, and env-gated live validation harness

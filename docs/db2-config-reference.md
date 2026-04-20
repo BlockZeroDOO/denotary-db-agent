@@ -71,3 +71,8 @@ Supported now:
 - local proof export is already covered with dry-run snapshot playback
 - live validation can be driven through `scripts/run-live-db2-integration.ps1` once Db2 credentials are available in the environment
 - native Db2 change capture can be added later if commercially justified
+
+Deployment guidance:
+
+- [wave2-db2-runbook.md](wave2-db2-runbook.md)
+- [../deploy/config/db2-agent.example.json](../deploy/config/db2-agent.example.json)
