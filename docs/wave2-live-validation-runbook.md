@@ -42,6 +42,7 @@ scripts/run-wave2-live-validation.ps1 db2
 scripts/run-wave2-live-validation.ps1 cassandra
 scripts/run-wave2-live-validation.ps1 elasticsearch
 scripts/run-wave2-live-validation.ps1 all -StrictEnv
+scripts/run-wave2-live-validation.ps1 all -OutputRoot data/wave2-live-validation-latest
 ```
 
 Shell:
@@ -53,6 +54,7 @@ scripts/run-wave2-live-validation.sh db2
 scripts/run-wave2-live-validation.sh cassandra
 scripts/run-wave2-live-validation.sh elasticsearch
 scripts/run-wave2-live-validation.sh all --strict-env
+scripts/run-wave2-live-validation.sh all "" data/wave2-live-validation-latest
 ```
 
 Python:
@@ -61,6 +63,7 @@ Python:
 python scripts/run-wave2-live-validation.py --adapter all
 python scripts/run-wave2-live-validation.py --adapter snowflake
 python scripts/run-wave2-live-validation.py --adapter all --strict-env
+python scripts/run-wave2-live-validation.py --adapter all --output-root data/wave2-live-validation-latest
 ```
 
 ## 4. Interpret the Result
@@ -78,6 +81,16 @@ python scripts/run-wave2-live-validation.py --adapter all --strict-env
 
 - the suite started and found a real runtime problem
 - or `--strict-env` was used and required variables were missing
+
+Every run also stores:
+
+- `summary.json`
+
+under either:
+
+- `data/wave2-live-validation-<timestamp>/`
+
+or the path you pass through `--output-root`
 
 ## 5. Next Depth After Live Baseline
 

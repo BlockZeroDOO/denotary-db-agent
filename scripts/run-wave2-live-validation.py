@@ -5,11 +5,13 @@ import json
 import os
 import subprocess
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+DATA_ROOT = PROJECT_ROOT / "data"
 PYTHON_EXE = Path(sys.executable)
 
 ADAPTERS: dict[str, dict[str, Any]] = {
@@ -55,6 +57,7 @@ ADAPTERS: dict[str, dict[str, Any]] = {
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run unified Wave 2 live validation suites.")
     parser.add_argument("--adapter", choices=tuple(list(ADAPTERS) + ["all"]), default="all")
+    parser.add_argument("--output-root", default="", help="Optional directory for persistent summary output.")
     parser.add_argument(
         "--strict-env",
         action="store_true",
@@ -92,8 +95,18 @@ def _run_suite(pattern: str) -> subprocess.CompletedProcess[str]:
     )
 
 
+def utc_stamp() -> str:
+    return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+
+
 def main() -> None:
     args = parse_args()
+    run_root = (
+        Path(args.output_root).resolve()
+        if args.output_root
+        else (DATA_ROOT / f"wave2-live-validation-{utc_stamp().lower()}").resolve()
+    )
+    run_root.mkdir(parents=True, exist_ok=True)
     results: list[dict[str, Any]] = []
     overall_exit = 0
     for adapter in _selected_adapters(args.adapter):
@@ -127,7 +140,13 @@ def main() -> None:
             }
         )
 
-    print(json.dumps({"results": results}, indent=2))
+    summary = {
+        "run_root": str(run_root),
+        "strict_env": bool(args.strict_env),
+        "results": results,
+    }
+    (run_root / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
+    print(json.dumps(summary, indent=2))
     raise SystemExit(overall_exit)
 
 

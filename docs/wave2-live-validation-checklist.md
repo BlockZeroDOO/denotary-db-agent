@@ -26,6 +26,7 @@ scripts/run-wave2-live-validation.ps1 snowflake
 scripts/run-wave2-live-validation.ps1 db2
 scripts/run-wave2-live-validation.ps1 cassandra
 scripts/run-wave2-live-validation.ps1 elasticsearch
+scripts/run-wave2-live-validation.ps1 all -OutputRoot data/wave2-live-validation-latest
 ```
 
 Shell:
@@ -36,6 +37,7 @@ scripts/run-wave2-live-validation.sh snowflake
 scripts/run-wave2-live-validation.sh db2
 scripts/run-wave2-live-validation.sh cassandra
 scripts/run-wave2-live-validation.sh elasticsearch
+scripts/run-wave2-live-validation.sh all "" data/wave2-live-validation-latest
 ```
 
 Python:
@@ -43,9 +45,14 @@ Python:
 ```bash
 python scripts/run-wave2-live-validation.py --adapter all
 python scripts/run-wave2-live-validation.py --adapter snowflake
+python scripts/run-wave2-live-validation.py --adapter all --output-root data/wave2-live-validation-latest
 ```
 
 Use `--strict-env` when missing credentials should fail the run instead of being reported as `skipped`.
+
+By default the launcher stores a persistent summary under:
+
+- `data/wave2-live-validation-<timestamp>/summary.json`
 
 ## Required Environment
 
