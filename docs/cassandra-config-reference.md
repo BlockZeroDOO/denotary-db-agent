@@ -11,6 +11,7 @@ Current baseline:
 - deterministic checkpoint resume
 - dry-run snapshot playback
 - local full-cycle proof export
+- env-gated live integration harness
 
 Native Cassandra CDC is not implemented yet.
 
@@ -68,4 +69,5 @@ Supported now:
 - live reads use tracked tables and a watermark field with deterministic client-side resume
 - the baseline query path may rely on `ALLOW FILTERING`, so it is aimed at validation and early production rollout rather than high-throughput CDC
 - local proof export is already covered with dry-run snapshot playback
+- live validation can be driven through `scripts/run-live-cassandra-integration.ps1` once Cassandra credentials are available in the environment
 - native Cassandra CDC can be added later if commercially justified
