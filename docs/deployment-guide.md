@@ -16,6 +16,12 @@ For a `denotary` mainnet deployment with an env-file-backed hot key, use:
 - [postgresql-hot-key-rotation.md](postgresql-hot-key-rotation.md)
 - [postgresql-recovery-scenarios.md](postgresql-recovery-scenarios.md)
 
+For an edge or embedded `SQLite` deployment baseline, use:
+
+- [sqlite-config-reference.md](sqlite-config-reference.md)
+- [wave2-sqlite-edge-runbook.md](wave2-sqlite-edge-runbook.md)
+- [deploy/config/sqlite-edge-agent.example.json](../deploy/config/sqlite-edge-agent.example.json)
+
 ## Recommended Modes
 
 - `systemd` on Linux servers

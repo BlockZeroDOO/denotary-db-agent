@@ -132,3 +132,9 @@ Planned next:
 
 - edge-focused runbooks
 - bounded soak validation for embedded and local-first scenarios
+
+See also:
+
+- [wave2-sqlite-validation.md](wave2-sqlite-validation.md)
+- [wave2-sqlite-validation-report.md](wave2-sqlite-validation-report.md)
+- [wave2-sqlite-edge-runbook.md](wave2-sqlite-edge-runbook.md)

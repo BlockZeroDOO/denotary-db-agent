@@ -252,6 +252,8 @@ See:
 - [docs/wave2-sqlite-validation.md](docs/wave2-sqlite-validation.md)
 - [docs/wave2-sqlite-validation-report.md](docs/wave2-sqlite-validation-report.md)
 - [scripts/run-wave2-sqlite-validation.ps1](scripts/run-wave2-sqlite-validation.ps1)
+- [docs/wave2-sqlite-edge-runbook.md](docs/wave2-sqlite-edge-runbook.md)
+- [deploy/config/sqlite-edge-agent.example.json](deploy/config/sqlite-edge-agent.example.json)
 - [docs/operator-guide.md](docs/operator-guide.md)
 - [docs/deployment-guide.md](docs/deployment-guide.md)
 - [docs/denotary-env-file-runbook.md](docs/denotary-env-file-runbook.md)
