@@ -123,8 +123,11 @@ Implementation starts now with:
 - `Elasticsearch` adapter contract registration
 - `Elasticsearch` configuration reference
 - `Elasticsearch` live cluster ping, tracked-index introspection, snapshot baseline, local full-cycle proof export, and env-gated live validation harness
+- `SQLite` adapter contract registration
+- `SQLite` configuration reference
+- `SQLite` file-backed readiness validation, tracked-table introspection, snapshot baseline, and local full-cycle proof export
 - `Wave 2` planning and documentation
 
 Planned next step:
 
-- move to `SQLite` as the next Wave 2 source after `Snowflake`, `Redis`, `IBM Db2`, `Apache Cassandra`, and `Elasticsearch`
+- extend `SQLite` into edge-oriented validation and then continue with the next Wave 2 hardening layer

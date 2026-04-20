@@ -39,4 +39,4 @@
 | IBM Db2 | enterprise | snapshot / watermark baseline, later native change capture if justified | adapter contract, config surface, live ping, tracked-table introspection, snapshot baseline, local full-cycle proof export, and env-gated live validation harness implemented |
 | Apache Cassandra | distributed wide-column | partition-aware snapshot baseline, later optional CDC | adapter contract, config surface, live ping, tracked-table introspection, snapshot baseline, local full-cycle proof export, and env-gated live validation harness implemented |
 | Elasticsearch | search / operational index | query-based snapshot and incremental baseline | adapter contract, config surface, live ping, tracked-index introspection, snapshot baseline, local full-cycle proof export, and env-gated live validation harness implemented |
-| SQLite | embedded / edge | local snapshot / watermark baseline | planned |
+| SQLite | embedded / edge | local snapshot / watermark baseline | adapter contract, config surface, file-backed readiness validation, tracked-table introspection, snapshot baseline, and local full-cycle proof export implemented |

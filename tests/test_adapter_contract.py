@@ -13,6 +13,7 @@ from denotary_db_agent.adapters.postgres import PostgresAdapter
 from denotary_db_agent.adapters.redis import RedisAdapter
 from denotary_db_agent.adapters.registry import ADAPTERS, build_adapter
 from denotary_db_agent.adapters.snowflake import SnowflakeAdapter
+from denotary_db_agent.adapters.sqlite import SqliteAdapter
 from denotary_db_agent.adapters.sqlserver import SqlServerAdapter
 from denotary_db_agent.config import SourceConfig
 
@@ -31,6 +32,7 @@ class AdapterRegistryContractTest(unittest.TestCase):
             ("db2", Db2Adapter, {"host": "127.0.0.1", "port": 50000, "username": "db2inst1", "password": "secret", "database": "LEDGER"}),
             ("cassandra", CassandraAdapter, {"host": "127.0.0.1", "port": 9042, "username": "cassandra", "password": "secret"}),
             ("elasticsearch", ElasticsearchAdapter, {"url": "http://127.0.0.1:9200"}),
+            ("sqlite", SqliteAdapter, {"path": "C:/runtime/ledger.sqlite3"}),
         ]
 
     def _source_config(self, adapter: str, connection: dict[str, object]) -> SourceConfig:
@@ -136,6 +138,12 @@ class AdapterRegistryContractTest(unittest.TestCase):
                 "default_checkpoint_strategy": "document_watermark",
                 "default_activity_model": "polling",
             },
+            "sqlite": {
+                "default_capture_mode": "watermark",
+                "cdc_modes": (),
+                "default_checkpoint_strategy": "table_watermark",
+                "default_activity_model": "polling",
+            },
         }
         for adapter_name, _adapter_class, connection in self.cases:
             with self.subTest(adapter=adapter_name):
@@ -164,6 +172,7 @@ class AdapterRegistryContractTest(unittest.TestCase):
             "db2": {},
             "cassandra": {},
             "elasticsearch": {},
+            "sqlite": {},
         }
         for adapter_name, _adapter_class, connection in self.cases:
             for capture_mode, expected_values in expected[adapter_name].items():

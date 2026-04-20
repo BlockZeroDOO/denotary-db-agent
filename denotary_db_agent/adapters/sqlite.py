@@ -1,0 +1,425 @@
+from __future__ import annotations
+
+import json
+import sqlite3
+from contextlib import contextmanager
+from dataclasses import dataclass
+from datetime import date, datetime, time, timezone
+from decimal import Decimal
+from pathlib import Path
+from typing import Any, Iterator
+
+from denotary_db_agent.adapters.base import AdapterCapabilities, BaseAdapter
+from denotary_db_agent.models import ChangeEvent, SourceCheckpoint
+
+
+@dataclass
+class SqliteTableSpec:
+    schema_name: str
+    table_name: str
+    watermark_column: str
+    commit_timestamp_column: str
+    primary_key_columns: list[str]
+    selected_columns: list[str]
+
+    @property
+    def key(self) -> str:
+        return f"{self.schema_name}.{self.table_name}"
+
+
+class SqliteAdapter(BaseAdapter):
+    source_type = "sqlite"
+    minimum_version = "3.39"
+    adapter_notes = (
+        "Wave 2 SQLite support currently provides file-backed readiness validation, tracked-table introspection, "
+        "watermark snapshot polling, deterministic checkpoint resume, and dry-run playback. Native SQLite CDC is "
+        "not implemented in the current baseline."
+    )
+
+    def discover_capabilities(self) -> AdapterCapabilities:
+        return AdapterCapabilities(
+            source_type=self.source_type,
+            minimum_version=self.minimum_version,
+            supports_cdc=False,
+            supports_snapshot=True,
+            operations=("snapshot",),
+            capture_modes=("watermark",),
+            cdc_modes=(),
+            default_capture_mode="watermark",
+            bootstrap_requirements=("tracked tables visible", "watermark columns configured"),
+            checkpoint_strategy="table_watermark",
+            activity_model="polling",
+            notes=self.adapter_notes,
+        )
+
+    def validate_connection(self) -> None:
+        database_path = self._database_path()
+        if not database_path:
+            raise ValueError(f"{self.source_type} connection is missing required field: path")
+        if self.config.options.get("dry_run_events"):
+            self._configured_table_specs()
+            return
+        if database_path != ":memory:" and not Path(database_path).exists():
+            raise ValueError(f"{self.source_type} database path does not exist: {database_path}")
+        with self._connect() as connection:
+            with connection:
+                connection.execute("select sqlite_version()")
+            self._load_table_specs(connection)
+
+    def bootstrap(self) -> dict:
+        self.validate_connection()
+        specs = self._load_live_or_configured_specs()
+        return self.build_bootstrap_result(
+            tracked_key="tracked_tables",
+            tracked_items=[self._spec_summary(spec) for spec in specs],
+            cdc=self._cdc_summary(),
+            extra={"tracking_model": "file_tables"},
+        )
+
+    def inspect(self) -> dict:
+        self.validate_connection()
+        specs = self._load_live_or_configured_specs()
+        return self.build_inspect_result(
+            tracked_key="tracked_tables",
+            tracked_items=[self._spec_summary(spec) for spec in specs],
+            cdc=self._cdc_summary(),
+            extra={"tracking_model": "file_tables"},
+        )
+
+    def runtime_signature(self) -> str:
+        specs = self._load_live_or_configured_specs()
+        payload = {
+            "adapter": self.config.adapter,
+            "source_id": self.config.id,
+            "capture_mode": self.capture_mode(),
+            "tracked_tables": [self._spec_signature_entry(spec) for spec in specs],
+            "include": self.config.include,
+        }
+        return json.dumps(payload, sort_keys=True)
+
+    def refresh_runtime(self) -> dict:
+        return self.bootstrap()
+
+    def start_stream(self, checkpoint: SourceCheckpoint | None):
+        raise NotImplementedError("sqlite native CDC is not implemented yet; use capture_mode=watermark")
+
+    def stop_stream(self) -> None:
+        return None
+
+    def read_snapshot(self, checkpoint: SourceCheckpoint | None = None):
+        dry_events = self.config.options.get("dry_run_events") or []
+        for item in dry_events:
+            yield ChangeEvent(
+                source_id=self.config.id,
+                source_type=self.source_type,
+                source_instance=self.config.source_instance,
+                database_name=self.config.database_name,
+                schema_or_namespace=str(item.get("schema_or_namespace", "main")),
+                table_or_collection=str(item.get("table_or_collection", "records")),
+                operation=str(item.get("operation", "snapshot")),
+                primary_key=dict(item.get("primary_key") or {}),
+                change_version=str(item.get("change_version", item.get("checkpoint_token", "0"))),
+                commit_timestamp=str(item.get("commit_timestamp", "1970-01-01T00:00:00Z")),
+                before=item.get("before"),
+                after=item.get("after") or {},
+                metadata=dict(item.get("metadata") or {}),
+                checkpoint_token=str(item.get("checkpoint_token", item.get("change_version", "0"))),
+            )
+        if dry_events:
+            return
+
+        checkpoint_state = self._parse_checkpoint(checkpoint)
+        if checkpoint is None and self.config.backfill_mode == "none":
+            return
+
+        with self._connect() as connection:
+            specs = self._load_table_specs(connection)
+            candidates: list[tuple[SqliteTableSpec, dict[str, Any]]] = []
+            for spec in specs:
+                table_state = checkpoint_state.get(spec.key)
+                candidates.extend((spec, row) for row in self._fetch_rows(connection, spec, table_state))
+
+        candidates.sort(key=lambda item: self._sort_key(item[0], item[1]))
+        current_state = dict(checkpoint_state)
+        for spec, row in candidates:
+            commit_timestamp = self._normalize_timestamp(self._row_get(row, spec.commit_timestamp_column))
+            primary_key = {column: self._row_get(row, column) for column in spec.primary_key_columns}
+            current_state[spec.key] = {
+                "watermark": self._normalize_timestamp(self._row_get(row, spec.watermark_column)),
+                "pk": [self._coerce_pk_value(primary_key[column]) for column in spec.primary_key_columns],
+            }
+            payload_after = {column: self._normalize_value(self._row_get(row, column)) for column in spec.selected_columns}
+            yield ChangeEvent(
+                source_id=self.config.id,
+                source_type=self.source_type,
+                source_instance=self.config.source_instance,
+                database_name=self.config.database_name,
+                schema_or_namespace=spec.schema_name,
+                table_or_collection=spec.table_name,
+                operation="snapshot",
+                primary_key={key: self._normalize_value(value) for key, value in primary_key.items()},
+                change_version=f"{spec.key}:{commit_timestamp}:{self._pk_marker(primary_key, spec.primary_key_columns)}",
+                commit_timestamp=commit_timestamp,
+                before=None,
+                after=payload_after,
+                metadata={
+                    "capture_mode": "watermark-poll",
+                    "watermark_column": spec.watermark_column,
+                    "commit_timestamp_column": spec.commit_timestamp_column,
+                    "primary_key_columns": spec.primary_key_columns,
+                },
+                checkpoint_token=json.dumps(current_state, sort_keys=True),
+            )
+
+    def serialize_checkpoint(self, event: ChangeEvent) -> str:
+        return event.checkpoint_token or event.change_version
+
+    def resume_from_checkpoint(self, checkpoint: SourceCheckpoint | None) -> None:
+        return None
+
+    @contextmanager
+    def _connect(self) -> Iterator[sqlite3.Connection]:
+        connection = sqlite3.connect(self._database_path())
+        try:
+            connection.row_factory = sqlite3.Row
+            yield connection
+        finally:
+            connection.close()
+
+    def _database_path(self) -> str:
+        return str(self.config.connection.get("path", "")).strip()
+
+    def _load_live_or_configured_specs(self) -> list[SqliteTableSpec]:
+        if self.config.options.get("dry_run_events"):
+            return self._configured_table_specs()
+        with self._connect() as connection:
+            return self._load_table_specs(connection)
+
+    def _configured_table_specs(self) -> list[SqliteTableSpec]:
+        include = self.config.include or {}
+        watermark_column = str(self.config.options.get("watermark_column", "updated_at")).strip() or "updated_at"
+        commit_timestamp_column = str(self.config.options.get("commit_timestamp_column", watermark_column)).strip() or watermark_column
+        primary_key_columns = self._primary_key_columns()
+        specs: list[SqliteTableSpec] = []
+        for schema_name, table_names in include.items():
+            if not isinstance(schema_name, str):
+                raise ValueError("sqlite include namespace names must be strings")
+            normalized_schema = schema_name.strip() or "main"
+            if not isinstance(table_names, list) or not all(isinstance(item, str) and item.strip() for item in table_names):
+                raise ValueError(f"sqlite include[{normalized_schema}] must be an array of non-empty table names")
+            for raw_table_name in table_names:
+                table_name = raw_table_name.strip()
+                specs.append(
+                    SqliteTableSpec(
+                        schema_name=normalized_schema,
+                        table_name=table_name,
+                        watermark_column=watermark_column,
+                        commit_timestamp_column=commit_timestamp_column,
+                        primary_key_columns=list(primary_key_columns),
+                        selected_columns=[*primary_key_columns, watermark_column, commit_timestamp_column],
+                    )
+                )
+        return specs
+
+    def _load_table_specs(self, connection: sqlite3.Connection) -> list[SqliteTableSpec]:
+        configured = self._configured_table_specs()
+        specs: list[SqliteTableSpec] = []
+        for item in configured:
+            columns = self._load_table_columns(connection, item)
+            column_lookup = {column.lower(): column for column in columns}
+            actual_watermark_column = column_lookup.get(item.watermark_column.lower())
+            if actual_watermark_column is None:
+                raise ValueError(
+                    f"{self.source_type} table {item.schema_name}.{item.table_name} does not contain watermark column {item.watermark_column}"
+                )
+            actual_commit_timestamp_column = column_lookup.get(item.commit_timestamp_column.lower())
+            if actual_commit_timestamp_column is None:
+                raise ValueError(
+                    f"{self.source_type} table {item.schema_name}.{item.table_name} does not contain commit timestamp column {item.commit_timestamp_column}"
+                )
+            actual_primary_key_columns = [column_lookup.get(column.lower()) for column in item.primary_key_columns]
+            if any(column is None for column in actual_primary_key_columns):
+                missing = [column for column, actual in zip(item.primary_key_columns, actual_primary_key_columns) if actual is None]
+                raise ValueError(
+                    f"{self.source_type} table {item.schema_name}.{item.table_name} does not contain primary key column(s): {', '.join(missing)}"
+                )
+            discovered_primary_keys = self._load_primary_key_columns(connection, item)
+            primary_key_columns = discovered_primary_keys or [str(column) for column in actual_primary_key_columns]
+            specs.append(
+                SqliteTableSpec(
+                    schema_name=item.schema_name,
+                    table_name=item.table_name,
+                    watermark_column=actual_watermark_column,
+                    commit_timestamp_column=actual_commit_timestamp_column,
+                    primary_key_columns=primary_key_columns,
+                    selected_columns=columns,
+                )
+            )
+        return specs
+
+    def _load_table_columns(self, connection: sqlite3.Connection, spec: SqliteTableSpec) -> list[str]:
+        cursor = connection.execute(
+            f"PRAGMA {self._quote_identifier(spec.schema_name)}.table_info({self._sql_string(spec.table_name)})"
+        )
+        rows = cursor.fetchall()
+        columns = [str(self._row_get(row, "name")) for row in rows if self._row_get(row, "name") is not None]
+        if not columns:
+            raise ValueError(f"{self.source_type} table {spec.schema_name}.{spec.table_name} is not visible via PRAGMA table_info")
+        return columns
+
+    def _load_primary_key_columns(self, connection: sqlite3.Connection, spec: SqliteTableSpec) -> list[str]:
+        cursor = connection.execute(
+            f"PRAGMA {self._quote_identifier(spec.schema_name)}.table_info({self._sql_string(spec.table_name)})"
+        )
+        rows = cursor.fetchall()
+        primary_key_rows = [row for row in rows if int(self._row_get(row, "pk") or 0) > 0]
+        primary_key_rows.sort(key=lambda row: int(self._row_get(row, "pk") or 0))
+        return [str(self._row_get(row, "name")) for row in primary_key_rows if self._row_get(row, "name") is not None]
+
+    def _primary_key_columns(self) -> list[str]:
+        columns = self.config.options.get("primary_key_columns")
+        if isinstance(columns, list) and columns and all(isinstance(item, str) and item.strip() for item in columns):
+            return [item.strip() for item in columns]
+        single_column = str(self.config.options.get("primary_key_column", "id")).strip() or "id"
+        return [single_column]
+
+    def _cdc_summary(self) -> dict[str, object]:
+        return self.build_cdc_summary(
+            {
+                "runtime": self.build_polling_runtime_summary(
+                    cursor=None,
+                    configured_runtime_mode=self.capture_mode(),
+                    effective_runtime_mode=self.capture_mode(),
+                    notification_aware=False,
+                ),
+            }
+        )
+
+    def _row_get(self, row: Any, key: str) -> Any:
+        if isinstance(row, dict):
+            if key in row:
+                return row[key]
+            lowered = key.lower()
+            for candidate_key, value in row.items():
+                if str(candidate_key).lower() == lowered:
+                    return value
+        try:
+            keys = row.keys()  # sqlite3.Row
+        except AttributeError:
+            return getattr(row, key, None)
+        lowered = key.lower()
+        for candidate_key in keys:
+            if str(candidate_key).lower() == lowered:
+                return row[candidate_key]
+        return None
+
+    def _parse_checkpoint(self, checkpoint: SourceCheckpoint | None) -> dict[str, dict[str, Any]]:
+        if checkpoint is None or not checkpoint.token:
+            return {}
+        parsed = json.loads(checkpoint.token)
+        if not isinstance(parsed, dict):
+            raise ValueError(f"{self.source_type} checkpoint token must be a JSON object")
+        return {str(key): value for key, value in parsed.items() if isinstance(value, dict)}
+
+    def _fetch_rows(self, connection: sqlite3.Connection, spec: SqliteTableSpec, table_state: dict[str, Any] | None) -> list[dict[str, Any]]:
+        select_columns = ", ".join(self._quote_identifier(column) for column in spec.selected_columns)
+        order_columns = [spec.watermark_column, *spec.primary_key_columns]
+        order_by = ", ".join(self._quote_identifier(column) for column in order_columns)
+        sql = (
+            f"select {select_columns} "
+            f"from {self._qualified_table(spec.schema_name, spec.table_name)} "
+            f"where {self._quote_identifier(spec.watermark_column)} is not null"
+        )
+        params: list[Any] = []
+        if table_state:
+            pk_values = list(table_state.get("pk") or [])
+            if len(pk_values) != len(spec.primary_key_columns):
+                raise ValueError(f"{self.source_type} checkpoint for {spec.key} has invalid primary key state")
+            watermark_value = table_state.get("watermark")
+            sql += (
+                f" and ("
+                f"{self._quote_identifier(spec.watermark_column)} > ? "
+                f"or ("
+                f"{self._quote_identifier(spec.watermark_column)} = ? and ("
+                + " or ".join(self._lexicographic_pk_predicates(spec.primary_key_columns))
+                + ")))"
+            )
+            params.extend([watermark_value, watermark_value, *pk_values * len(spec.primary_key_columns)])
+        sql += f" order by {order_by}"
+        row_limit = int(self.config.options.get("row_limit", self.config.batch_size))
+        if row_limit > 0:
+            sql += " limit ?"
+            params.append(row_limit)
+        cursor = connection.execute(sql, tuple(params))
+        return list(cursor.fetchall())
+
+    def _lexicographic_pk_predicates(self, primary_key_columns: list[str]) -> list[str]:
+        predicates: list[str] = []
+        for index, column in enumerate(primary_key_columns):
+            parts = [f"{self._quote_identifier(previous)} = ?" for previous in primary_key_columns[:index]]
+            parts.append(f"{self._quote_identifier(column)} > ?")
+            predicates.append("(" + " and ".join(parts) + ")")
+        return predicates
+
+    def _sort_key(self, spec: SqliteTableSpec, row: dict[str, Any]) -> tuple[Any, ...]:
+        return (
+            self._normalize_timestamp(self._row_get(row, spec.watermark_column)),
+            *[self._coerce_pk_value(self._row_get(row, column)) for column in spec.primary_key_columns],
+        )
+
+    def _normalize_value(self, value: Any) -> Any:
+        if isinstance(value, datetime):
+            normalized = value.astimezone(timezone.utc) if value.tzinfo else value.replace(tzinfo=timezone.utc)
+            return normalized.replace(microsecond=0).isoformat().replace("+00:00", "Z")
+        if isinstance(value, date) and not isinstance(value, datetime):
+            return value.isoformat()
+        if isinstance(value, time):
+            return value.replace(microsecond=0).isoformat()
+        if isinstance(value, Decimal):
+            return format(value, "f")
+        if isinstance(value, bytes):
+            return value.hex()
+        return value
+
+    def _normalize_timestamp(self, value: Any) -> str:
+        normalized = self._normalize_value(value)
+        if isinstance(normalized, str):
+            return normalized
+        return str(normalized)
+
+    def _coerce_pk_value(self, value: Any) -> Any:
+        normalized = self._normalize_value(value)
+        if isinstance(normalized, (str, int, float, bool)) or normalized is None:
+            return normalized
+        return str(normalized)
+
+    def _pk_marker(self, primary_key: dict[str, Any], primary_key_columns: list[str]) -> str:
+        return ":".join(str(self._coerce_pk_value(primary_key[column])) for column in primary_key_columns)
+
+    def _qualified_table(self, schema_name: str, table_name: str) -> str:
+        return f'{self._quote_identifier(schema_name)}.{self._quote_identifier(table_name)}'
+
+    def _quote_identifier(self, value: str) -> str:
+        return '"' + value.replace('"', '""') + '"'
+
+    def _sql_string(self, value: str) -> str:
+        return "'" + value.replace("'", "''") + "'"
+
+    def _spec_summary(self, spec: SqliteTableSpec) -> dict[str, object]:
+        return {
+            "schema_name": spec.schema_name,
+            "table_name": spec.table_name,
+            "watermark_column": spec.watermark_column,
+            "commit_timestamp_column": spec.commit_timestamp_column,
+            "primary_key_columns": list(spec.primary_key_columns),
+            "selected_columns": list(spec.selected_columns),
+        }
+
+    def _spec_signature_entry(self, spec: SqliteTableSpec) -> dict[str, object]:
+        return {
+            "key": spec.key,
+            "watermark_column": spec.watermark_column,
+            "commit_timestamp_column": spec.commit_timestamp_column,
+            "primary_key_columns": list(spec.primary_key_columns),
+            "selected_columns": list(spec.selected_columns),
+        }

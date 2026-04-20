@@ -36,6 +36,7 @@ The full agent config is split into:
 - [db2-config-reference.md](db2-config-reference.md)
 - [cassandra-config-reference.md](cassandra-config-reference.md)
 - [elasticsearch-config-reference.md](elasticsearch-config-reference.md)
+- [sqlite-config-reference.md](sqlite-config-reference.md)
 
 ## Top-Level Shape
 
@@ -139,6 +140,7 @@ Each entry in `sources` is one logical input source.
   - `"db2"`
   - `"cassandra"`
   - `"elasticsearch"`
+  - `"sqlite"`
 
 ### `enabled`
 
@@ -243,3 +245,5 @@ Each entry in `sources` is one logical input source.
   - [cassandra-config-reference.md](cassandra-config-reference.md)
 - Elasticsearch:
   - [elasticsearch-config-reference.md](elasticsearch-config-reference.md)
+- SQLite:
+  - [sqlite-config-reference.md](sqlite-config-reference.md)
