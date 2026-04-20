@@ -69,6 +69,7 @@ The current `ScyllaDB` implementation confirms:
 - Docker-backed live integration harness
 - restart recovery validation
 - short-soak validation
+- real `denotary` mainnet happy-path validation
 
 Reference:
 

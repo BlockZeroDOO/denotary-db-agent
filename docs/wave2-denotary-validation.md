@@ -6,6 +6,7 @@ Current scope:
 
 - `SQLite`
 - `Redis`
+- `ScyllaDB`
 
 The validation uses:
 
@@ -44,6 +45,7 @@ PowerShell:
 scripts/run-wave2-denotary-validation.ps1 -Adapter all
 scripts/run-wave2-denotary-validation.ps1 -Adapter sqlite
 scripts/run-wave2-denotary-validation.ps1 -Adapter redis
+scripts/run-wave2-denotary-live-validation.py --adapter scylladb --output-root data/wave2-denotary-live-validation-scylladb
 ```
 
 Shell:
@@ -60,6 +62,7 @@ Python:
 python scripts/run-wave2-denotary-validation.py --adapter all
 python scripts/run-wave2-denotary-validation.py --adapter sqlite
 python scripts/run-wave2-denotary-validation.py --adapter redis
+python scripts/run-wave2-denotary-live-validation.py --adapter scylladb --output-root data/wave2-denotary-live-validation-scylladb
 ```
 
 By default the script stores persistent run artifacts under:
@@ -95,4 +98,4 @@ It does not yet mean:
 
 - every `Wave 2` adapter is mainnet-validated
 - restart, soak, and outage depth already matches `Wave 1`
-- `Db2`, `Cassandra`, or `Elasticsearch` are already confirmed on mainnet
+- every non-SQLite/Redis `Wave 2` adapter is already confirmed on mainnet

@@ -58,6 +58,7 @@ Current ScyllaDB Wave 2 status:
 - Docker-backed live integration is implemented
 - restart recovery validation is implemented
 - short-soak validation is implemented
+- real `denotary` mainnet validation is implemented
 - deployment starter config and operator runbook are implemented
 
 Current IBM Db2 Wave 2 status:

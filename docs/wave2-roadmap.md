@@ -113,6 +113,7 @@ Implementation currently covers:
 - `ScyllaDB` local full-cycle proof export
 - `ScyllaDB` Docker-backed live integration harness
 - `ScyllaDB` restart and short-soak validation
+- real `denotary` mainnet happy-path validation for `ScyllaDB`
 - `IBM Db2` adapter contract registration
 - `IBM Db2` configuration reference
 - `IBM Db2` live ping, tracked-table introspection, snapshot baseline, local full-cycle proof export, env-gated live validation harness, local Docker live validation, and real `denotary` mainnet happy-path validation

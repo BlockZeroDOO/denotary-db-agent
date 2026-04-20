@@ -39,7 +39,7 @@ BASE_VALIDATION = _load_script(PROJECT_ROOT / "scripts" / "run-wave2-denotary-va
 from cassandra_live_support import (  # type: ignore
     agent_connection_config as cassandra_connection_config,
     cassandra_keyspace,
-    create_session,
+    create_session as create_cassandra_session,
     unique_table_name as unique_cassandra_table_name,
     wait_for_table_visibility as wait_for_cassandra_table_visibility,
 )
@@ -56,6 +56,13 @@ from elasticsearch_live_support import (  # type: ignore
     create_client as create_elasticsearch_client,
     wait_for_index_visibility,
 )
+from scylladb_live_support import (  # type: ignore
+    agent_connection_config as scylladb_connection_config,
+    create_session as create_scylladb_session,
+    scylladb_keyspace,
+    unique_table_name as unique_scylladb_table_name,
+    wait_for_table_visibility as wait_for_scylladb_table_visibility,
+)
 
 
 DATA_ROOT = PROJECT_ROOT / "data"
@@ -64,7 +71,7 @@ PYTHON_EXE = Path(sys.executable)
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run Wave 2 denotary mainnet validation for live Docker-backed adapters.")
-    parser.add_argument("--adapter", choices=("elasticsearch", "cassandra", "db2", "all"), default="all")
+    parser.add_argument("--adapter", choices=("elasticsearch", "cassandra", "scylladb", "db2", "all"), default="all")
     parser.add_argument("--output-root", default="", help="Optional persistent run directory.")
     return parser.parse_args()
 
@@ -153,12 +160,24 @@ def _wait_for_cassandra(timeout_sec: float = 180.0) -> None:
     deadline = time.time() + timeout_sec
     while time.time() < deadline:
         try:
-            cluster, _session = create_session()
+            cluster, _session = create_cassandra_session()
             cluster.shutdown()
             return
         except Exception:
             time.sleep(2)
     raise RuntimeError("cassandra did not become ready in time")
+
+
+def _wait_for_scylladb(timeout_sec: float = 180.0) -> None:
+    deadline = time.time() + timeout_sec
+    while time.time() < deadline:
+        try:
+            cluster, _session = create_scylladb_session()
+            cluster.shutdown()
+            return
+        except Exception:
+            time.sleep(2)
+    raise RuntimeError("scylladb did not become ready in time")
 
 
 def _wait_for_elasticsearch(timeout_sec: float = 120.0) -> None:
@@ -305,7 +324,7 @@ def run_cassandra_validation(temp_dir: Path) -> dict[str, Any]:
         _docker_compose(compose_file, "up", "-d")
         try:
             _wait_for_cassandra()
-            cluster, session = create_session()
+            cluster, session = create_cassandra_session()
             try:
                 session.execute(
                     """
@@ -363,7 +382,7 @@ def run_cassandra_validation(temp_dir: Path) -> dict[str, Any]:
                     baseline = engine.run_once()
                     if baseline["processed"] != 0 or baseline["failed"] != 0:
                         raise RuntimeError(f"cassandra denotary baseline was not idle: {baseline}")
-                    cluster, session = create_session()
+                    cluster, session = create_cassandra_session()
                     try:
                         marker = BASE_VALIDATION.build_run_marker("cassandra-denotary")
                         session.execute(
@@ -393,7 +412,122 @@ def run_cassandra_validation(temp_dir: Path) -> dict[str, Any]:
                     engine.close()
             finally:
                 stack.stop()
-                cluster, session = create_session()
+                cluster, session = create_cassandra_session()
+                try:
+                    session.execute(f"drop table if exists denotary_agent.{table_name}")
+                finally:
+                    cluster.shutdown()
+        finally:
+            _docker_compose(compose_file, "down", "-v")
+
+
+def run_scylladb_validation(temp_dir: Path) -> dict[str, Any]:
+    compose_file = PROJECT_ROOT / "deploy" / "scylladb-live" / "docker-compose.yml"
+    env = {
+        "DENOTARY_SCYLLADB_HOST": "127.0.0.1",
+        "DENOTARY_SCYLLADB_PORT": "59043",
+        "DENOTARY_SCYLLADB_KEYSPACE": "denotary_agent",
+    }
+    if temp_dir.exists():
+        shutil.rmtree(temp_dir, ignore_errors=True)
+    temp_dir.mkdir(parents=True, exist_ok=True)
+    state_db = temp_dir / "offchain-state.sqlite3"
+    stack = BASE_VALIDATION.OffchainStack(state_db)
+    table_name = unique_scylladb_table_name()
+    with _temporary_env(env):
+        _docker_compose(compose_file, "down", "-v")
+        _docker_compose(compose_file, "up", "-d")
+        try:
+            _wait_for_scylladb()
+            cluster, session = create_scylladb_session()
+            try:
+                session.execute(
+                    """
+                    create keyspace if not exists denotary_agent
+                    with replication = {'class': 'SimpleStrategy', 'replication_factor': 1}
+                    """
+                )
+                session.execute(
+                    f"""
+                    create table denotary_agent.{table_name} (
+                        id int,
+                        status text,
+                        updated_at timestamp,
+                        primary key (id)
+                    )
+                    """
+                )
+            finally:
+                cluster.shutdown()
+            wait_for_scylladb_table_visibility(table_name)
+            stack.start()
+            try:
+                config = {
+                    "agent_name": "wave2-scylladb-denotary-live-validation",
+                    "log_level": "INFO",
+                    "denotary": BASE_VALIDATION.build_denotary_config_for_stack(stack),
+                    "storage": _build_storage(temp_dir),
+                    "sources": [
+                        {
+                            "id": "scylladb-wave2-denotary-live",
+                            "adapter": "scylladb",
+                            "enabled": True,
+                            "source_instance": "events-denotary-live",
+                            "database_name": scylladb_keyspace(),
+                            "include": {scylladb_keyspace(): [table_name]},
+                            "checkpoint_policy": "after_ack",
+                            "backfill_mode": "full",
+                            "connection": scylladb_connection_config(),
+                            "options": {
+                                "capture_mode": "watermark",
+                                "watermark_column": "updated_at",
+                                "commit_timestamp_column": "updated_at",
+                                "primary_key_columns": ["id"],
+                                "row_limit": 100,
+                            },
+                        }
+                    ],
+                }
+                config_path = _write_config(temp_dir / "scylladb-denotary-live-config.json", config)
+                engine = AgentEngine(load_config(config_path))
+                try:
+                    doctor = engine.doctor("scylladb-wave2-denotary-live")
+                    if doctor["overall"]["severity"] == "critical":
+                        raise RuntimeError(f"scylladb denotary doctor failed: {doctor['errors']}")
+                    baseline = engine.run_once()
+                    if baseline["processed"] != 0 or baseline["failed"] != 0:
+                        raise RuntimeError(f"scylladb denotary baseline was not idle: {baseline}")
+                    cluster, session = create_scylladb_session()
+                    try:
+                        marker = BASE_VALIDATION.build_run_marker("scylladb-denotary")
+                        session.execute(
+                            f"""
+                            insert into denotary_agent.{table_name} (id, status, updated_at)
+                            values (%s, %s, %s)
+                            """,
+                            (
+                                int(marker["record_id"]),
+                                str(marker["status"]),
+                                str(marker["timestamp"]),
+                            ),
+                        )
+                    finally:
+                        cluster.shutdown()
+                    result = engine.run_once()
+                    if result["processed"] != 1 or result["failed"] != 0:
+                        raise RuntimeError(f"scylladb denotary run did not process exactly one event: {result}")
+                    return _finalize_result(
+                        adapter="scylladb",
+                        source_id="scylladb-wave2-denotary-live",
+                        engine=engine,
+                        doctor=doctor,
+                        config_path=config_path,
+                    )
+                finally:
+                    engine.close()
+            finally:
+                stack.stop()
+                cluster, session = create_scylladb_session()
                 try:
                     session.execute(f"drop table if exists denotary_agent.{table_name}")
                 finally:
@@ -524,7 +658,7 @@ def run_db2_validation(temp_dir: Path) -> dict[str, Any]:
 
 def main() -> None:
     args = parse_args()
-    adapters = ["elasticsearch", "cassandra", "db2"] if args.adapter == "all" else [args.adapter]
+    adapters = ["elasticsearch", "cassandra", "scylladb", "db2"] if args.adapter == "all" else [args.adapter]
     run_root = (
         Path(args.output_root).resolve()
         if args.output_root
@@ -535,6 +669,7 @@ def main() -> None:
     runners = {
         "elasticsearch": run_elasticsearch_validation,
         "cassandra": run_cassandra_validation,
+        "scylladb": run_scylladb_validation,
         "db2": run_db2_validation,
     }
     for adapter in adapters:

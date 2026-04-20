@@ -53,9 +53,24 @@ Current `Wave 2` real-mainnet confirmation now exists for:
 
 - `SQLite`
 - `Redis`
+- `ScyllaDB`
 
 That means the current `Wave 2` set is no longer only local-validation-ready. It already includes:
 
 - edge/local-first notarization on real mainnet
 - operational key-value state notarization on real mainnet
+- distributed wide-column notarization on real mainnet
 - finalized proof export through the same production-style signer model used by `Wave 1`
+
+## ScyllaDB
+
+- result:
+  - `processed = 1`
+  - `failed = 0`
+- request:
+  - `request_id = 5fa1675f2d688df34b3612b75d34abf892f8509936144174222c92ce2e5d869a`
+- chain:
+  - `tx_id = 991abdb365530db670a3f735e8083a2013dea77c609e52acd301d59dd441cb90`
+  - `block_num = 1134971`
+- proof:
+  - [5fa1675f2d688df34b3612b75d34abf892f8509936144174222c92ce2e5d869a.json](/c:/projects/denotary-db-agent/data/wave2-denotary-live-validation-scylladb/scylladb/proofs/scylladb-wave2-denotary-live/5fa1675f2d688df34b3612b75d34abf892f8509936144174222c92ce2e5d869a.json)
