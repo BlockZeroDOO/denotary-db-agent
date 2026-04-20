@@ -14,6 +14,10 @@ Current scope:
 Start from:
 
 - [examples/wave2-live.env.example](../examples/wave2-live.env.example)
+- [examples/wave2-snowflake.env.example](../examples/wave2-snowflake.env.example)
+- [examples/wave2-db2.env.example](../examples/wave2-db2.env.example)
+- [examples/wave2-cassandra.env.example](../examples/wave2-cassandra.env.example)
+- [examples/wave2-elasticsearch.env.example](../examples/wave2-elasticsearch.env.example)
 
 Create a local secret env file outside version control, or export variables directly in your shell.
 

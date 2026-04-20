@@ -15,6 +15,10 @@ For a copy-ready env template and step-by-step operator flow, also see:
 
 - [wave2-live-validation-runbook.md](wave2-live-validation-runbook.md)
 - [../examples/wave2-live.env.example](../examples/wave2-live.env.example)
+- [../examples/wave2-snowflake.env.example](../examples/wave2-snowflake.env.example)
+- [../examples/wave2-db2.env.example](../examples/wave2-db2.env.example)
+- [../examples/wave2-cassandra.env.example](../examples/wave2-cassandra.env.example)
+- [../examples/wave2-elasticsearch.env.example](../examples/wave2-elasticsearch.env.example)
 
 ## Unified Commands
 
