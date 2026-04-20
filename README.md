@@ -50,6 +50,8 @@ Current Redis Wave 2 status:
 - deterministic lexicographic key resume is implemented
 - local full-cycle proof export is implemented for the snapshot baseline
 - Docker-backed live integration and full-cycle harnesses are implemented
+- restart recovery validation is implemented
+- short-soak validation is implemented
 - dry-run snapshot playback is implemented for pipeline validation
 
 Current IBM Db2 Wave 2 status:
@@ -242,6 +244,9 @@ See:
 - [docs/adapter-separation-architecture.md](docs/adapter-separation-architecture.md)
 - [docs/wave2-roadmap.md](docs/wave2-roadmap.md)
 - [docs/wave2-readiness-matrix.md](docs/wave2-readiness-matrix.md)
+- [docs/wave2-redis-validation.md](docs/wave2-redis-validation.md)
+- [docs/wave2-redis-validation-report.md](docs/wave2-redis-validation-report.md)
+- [scripts/run-wave2-redis-validation.ps1](scripts/run-wave2-redis-validation.ps1)
 - [docs/operator-guide.md](docs/operator-guide.md)
 - [docs/deployment-guide.md](docs/deployment-guide.md)
 - [docs/denotary-env-file-runbook.md](docs/denotary-env-file-runbook.md)

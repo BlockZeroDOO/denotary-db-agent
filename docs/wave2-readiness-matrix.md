@@ -9,7 +9,7 @@ It is intentionally narrower than the `Wave 1` readiness matrix: most `Wave 2` s
 | Adapter | Snapshot baseline | Local full-cycle proof export | Live validation harness | Native CDC | Current readiness summary |
 | --- | --- | --- | --- | --- | --- |
 | Snowflake | yes | yes | yes, env-gated | no | good enterprise analytics baseline with watermark polling and live warehouse/object validation |
-| Redis | yes | yes | yes, Docker-backed | no | strong operational-state baseline with scan polling, resume, and live full-cycle validation |
+| Redis | yes | yes | yes, Docker-backed | no | strong operational-state baseline with scan polling, resume, live full-cycle validation, restart recovery, and short-soak validation |
 | IBM Db2 | yes | yes | yes, env-gated | no | strong enterprise SQL baseline with tracked-table introspection and local full-cycle proof export |
 | Apache Cassandra | yes | yes | yes, env-gated | no | strong distributed wide-column baseline with tracked-table introspection and local full-cycle proof export |
 | Elasticsearch | yes | yes | yes, env-gated | no | strong search/index baseline with tracked-index introspection and query-based polling |
@@ -51,8 +51,7 @@ The following layers still remain open for most `Wave 2` adapters:
 Priority after the baseline phase:
 
 1. `SQLite` edge-focused validation and runbooks
-2. `Redis` restart and short-soak validation
-3. `Elasticsearch` restart and short-soak validation
+2. `Elasticsearch` restart and short-soak validation
 4. `Snowflake` live validation in a real account
 5. `IBM Db2` and `Apache Cassandra` live validation in real environments
 

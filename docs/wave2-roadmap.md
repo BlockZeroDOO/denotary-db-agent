@@ -114,6 +114,7 @@ Implementation starts now with:
 - `Redis` live ping and explicit key-pattern snapshot baseline
 - `Redis` local full-cycle proof export
 - `Redis` Docker-backed live integration and full-cycle harnesses
+- `Redis` restart recovery and short-soak validation
 - `IBM Db2` adapter contract registration
 - `IBM Db2` configuration reference
 - `IBM Db2` live ping, tracked-table introspection, snapshot baseline, local full-cycle proof export, and env-gated live validation harness
