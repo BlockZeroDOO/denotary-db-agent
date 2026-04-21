@@ -92,6 +92,7 @@ Current Elasticsearch Wave 2 status:
 - env-gated restart and short-soak validation harness is implemented
 - real `denotary` mainnet happy-path validation is implemented
 - bounded `denotary` mainnet budget validation is implemented
+- real `denotary` mainnet degraded-service validation is implemented
 - dry-run snapshot playback is implemented for pipeline validation
 
 Current SQLite Wave 2 status:

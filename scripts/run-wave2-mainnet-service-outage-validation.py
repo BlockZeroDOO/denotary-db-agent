@@ -52,6 +52,11 @@ from db2_live_support import (  # type: ignore
     wait_for_db2_ready,
     wait_for_table_visibility as wait_for_db2_table_visibility,
 )
+from elasticsearch_live_support import (  # type: ignore
+    agent_connection_config as elasticsearch_connection_config,
+    create_client as create_elasticsearch_client,
+    wait_for_index_visibility,
+)
 from scylladb_live_support import (  # type: ignore
     agent_connection_config as scylladb_connection_config,
     create_session as create_scylladb_session,
@@ -63,7 +68,7 @@ from scylladb_live_support import (  # type: ignore
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run Wave 2 denotary mainnet service-outage validation.")
-    parser.add_argument("--adapter", choices=("sqlite", "redis", "scylladb", "db2", "all"), default="all")
+    parser.add_argument("--adapter", choices=("sqlite", "redis", "scylladb", "db2", "elasticsearch", "all"), default="all")
     parser.add_argument("--scenario", choices=sorted(SCENARIOS))
     parser.add_argument("--bad-service-url", default=BAD_SERVICE_URL)
     parser.add_argument("--output-root", default="", help="Optional persistent run directory.")
@@ -111,6 +116,21 @@ def _wait_for_scylladb(timeout_sec: float = 180.0) -> None:
         except Exception:
             time.sleep(2)
     raise RuntimeError("scylladb did not become ready in time")
+
+
+def _wait_for_elasticsearch(timeout_sec: float = 120.0) -> None:
+    deadline = time.time() + timeout_sec
+    while time.time() < deadline:
+        try:
+            client = create_elasticsearch_client()
+            try:
+                if client.ping():
+                    return
+            finally:
+                client.close()
+        except Exception:
+            time.sleep(1)
+    raise RuntimeError("elasticsearch did not become ready in time")
 
 
 def _db2_timestamp_literal(value: str) -> str:
@@ -321,6 +341,53 @@ def _build_db2_config(
         ],
     }
     path = adapter_root / f"db2-{suffix}.json"
+    path.write_text(json.dumps(config, indent=2), encoding="utf-8")
+    return path
+
+
+def _build_elasticsearch_config(
+    adapter_root: Path,
+    stack: Any,
+    *,
+    source_id: str,
+    index_name: str,
+    broken_field: str | None,
+    bad_service_url: str,
+    suffix: str,
+) -> Path:
+    denotary = DENOTARY_VALIDATION.build_denotary_config_for_stack(stack)
+    if broken_field:
+        denotary[broken_field] = bad_service_url
+    config = {
+        "agent_name": f"wave2-elasticsearch-denotary-outage-{suffix}",
+        "log_level": "INFO",
+        "denotary": denotary,
+        "storage": {
+            "state_db": str((adapter_root / "state.sqlite3").resolve()),
+            "proof_dir": str((adapter_root / "proofs").resolve()),
+        },
+        "sources": [
+            {
+                "id": source_id,
+                "adapter": "elasticsearch",
+                "enabled": True,
+                "source_instance": "search-denotary-outage",
+                "database_name": "search",
+                "include": {"default": [index_name]},
+                "checkpoint_policy": "after_ack",
+                "backfill_mode": "full",
+                "connection": elasticsearch_connection_config(),
+                "options": {
+                    "capture_mode": "watermark",
+                    "watermark_field": "updated_at",
+                    "commit_timestamp_field": "updated_at",
+                    "primary_key_field": "record_id",
+                    "row_limit": 100,
+                },
+            }
+        ],
+    }
+    path = adapter_root / f"elasticsearch-{suffix}.json"
     path.write_text(json.dumps(config, indent=2), encoding="utf-8")
     return path
 
@@ -820,9 +887,163 @@ def _run_db2_scenario_ready(
             connection.close()
 
 
+def run_elasticsearch_scenario(
+    *,
+    adapter_root: Path,
+    scenario: str,
+    broken_field: str,
+    bad_service_url: str,
+) -> dict[str, Any]:
+    compose_file = PROJECT_ROOT / "deploy" / "elasticsearch-live" / "docker-compose.yml"
+    env = {
+        "DENOTARY_ELASTICSEARCH_URL": "http://127.0.0.1:59200",
+        "DENOTARY_ELASTICSEARCH_VERIFY_CERTS": "false",
+    }
+    with _temporary_env(env):
+        _docker_compose(compose_file, "down", "-v")
+        _docker_compose(compose_file, "up", "-d")
+        try:
+            _wait_for_elasticsearch()
+            return _run_elasticsearch_scenario_ready(
+                adapter_root=adapter_root,
+                scenario=scenario,
+                broken_field=broken_field,
+                bad_service_url=bad_service_url,
+            )
+        finally:
+            _docker_compose(compose_file, "down", "-v")
+
+
+def _run_elasticsearch_scenario_ready(
+    *,
+    adapter_root: Path,
+    scenario: str,
+    broken_field: str,
+    bad_service_url: str,
+) -> dict[str, Any]:
+    if adapter_root.exists():
+        shutil.rmtree(adapter_root, ignore_errors=True)
+    adapter_root.mkdir(parents=True, exist_ok=True)
+    state_db = adapter_root / "offchain-state.sqlite3"
+    source_id = "elasticsearch-wave2-denotary-outage"
+    index_name = f"wave2-elastic-outage-{scenario}-{uuid4().hex[:8]}".lower()
+    client = create_elasticsearch_client()
+    try:
+        if client.indices.exists(index=index_name):
+            client.indices.delete(index=index_name)
+        client.indices.create(
+            index=index_name,
+            mappings={
+                "properties": {
+                    "record_id": {"type": "keyword"},
+                    "status": {"type": "keyword"},
+                    "updated_at": {"type": "date"},
+                }
+            },
+        )
+        client.indices.refresh(index=index_name)
+    finally:
+        client.close()
+    wait_for_index_visibility(index_name)
+    stack = DENOTARY_VALIDATION.OffchainStack(state_db)
+    stack.start()
+    try:
+        broken_config_path = _build_elasticsearch_config(
+            adapter_root,
+            stack,
+            source_id=source_id,
+            index_name=index_name,
+            broken_field=broken_field,
+            bad_service_url=bad_service_url,
+            suffix=f"{scenario}-broken",
+        )
+        healthy_config_path = _build_elasticsearch_config(
+            adapter_root,
+            stack,
+            source_id=source_id,
+            index_name=index_name,
+            broken_field=None,
+            bad_service_url=bad_service_url,
+            suffix=f"{scenario}-healthy",
+        )
+        marker = DENOTARY_VALIDATION.build_run_marker(f"elasticsearch-{scenario}")
+        broken_engine = AgentEngine(load_config(broken_config_path))
+        try:
+            baseline = broken_engine.run_once()
+            client = create_elasticsearch_client()
+            try:
+                client.index(
+                    index=index_name,
+                    id=str(marker["record_id"]),
+                    document={
+                        "record_id": str(marker["record_id"]),
+                        "status": str(marker["status"]),
+                        "updated_at": str(marker["timestamp"]),
+                    },
+                )
+                client.indices.refresh(index=index_name)
+            finally:
+                client.close()
+            first = broken_engine.run_once()
+            first_deliveries = broken_engine.store.list_deliveries(source_id)
+            first_proofs = broken_engine.store.list_proofs(source_id)
+            first_dlq = broken_engine.store.list_dlq(source_id)
+        finally:
+            broken_engine.close()
+
+        healthy_engine = AgentEngine(load_config(healthy_config_path))
+        try:
+            second = healthy_engine.run_once()
+            deliveries = healthy_engine.store.list_deliveries(source_id)
+            proofs = healthy_engine.store.list_proofs(source_id)
+            dlq = healthy_engine.store.list_dlq(source_id)
+        finally:
+            healthy_engine.close()
+
+        if int(baseline.get("processed") or 0) != 0 or int(baseline.get("failed") or 0) != 0:
+            raise RuntimeError(f"elasticsearch {scenario} baseline was not idle: {baseline}")
+        if int(first.get("processed") or 0) != 0 or int(first.get("failed") or 0) != 1:
+            raise RuntimeError(f"elasticsearch {scenario} first run did not fail as expected: {first}")
+        if int(second.get("processed") or 0) != 1 or int(second.get("failed") or 0) != 0:
+            raise RuntimeError(f"elasticsearch {scenario} recovery run did not succeed as expected: {second}")
+        if not proofs:
+            raise RuntimeError(f"elasticsearch {scenario} did not export a proof after recovery")
+        latest_proof = proofs[0]
+        proof_payload = _load_proof_bundle(latest_proof)
+        return {
+            "adapter": "elasticsearch",
+            "scenario": scenario,
+            "failed_component": broken_field,
+            "status": "passed",
+            "baseline_processed": baseline["processed"],
+            "first_run": first,
+            "second_run": second,
+            "first_delivery_count": len(first_deliveries),
+            "first_proof_count": len(first_proofs),
+            "first_dlq_count": len(first_dlq),
+            "delivery_count": len(deliveries),
+            "proof_count": len(proofs),
+            "dlq_count": len(dlq),
+            "request_id": latest_proof["request_id"],
+            "tx_id": proof_payload["receipt"]["tx_id"],
+            "block_num": proof_payload["receipt"]["block_num"],
+            "proof_path": latest_proof["export_path"],
+            "broadcast_backend": "private_key_env",
+            "finality_mode": "finalized_exported",
+        }
+    finally:
+        stack.stop()
+        client = create_elasticsearch_client()
+        try:
+            if client.indices.exists(index=index_name):
+                client.indices.delete(index=index_name)
+        finally:
+            client.close()
+
+
 def main() -> None:
     args = parse_args()
-    adapters = ["sqlite", "redis", "scylladb", "db2"] if args.adapter == "all" else [args.adapter]
+    adapters = ["sqlite", "redis", "scylladb", "db2", "elasticsearch"] if args.adapter == "all" else [args.adapter]
     scenarios = [args.scenario] if args.scenario else list(SCENARIOS)
     run_root = (
         Path(args.output_root).resolve()
@@ -865,6 +1086,34 @@ def main() -> None:
                 finally:
                     _docker_compose(compose_file, "down", "-v")
             continue
+        if adapter == "elasticsearch" and len(scenarios) > 1:
+            compose_file = PROJECT_ROOT / "deploy" / "elasticsearch-live" / "docker-compose.yml"
+            env = {
+                "DENOTARY_ELASTICSEARCH_URL": "http://127.0.0.1:59200",
+                "DENOTARY_ELASTICSEARCH_VERIFY_CERTS": "false",
+            }
+            with _temporary_env(env):
+                _docker_compose(compose_file, "down", "-v")
+                _docker_compose(compose_file, "up", "-d")
+                try:
+                    _wait_for_elasticsearch()
+                    for scenario in scenarios:
+                        try:
+                            broken_field = SCENARIOS[scenario]
+                            adapter_root = run_root / adapter / scenario
+                            results.append(
+                                _run_elasticsearch_scenario_ready(
+                                    adapter_root=adapter_root,
+                                    scenario=scenario,
+                                    broken_field=broken_field,
+                                    bad_service_url=args.bad_service_url,
+                                )
+                            )
+                        except Exception as exc:  # noqa: BLE001
+                            results.append({"adapter": adapter, "scenario": scenario, "status": "failed", "error": str(exc)})
+                finally:
+                    _docker_compose(compose_file, "down", "-v")
+            continue
         for scenario in scenarios:
             try:
                 broken_field = SCENARIOS[scenario]
@@ -890,6 +1139,15 @@ def main() -> None:
                 elif adapter == "scylladb":
                     results.append(
                         run_scylladb_scenario(
+                            adapter_root=adapter_root,
+                            scenario=scenario,
+                            broken_field=broken_field,
+                            bad_service_url=args.bad_service_url,
+                        )
+                    )
+                elif adapter == "elasticsearch":
+                    results.append(
+                        run_elasticsearch_scenario(
                             adapter_root=adapter_root,
                             scenario=scenario,
                             broken_field=broken_field,

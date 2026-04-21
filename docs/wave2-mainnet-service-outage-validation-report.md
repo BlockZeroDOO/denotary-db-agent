@@ -17,9 +17,11 @@ Common validation baseline:
 - persisted run roots:
   - `data/wave2-mainnet-service-outage-latest`
   - `data/wave2-mainnet-service-outage-db2-latest`
+  - `data/wave2-mainnet-service-outage-elasticsearch-latest`
 - summaries:
   - [wave2-mainnet-service-outage-latest/summary.json](/c:/projects/denotary-db-agent/data/wave2-mainnet-service-outage-latest/summary.json)
   - [wave2-mainnet-service-outage-db2-latest/summary.json](/c:/projects/denotary-db-agent/data/wave2-mainnet-service-outage-db2-latest/summary.json)
+  - [wave2-mainnet-service-outage-elasticsearch-latest/summary.json](/c:/projects/denotary-db-agent/data/wave2-mainnet-service-outage-elasticsearch-latest/summary.json)
 
 ## Verified Recovery Pattern
 
@@ -118,6 +120,25 @@ Current artifact counts per passing scenario:
   - `tx_id = 6b4f5b5f624e1ac8ee1c13d03f5a1f2587c48c98b145d8e49d9ef8ca8a711320`
   - `block_num = 1239959`
 
+`Elasticsearch`
+
+- `ingress`: passed
+  - `request_id = 540218bbaec3315e09d75bba6d890f9f2b674c4077349f180084513ccddbebb8`
+  - `tx_id = 52ef7edb9ae0f8fdc5e47feeb1220932aa082716b77495d9d1e2e13adba6e3db`
+  - `block_num = 1246914`
+- `watcher`: passed
+  - `request_id = 196168b627fec2849e7223f34e1dfc683db29f6b1419a69cd2f6f0f35fb745f6`
+  - `tx_id = e9c0bc8a1ebb2aa9e5e1f2d4a47c051048cad8e746967d904049504ffd478a03`
+  - `block_num = 1247044`
+- `receipt`: passed
+  - `request_id = ebaced8c122fbe0869d2e329af15ea08f1a814651b924a89ea9201f54624dd57`
+  - `tx_id = d78423c1924c34a92a6ac1621ab5e54fa8f446fb49b275a5db9c688287399c52`
+  - `block_num = 1247140`
+- `audit`: passed
+  - `request_id = 6db8dd768b8e04153e0518af12523003cf02fb7aca8e9029ee9da23ac01f2baa`
+  - `tx_id = 3af382d193540da40f116cedac99a58aecaea4d8aece404d97ace094d8a91ea8`
+  - `block_num = 1247316`
+
 ## Interpretation
 
 This closes the first real-mainnet degraded-service recovery layer for:
@@ -126,5 +147,6 @@ This closes the first real-mainnet degraded-service recovery layer for:
 - operational-state `Redis`
 - wide-column `ScyllaDB`
 - enterprise SQL `IBM Db2`
+- search / index `Elasticsearch`
 
-Together with real mainnet happy-path validation, these adapters now have a stronger `Wave 2` readiness story than baseline proof export alone. For `SQLite`, `Redis`, `ScyllaDB`, and `IBM Db2`, this layer now also stacks on top of bounded mainnet budget validation.
+Together with real mainnet happy-path validation, these adapters now have a stronger `Wave 2` readiness story than baseline proof export alone. For `SQLite`, `Redis`, `ScyllaDB`, `IBM Db2`, and `Elasticsearch`, this layer now also stacks on top of bounded mainnet budget validation.

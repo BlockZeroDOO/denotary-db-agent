@@ -8,6 +8,7 @@ Current scope:
 - `Redis`
 - `ScyllaDB`
 - `IBM Db2`
+- `Elasticsearch`
 
 The validation keeps:
 
@@ -36,6 +37,7 @@ scripts/run-wave2-mainnet-service-outage-validation.ps1 sqlite ingress
 scripts/run-wave2-mainnet-service-outage-validation.ps1 redis watcher
 scripts/run-wave2-mainnet-service-outage-validation.ps1 scylladb receipt
 scripts/run-wave2-mainnet-service-outage-validation.ps1 db2 audit
+scripts/run-wave2-mainnet-service-outage-validation.ps1 elasticsearch audit
 ```
 
 Shell:
@@ -46,6 +48,7 @@ scripts/run-wave2-mainnet-service-outage-validation.sh sqlite ingress
 scripts/run-wave2-mainnet-service-outage-validation.sh redis watcher
 scripts/run-wave2-mainnet-service-outage-validation.sh scylladb receipt
 scripts/run-wave2-mainnet-service-outage-validation.sh db2 audit
+scripts/run-wave2-mainnet-service-outage-validation.sh elasticsearch audit
 ```
 
 Python:
@@ -56,6 +59,7 @@ python scripts/run-wave2-mainnet-service-outage-validation.py --adapter sqlite -
 python scripts/run-wave2-mainnet-service-outage-validation.py --adapter redis --scenario watcher
 python scripts/run-wave2-mainnet-service-outage-validation.py --adapter scylladb --scenario receipt
 python scripts/run-wave2-mainnet-service-outage-validation.py --adapter db2 --scenario audit
+python scripts/run-wave2-mainnet-service-outage-validation.py --adapter elasticsearch --scenario audit
 ```
 
 To persist a stable artifact root:
@@ -72,6 +76,14 @@ For `IBM Db2`, use a dedicated artifact root so the persisted summary reflects t
 python scripts/run-wave2-mainnet-service-outage-validation.py \
   --adapter db2 \
   --output-root data/wave2-mainnet-service-outage-db2-latest
+```
+
+For `Elasticsearch`, use a dedicated artifact root so the persisted summary reflects the `Elasticsearch` run set directly:
+
+```bash
+python scripts/run-wave2-mainnet-service-outage-validation.py \
+  --adapter elasticsearch \
+  --output-root data/wave2-mainnet-service-outage-elasticsearch-latest
 ```
 
 ## Expected Recovery Pattern
@@ -101,7 +113,7 @@ This is expected for the current drill because the first failed attempt is retai
 
 Passing this validation means:
 
-- `SQLite`, `Redis`, `ScyllaDB`, and `IBM Db2` recover cleanly from temporary off-chain pipeline outages on the real `denotary` mainnet path
+- `SQLite`, `Redis`, `ScyllaDB`, `IBM Db2`, and `Elasticsearch` recover cleanly from temporary off-chain pipeline outages on the real `denotary` mainnet path
 - the event is not lost after the first failed attempt
 - a second run with healthy service URLs still reaches finalized proof export
 
