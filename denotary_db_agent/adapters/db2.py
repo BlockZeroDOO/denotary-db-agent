@@ -116,7 +116,7 @@ class Db2Adapter(BaseAdapter):
         )
 
     def runtime_signature(self) -> str:
-        specs = self._load_live_or_configured_specs()
+        specs = self._configured_table_specs()
         payload = {
             "adapter": self.config.adapter,
             "source_id": self.config.id,

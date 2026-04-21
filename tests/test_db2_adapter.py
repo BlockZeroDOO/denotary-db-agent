@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import unittest
+from datetime import datetime
 from unittest.mock import patch
 
 from denotary_db_agent.adapters.db2 import Db2Adapter
@@ -233,7 +234,8 @@ class Db2AdapterTest(unittest.TestCase):
         self.assertEqual(len(events), 1)
         executed_sql, executed_params = connection.cursor_instance.executed[-1]
         self.assertIn('"UPDATED_AT" > ?', executed_sql)
-        self.assertEqual(executed_params[0], "2026-04-20T08:00:00Z")
+        self.assertIsInstance(executed_params[0], datetime)
+        self.assertEqual(executed_params[0].isoformat(), "2026-04-20T08:00:00")
 
 
 if __name__ == "__main__":
