@@ -118,3 +118,4 @@ For rollout conversations, the cleanest framing is:
 - [wave-readiness-summary.md](wave-readiness-summary.md)
 - [wave1-readiness-matrix.md](wave1-readiness-matrix.md)
 - [wave2-readiness-matrix.md](wave2-readiness-matrix.md)
+- [wave2-merge-prep.md](wave2-merge-prep.md)

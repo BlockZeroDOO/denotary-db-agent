@@ -239,6 +239,7 @@ Combined rollout view:
 - [docs/wave-readiness-summary.md](docs/wave-readiness-summary.md)
 - [docs/wave1-readiness-matrix.md](docs/wave1-readiness-matrix.md)
 - [docs/wave2-readiness-matrix.md](docs/wave2-readiness-matrix.md)
+- [docs/wave2-merge-prep.md](docs/wave2-merge-prep.md)
 
 ## Quick Start
 
