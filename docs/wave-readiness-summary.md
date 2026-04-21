@@ -31,10 +31,10 @@ Legend:
 | Wave 1 | Oracle | yes | yes | yes | yes | yes | yes | yes | shared | shared | strong |
 | Wave 1 | MongoDB | yes | yes | yes | yes | yes | yes | yes | shared | shared | strong |
 | Wave 2 | Redis | yes | yes | yes | yes | yes | yes | yes | yes | yes | strong operational-state baseline |
-| Wave 2 | ScyllaDB | yes | yes | yes | yes | yes | yes | yes | no | yes | strong wide-column baseline |
-| Wave 2 | IBM Db2 | yes | yes | yes | yes | yes | yes | yes | no | yes | strong enterprise SQL baseline |
-| Wave 2 | Apache Cassandra | yes | yes | yes | yes | yes | yes | yes | no | yes | strong distributed wide-column baseline |
-| Wave 2 | Elasticsearch | yes | yes | yes | yes | yes | yes | yes | no | yes | strong search/index baseline |
+| Wave 2 | ScyllaDB | yes | yes | yes | yes | yes | yes | yes | yes | yes | strong wide-column baseline |
+| Wave 2 | IBM Db2 | yes | yes | yes | yes | yes | yes | yes | yes | yes | strong enterprise SQL baseline |
+| Wave 2 | Apache Cassandra | yes | yes | yes | yes | yes | yes | yes | yes | yes | strong distributed wide-column baseline |
+| Wave 2 | Elasticsearch | yes | yes | yes | yes | yes | yes | yes | yes | yes | strong search/index baseline |
 | Wave 2 | SQLite | yes | file-backed | yes | yes | yes | yes | yes | yes | yes | strong edge and embedded baseline |
 
 ## Interpretation
@@ -70,13 +70,14 @@ It now has:
   - `Apache Cassandra`
   - `Elasticsearch`
 - local restart, short-soak, and long-soak validation for all currently active `Wave 2` adapters
+- local service-outage validation for all currently active `Wave 2` adapters
 
 ## Remaining Gaps
 
 The main remaining work is now selective depth, not core platform coverage:
 
 - longer endurance runs for `Wave 2` beyond the current bounded long-soak and budget profiles
-- optional local service-outage drills for `Wave 2` adapters that currently rely only on mainnet degraded-service confirmation
+- optional deeper outage-duration drills beyond the current bounded local and mainnet degraded-service profiles
 - eventual return to `Snowflake` if a real credentialed environment becomes available again
 
 ## Recommended Packaging

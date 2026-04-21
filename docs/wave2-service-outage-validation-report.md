@@ -6,6 +6,10 @@ Validated adapters:
 
 - `SQLite`
 - `Redis`
+- `IBM Db2`
+- `Apache Cassandra`
+- `ScyllaDB`
+- `Elasticsearch`
 
 Validated outage scenarios:
 
@@ -43,6 +47,38 @@ For every passing scenario, the observed recovery contract is:
 - `receipt_fetch_outage`: passed
 - `audit_fetch_outage`: passed
 
+`IBM Db2`
+
+- `ingress_prepare_outage`: passed
+- `watcher_register_outage`: passed
+- `receipt_fetch_outage`: passed
+- `audit_fetch_outage`: passed
+
+`Apache Cassandra`
+
+- `ingress_prepare_outage`: passed
+- `watcher_register_outage`: passed
+- `receipt_fetch_outage`: passed
+- `audit_fetch_outage`: passed
+
+`ScyllaDB`
+
+- `ingress_prepare_outage`: passed
+- `watcher_register_outage`: passed
+- `receipt_fetch_outage`: passed
+- `audit_fetch_outage`: passed
+
+`Elasticsearch`
+
+- `ingress_prepare_outage`: passed
+- `watcher_register_outage`: passed
+- `receipt_fetch_outage`: passed
+- `audit_fetch_outage`: passed
+
+Artifact:
+
+- [summary.json](../data/wave2-service-outage-validation-latest/summary.json)
+
 ## Interpretation
 
 This closes the first local service-degradation recovery layer for:
@@ -50,4 +86,4 @@ This closes the first local service-degradation recovery layer for:
 - file-backed edge / embedded `SQLite`
 - operational-state `Redis`
 
-Together with restart and short-soak validation, these adapters now have a stronger `Wave 2` readiness story than simple baseline proof export alone.
+Together with restart, short-soak, and long-soak validation, the active `Wave 2` adapters now have a substantially stronger readiness story than simple baseline proof export alone.

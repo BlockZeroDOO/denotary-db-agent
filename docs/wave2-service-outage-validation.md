@@ -4,6 +4,10 @@ This document describes the current local service-outage validation layer for th
 
 - `SQLite`
 - `Redis`
+- `IBM Db2`
+- `Apache Cassandra`
+- `ScyllaDB`
+- `Elasticsearch`
 
 The goal is to validate recovery when the source remains healthy but part of the off-chain notarization pipeline is temporarily unavailable.
 
@@ -19,6 +23,7 @@ The validation uses:
 - the real `SQLite` and `Redis` adapters
 - a real file-backed SQLite database
 - a real Docker-backed Redis instance
+- local Docker-backed `Db2`, `Cassandra`, `ScyllaDB`, and `Elasticsearch` environments
 - local mock `Ingress`, `Watcher`, `Receipt`, `Audit`, and `Chain` services
 - the normal `AgentEngine` delivery / receipt / proof-export path
 
@@ -65,11 +70,21 @@ For each adapter and outage scenario:
 
 This validates that the event is not checkpointed before successful notarization and that a repeat `run_once()` can recover cleanly after a short outage.
 
+## Artifact
+
+The harness writes:
+
+- `summary.json`
+
+Default output root:
+
+- `data/wave2-service-outage-validation-latest`
+
 ## Current Interpretation
 
 Passing this validation means:
 
-- `SQLite` and `Redis` can tolerate short-lived failures in the off-chain notarization pipeline
+- the active `Wave 2` adapters can tolerate short-lived failures in the off-chain notarization pipeline
 - the retry path preserves enough local state to complete proof export on the next run
 - the current `Wave 2` local story is stronger than baseline-only snapshot validation
 
@@ -77,4 +92,4 @@ It does not yet mean:
 
 - long outage durability is fully characterized
 - mainnet degraded-service behavior is validated
-- every other `Wave 2` adapter has the same outage coverage
+- every future `Wave 2` adapter will automatically inherit the same outage coverage

@@ -129,6 +129,15 @@ Current Wave 2 long-soak status:
 - Elasticsearch long-soak is validated
 - SQLite long-soak is validated
 
+Current Wave 2 local service-outage status:
+
+- Redis local service-outage recovery is validated
+- SQLite local service-outage recovery is validated
+- ScyllaDB local service-outage recovery is validated
+- IBM Db2 local service-outage recovery is validated
+- Apache Cassandra local service-outage recovery is validated
+- Elasticsearch local service-outage recovery is validated
+
 This initial implementation focuses on the platform layer and adapter contract. Real CDC transport details per database remain adapter-specific work on top of this package scaffold.
 
 Current PostgreSQL status:
