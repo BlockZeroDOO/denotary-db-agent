@@ -12,7 +12,7 @@ It is meant to answer three questions quickly:
 
 - `Wave 1` is operationally mature.
 - `Wave 2` now has broad adapter coverage and several adapters already validated through the same mainnet and recovery layers as the stronger `Wave 1` paths.
-- The largest remaining gaps are no longer baseline adapter implementation; they are mostly depth-of-validation and long-running endurance work for selected `Wave 2` adapters.
+- The largest remaining gaps are no longer baseline adapter implementation; they are mostly selective hardening and endurance extension beyond the current bounded long-soak profile.
 
 ## Combined Matrix
 
@@ -30,12 +30,12 @@ Legend:
 | Wave 1 | SQL Server | yes | yes | yes | yes | yes | yes | yes | shared | shared | strong |
 | Wave 1 | Oracle | yes | yes | yes | yes | yes | yes | yes | shared | shared | strong |
 | Wave 1 | MongoDB | yes | yes | yes | yes | yes | yes | yes | shared | shared | strong |
-| Wave 2 | Redis | yes | yes | yes | yes | no | yes | yes | yes | yes | strong operational-state baseline |
-| Wave 2 | ScyllaDB | yes | yes | yes | yes | no | yes | yes | no | yes | strong wide-column baseline |
-| Wave 2 | IBM Db2 | yes | yes | yes | yes | no | yes | yes | no | yes | strong enterprise SQL baseline |
-| Wave 2 | Apache Cassandra | yes | yes | yes | yes | no | yes | yes | no | yes | strong distributed wide-column baseline |
-| Wave 2 | Elasticsearch | yes | yes | partial | partial | no | yes | yes | no | yes | strong search/index baseline |
-| Wave 2 | SQLite | yes | file-backed | yes | yes | no | yes | yes | yes | yes | strong edge and embedded baseline |
+| Wave 2 | Redis | yes | yes | yes | yes | yes | yes | yes | yes | yes | strong operational-state baseline |
+| Wave 2 | ScyllaDB | yes | yes | yes | yes | yes | yes | yes | no | yes | strong wide-column baseline |
+| Wave 2 | IBM Db2 | yes | yes | yes | yes | yes | yes | yes | no | yes | strong enterprise SQL baseline |
+| Wave 2 | Apache Cassandra | yes | yes | yes | yes | yes | yes | yes | no | yes | strong distributed wide-column baseline |
+| Wave 2 | Elasticsearch | yes | yes | yes | yes | yes | yes | yes | no | yes | strong search/index baseline |
+| Wave 2 | SQLite | yes | file-backed | yes | yes | yes | yes | yes | yes | yes | strong edge and embedded baseline |
 
 ## Interpretation
 
@@ -61,6 +61,7 @@ It now has:
 - broad adapter coverage across operational state, wide-column, enterprise SQL, search, and embedded/file-backed sources
 - real `denotary` mainnet happy-path validation across all currently active `Wave 2` adapters
 - bounded mainnet batch validation across all currently active `Wave 2` adapters
+- bounded long-soak validation across all currently active `Wave 2` adapters
 - real mainnet degraded-service validation for:
   - `Redis`
   - `SQLite`
@@ -68,14 +69,13 @@ It now has:
   - `IBM Db2`
   - `Apache Cassandra`
   - `Elasticsearch`
-- local restart and short-soak validation for all currently active `Wave 2` adapters except where the current harness remains env-gated rather than fully Docker-backed
+- local restart, short-soak, and long-soak validation for all currently active `Wave 2` adapters
 
 ## Remaining Gaps
 
 The main remaining work is now selective depth, not core platform coverage:
 
-- longer endurance runs for `Wave 2` beyond the current bounded short-soak and budget profiles
-- deeper restart and soak coverage for `Elasticsearch` in a non-env-gated live environment
+- longer endurance runs for `Wave 2` beyond the current bounded long-soak and budget profiles
 - optional local service-outage drills for `Wave 2` adapters that currently rely only on mainnet degraded-service confirmation
 - eventual return to `Snowflake` if a real credentialed environment becomes available again
 
@@ -96,3 +96,4 @@ For stakeholders, the cleanest way to present current readiness is:
 - [wave2-denotary-validation-report.md](wave2-denotary-validation-report.md)
 - [wave2-mainnet-budget-validation-report.md](wave2-mainnet-budget-validation-report.md)
 - [wave2-mainnet-service-outage-validation-report.md](wave2-mainnet-service-outage-validation-report.md)
+- [wave2-long-soak-validation-report.md](wave2-long-soak-validation-report.md)

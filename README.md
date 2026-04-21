@@ -120,6 +120,15 @@ Current SQLite Wave 2 status:
 - real `denotary` mainnet degraded-service recovery validation is implemented
 - dry-run snapshot playback is implemented for pipeline validation
 
+Current Wave 2 long-soak status:
+
+- Redis long-soak is validated
+- ScyllaDB long-soak is validated
+- IBM Db2 long-soak is validated
+- Apache Cassandra long-soak is validated
+- Elasticsearch long-soak is validated
+- SQLite long-soak is validated
+
 This initial implementation focuses on the platform layer and adapter contract. Real CDC transport details per database remain adapter-specific work on top of this package scaffold.
 
 Current PostgreSQL status:
@@ -297,6 +306,9 @@ See:
 - [docs/wave2-mainnet-service-outage-validation.md](docs/wave2-mainnet-service-outage-validation.md)
 - [docs/wave2-mainnet-service-outage-validation-report.md](docs/wave2-mainnet-service-outage-validation-report.md)
 - [scripts/run-wave2-mainnet-service-outage-validation.ps1](scripts/run-wave2-mainnet-service-outage-validation.ps1)
+- [docs/wave2-long-soak-validation.md](docs/wave2-long-soak-validation.md)
+- [docs/wave2-long-soak-validation-report.md](docs/wave2-long-soak-validation-report.md)
+- [scripts/run-wave2-long-soak-validation.ps1](scripts/run-wave2-long-soak-validation.ps1)
 - [docs/wave2-live-validation-checklist.md](docs/wave2-live-validation-checklist.md)
 - [docs/wave2-live-validation-runbook.md](docs/wave2-live-validation-runbook.md)
 - [examples/wave2-live.env.example](examples/wave2-live.env.example)

@@ -140,6 +140,11 @@ class _temporary_env:
 
 
 def _ensure_db2_database(container_name: str = "denotary-db-agent-db2-live", timeout_sec: float = 900.0) -> None:
+    try:
+        wait_for_db2_ready(timeout_sec=120.0, consecutive_successes=1, success_interval_sec=1.0)
+        return
+    except Exception:
+        pass
     deadline = time.time() + timeout_sec
     command = (
         "su - db2inst1 -c \""
