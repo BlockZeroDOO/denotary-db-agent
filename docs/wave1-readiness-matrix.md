@@ -15,6 +15,10 @@ It complements the detailed validation reports and is intended to answer one pra
 - on which layer it was validated
 - what still remains outside the confirmed production baseline
 
+For the combined rollout view across both implementation waves, see:
+
+- [wave-readiness-summary.md](wave-readiness-summary.md)
+
 ## Legend
 
 - `yes`: confirmed

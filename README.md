@@ -215,6 +215,12 @@ Current Wave 1 mainnet degraded-service status:
 - `receipt` outage recovery is validated on real `denotary` mainnet path
 - `audit` outage recovery is validated on real `denotary` mainnet path
 
+Combined rollout view:
+
+- [docs/wave-readiness-summary.md](docs/wave-readiness-summary.md)
+- [docs/wave1-readiness-matrix.md](docs/wave1-readiness-matrix.md)
+- [docs/wave2-readiness-matrix.md](docs/wave2-readiness-matrix.md)
+
 ## Quick Start
 
 ```bash
@@ -270,6 +276,7 @@ See:
 - [docs/architecture.md](docs/architecture.md)
 - [docs/adapter-separation-architecture.md](docs/adapter-separation-architecture.md)
 - [docs/wave2-roadmap.md](docs/wave2-roadmap.md)
+- [docs/wave-readiness-summary.md](docs/wave-readiness-summary.md)
 - [docs/wave2-readiness-matrix.md](docs/wave2-readiness-matrix.md)
 - [docs/wave2-redis-validation.md](docs/wave2-redis-validation.md)
 - [docs/wave2-redis-validation-report.md](docs/wave2-redis-validation-report.md)

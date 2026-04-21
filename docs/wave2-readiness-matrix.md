@@ -2,6 +2,10 @@
 
 This document summarizes the current implementation state of `Wave 2` adapters in `denotary-db-agent`.
 
+For the combined rollout view across both implementation waves, see:
+
+- [wave-readiness-summary.md](wave-readiness-summary.md)
+
 It is intentionally narrower than the `Wave 1` readiness matrix: most `Wave 2` sources are still at the baseline and local-validation stage, while deeper restart/soak/mainnet validation remains future work.
 
 ## Current Matrix
