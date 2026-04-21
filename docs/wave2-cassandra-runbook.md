@@ -76,7 +76,5 @@ The current `Cassandra` implementation already confirms:
 - tracked-table introspection
 - local full-cycle proof export
 - env-gated live integration harness
-
-Current gap:
-
-- deeper restart and soak validation still depend on a real Cassandra environment
+- local Docker-backed restart validation
+- local Docker-backed short-soak validation

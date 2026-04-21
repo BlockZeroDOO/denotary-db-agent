@@ -12,6 +12,8 @@ Current baseline:
 - dry-run snapshot playback
 - local full-cycle proof export
 - env-gated live integration harness
+- local Docker-backed restart validation
+- local Docker-backed short-soak validation
 
 Native Cassandra CDC is not implemented yet.
 
