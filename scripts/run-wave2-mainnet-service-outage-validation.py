@@ -44,6 +44,13 @@ DENOTARY_VALIDATION = _load_script(
 )
 sys.path.insert(0, str(PROJECT_ROOT / "tests"))
 
+from cassandra_live_support import (  # type: ignore
+    agent_connection_config as cassandra_connection_config,
+    cassandra_keyspace,
+    create_session as create_cassandra_session,
+    unique_table_name as unique_cassandra_table_name,
+    wait_for_table_visibility as wait_for_cassandra_table_visibility,
+)
 from db2_live_support import (  # type: ignore
     agent_connection_config as db2_connection_config,
     create_connection as create_db2_connection,
@@ -68,7 +75,7 @@ from scylladb_live_support import (  # type: ignore
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run Wave 2 denotary mainnet service-outage validation.")
-    parser.add_argument("--adapter", choices=("sqlite", "redis", "scylladb", "db2", "elasticsearch", "all"), default="all")
+    parser.add_argument("--adapter", choices=("sqlite", "redis", "cassandra", "scylladb", "db2", "elasticsearch", "all"), default="all")
     parser.add_argument("--scenario", choices=sorted(SCENARIOS))
     parser.add_argument("--bad-service-url", default=BAD_SERVICE_URL)
     parser.add_argument("--output-root", default="", help="Optional persistent run directory.")
@@ -104,6 +111,18 @@ class _temporary_env:
                 os.environ.pop(key, None)
             else:
                 os.environ[key] = previous
+
+
+def _wait_for_cassandra(timeout_sec: float = 180.0) -> None:
+    deadline = time.time() + timeout_sec
+    while time.time() < deadline:
+        try:
+            cluster, _session = create_cassandra_session()
+            cluster.shutdown()
+            return
+        except Exception:
+            time.sleep(2)
+    raise RuntimeError("cassandra did not become ready in time")
 
 
 def _wait_for_scylladb(timeout_sec: float = 180.0) -> None:
@@ -294,6 +313,53 @@ def _build_scylladb_config(
         ],
     }
     path = adapter_root / f"scylladb-{suffix}.json"
+    path.write_text(json.dumps(config, indent=2), encoding="utf-8")
+    return path
+
+
+def _build_cassandra_config(
+    adapter_root: Path,
+    stack: Any,
+    *,
+    source_id: str,
+    table_name: str,
+    broken_field: str | None,
+    bad_service_url: str,
+    suffix: str,
+) -> Path:
+    denotary = DENOTARY_VALIDATION.build_denotary_config_for_stack(stack)
+    if broken_field:
+        denotary[broken_field] = bad_service_url
+    config = {
+        "agent_name": f"wave2-cassandra-denotary-outage-{suffix}",
+        "log_level": "INFO",
+        "denotary": denotary,
+        "storage": {
+            "state_db": str((adapter_root / "state.sqlite3").resolve()),
+            "proof_dir": str((adapter_root / "proofs").resolve()),
+        },
+        "sources": [
+            {
+                "id": source_id,
+                "adapter": "cassandra",
+                "enabled": True,
+                "source_instance": "cluster-denotary-outage",
+                "database_name": cassandra_keyspace(),
+                "include": {cassandra_keyspace(): [table_name]},
+                "checkpoint_policy": "after_ack",
+                "backfill_mode": "full",
+                "connection": cassandra_connection_config(),
+                "options": {
+                    "capture_mode": "watermark",
+                    "watermark_column": "updated_at",
+                    "commit_timestamp_column": "updated_at",
+                    "primary_key_columns": ["id"],
+                    "row_limit": 100,
+                },
+            }
+        ],
+    }
+    path = adapter_root / f"cassandra-{suffix}.json"
     path.write_text(json.dumps(config, indent=2), encoding="utf-8")
     return path
 
@@ -723,6 +789,164 @@ def run_scylladb_scenario(
             _docker_compose(compose_file, "down", "-v")
 
 
+def run_cassandra_scenario(
+    *,
+    adapter_root: Path,
+    scenario: str,
+    broken_field: str,
+    bad_service_url: str,
+) -> dict[str, Any]:
+    compose_file = PROJECT_ROOT / "deploy" / "cassandra-live" / "docker-compose.yml"
+    env = {
+        "DENOTARY_CASSANDRA_HOST": "127.0.0.1",
+        "DENOTARY_CASSANDRA_PORT": "59042",
+        "DENOTARY_CASSANDRA_KEYSPACE": "denotary_agent",
+    }
+    with _temporary_env(env):
+        _docker_compose(compose_file, "down", "-v")
+        _docker_compose(compose_file, "up", "-d")
+        try:
+            _wait_for_cassandra()
+            return _run_cassandra_scenario_ready(
+                adapter_root=adapter_root,
+                scenario=scenario,
+                broken_field=broken_field,
+                bad_service_url=bad_service_url,
+            )
+        finally:
+            _docker_compose(compose_file, "down", "-v")
+
+
+def _run_cassandra_scenario_ready(
+    *,
+    adapter_root: Path,
+    scenario: str,
+    broken_field: str,
+    bad_service_url: str,
+) -> dict[str, Any]:
+    if adapter_root.exists():
+        shutil.rmtree(adapter_root, ignore_errors=True)
+    adapter_root.mkdir(parents=True, exist_ok=True)
+    state_db = adapter_root / "offchain-state.sqlite3"
+    source_id = "cassandra-wave2-denotary-outage"
+    table_name = unique_cassandra_table_name(f"wave2_outage_{scenario}_{uuid4().hex[:6].lower()}")
+    cluster, session = create_cassandra_session()
+    try:
+        session.execute(
+            """
+            create keyspace if not exists denotary_agent
+            with replication = {'class': 'SimpleStrategy', 'replication_factor': 1}
+            """
+        )
+        session.execute(
+            f"""
+            create table denotary_agent.{table_name} (
+                id int,
+                status text,
+                updated_at timestamp,
+                primary key (id)
+            )
+            """
+        )
+    finally:
+        cluster.shutdown()
+    wait_for_cassandra_table_visibility(table_name)
+    stack = DENOTARY_VALIDATION.OffchainStack(state_db)
+    stack.start()
+    try:
+        broken_config_path = _build_cassandra_config(
+            adapter_root,
+            stack,
+            source_id=source_id,
+            table_name=table_name,
+            broken_field=broken_field,
+            bad_service_url=bad_service_url,
+            suffix=f"{scenario}-broken",
+        )
+        healthy_config_path = _build_cassandra_config(
+            adapter_root,
+            stack,
+            source_id=source_id,
+            table_name=table_name,
+            broken_field=None,
+            bad_service_url=bad_service_url,
+            suffix=f"{scenario}-healthy",
+        )
+        marker = DENOTARY_VALIDATION.build_run_marker(f"cassandra-{scenario}")
+        broken_engine = AgentEngine(load_config(broken_config_path))
+        try:
+            baseline = broken_engine.run_once()
+            cluster, session = create_cassandra_session()
+            try:
+                session.execute(
+                    f"""
+                    insert into denotary_agent.{table_name} (id, status, updated_at)
+                    values (%s, %s, %s)
+                    """,
+                    (
+                        int(marker["record_id"]),
+                        str(marker["status"]),
+                        str(marker["timestamp"]),
+                    ),
+                )
+            finally:
+                cluster.shutdown()
+            first = broken_engine.run_once()
+            first_deliveries = broken_engine.store.list_deliveries(source_id)
+            first_proofs = broken_engine.store.list_proofs(source_id)
+            first_dlq = broken_engine.store.list_dlq(source_id)
+        finally:
+            broken_engine.close()
+
+        healthy_engine = AgentEngine(load_config(healthy_config_path))
+        try:
+            second = healthy_engine.run_once()
+            deliveries = healthy_engine.store.list_deliveries(source_id)
+            proofs = healthy_engine.store.list_proofs(source_id)
+            dlq = healthy_engine.store.list_dlq(source_id)
+        finally:
+            healthy_engine.close()
+
+        if int(baseline.get("processed") or 0) != 0 or int(baseline.get("failed") or 0) != 0:
+            raise RuntimeError(f"cassandra {scenario} baseline was not idle: {baseline}")
+        if int(first.get("processed") or 0) != 0 or int(first.get("failed") or 0) != 1:
+            raise RuntimeError(f"cassandra {scenario} first run did not fail as expected: {first}")
+        if int(second.get("processed") or 0) != 1 or int(second.get("failed") or 0) != 0:
+            raise RuntimeError(f"cassandra {scenario} recovery run did not succeed as expected: {second}")
+        if not proofs:
+            raise RuntimeError(f"cassandra {scenario} did not export a proof after recovery")
+        latest_proof = proofs[0]
+        proof_payload = _load_proof_bundle(latest_proof)
+        return {
+            "adapter": "cassandra",
+            "scenario": scenario,
+            "failed_component": broken_field,
+            "status": "passed",
+            "baseline_processed": baseline["processed"],
+            "first_run": first,
+            "second_run": second,
+            "first_delivery_count": len(first_deliveries),
+            "first_proof_count": len(first_proofs),
+            "first_dlq_count": len(first_dlq),
+            "delivery_count": len(deliveries),
+            "proof_count": len(proofs),
+            "dlq_count": len(dlq),
+            "request_id": latest_proof["request_id"],
+            "tx_id": proof_payload["receipt"]["tx_id"],
+            "block_num": proof_payload["receipt"]["block_num"],
+            "proof_path": latest_proof["export_path"],
+            "broadcast_backend": "private_key_env",
+            "finality_mode": "finalized_exported",
+        }
+    finally:
+        stack.stop()
+        cluster, session = create_cassandra_session()
+        try:
+            session.execute(f"drop table if exists denotary_agent.{table_name}")
+        finally:
+            cluster.shutdown()
+
+
 def run_db2_scenario(
     *,
     adapter_root: Path,
@@ -1043,7 +1267,7 @@ def _run_elasticsearch_scenario_ready(
 
 def main() -> None:
     args = parse_args()
-    adapters = ["sqlite", "redis", "scylladb", "db2", "elasticsearch"] if args.adapter == "all" else [args.adapter]
+    adapters = ["sqlite", "redis", "cassandra", "scylladb", "db2", "elasticsearch"] if args.adapter == "all" else [args.adapter]
     scenarios = [args.scenario] if args.scenario else list(SCENARIOS)
     run_root = (
         Path(args.output_root).resolve()
@@ -1053,6 +1277,35 @@ def main() -> None:
     run_root.mkdir(parents=True, exist_ok=True)
     results: list[dict[str, Any]] = []
     for adapter in adapters:
+        if adapter == "cassandra" and len(scenarios) > 1:
+            compose_file = PROJECT_ROOT / "deploy" / "cassandra-live" / "docker-compose.yml"
+            env = {
+                "DENOTARY_CASSANDRA_HOST": "127.0.0.1",
+                "DENOTARY_CASSANDRA_PORT": "59042",
+                "DENOTARY_CASSANDRA_KEYSPACE": "denotary_agent",
+            }
+            with _temporary_env(env):
+                _docker_compose(compose_file, "down", "-v")
+                _docker_compose(compose_file, "up", "-d")
+                try:
+                    _wait_for_cassandra()
+                    for scenario in scenarios:
+                        try:
+                            broken_field = SCENARIOS[scenario]
+                            adapter_root = run_root / adapter / scenario
+                            results.append(
+                                _run_cassandra_scenario_ready(
+                                    adapter_root=adapter_root,
+                                    scenario=scenario,
+                                    broken_field=broken_field,
+                                    bad_service_url=args.bad_service_url,
+                                )
+                            )
+                        except Exception as exc:  # noqa: BLE001
+                            results.append({"adapter": adapter, "scenario": scenario, "status": "failed", "error": str(exc)})
+                finally:
+                    _docker_compose(compose_file, "down", "-v")
+            continue
         if adapter == "db2" and len(scenarios) > 1:
             compose_file = PROJECT_ROOT / "deploy" / "db2-live" / "docker-compose.yml"
             env = {
@@ -1139,6 +1392,15 @@ def main() -> None:
                 elif adapter == "scylladb":
                     results.append(
                         run_scylladb_scenario(
+                            adapter_root=adapter_root,
+                            scenario=scenario,
+                            broken_field=broken_field,
+                            bad_service_url=args.bad_service_url,
+                        )
+                    )
+                elif adapter == "cassandra":
+                    results.append(
+                        run_cassandra_scenario(
                             adapter_root=adapter_root,
                             scenario=scenario,
                             broken_field=broken_field,

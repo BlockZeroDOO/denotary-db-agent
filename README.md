@@ -79,6 +79,9 @@ Current Apache Cassandra Wave 2 status:
 - watermark snapshot polling with deterministic resume is implemented
 - local full-cycle proof export is implemented
 - env-gated live integration harness is implemented
+- real `denotary` mainnet happy-path validation is implemented
+- bounded `denotary` mainnet budget validation is implemented
+- real `denotary` mainnet degraded-service validation is implemented
 - dry-run snapshot playback is implemented for pipeline validation
 
 Current Elasticsearch Wave 2 status:

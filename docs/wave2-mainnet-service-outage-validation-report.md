@@ -16,10 +16,12 @@ Common validation baseline:
   - `policy_id = 1`
 - persisted run roots:
   - `data/wave2-mainnet-service-outage-latest`
+  - `data/wave2-mainnet-service-outage-cassandra-latest`
   - `data/wave2-mainnet-service-outage-db2-latest`
   - `data/wave2-mainnet-service-outage-elasticsearch-latest`
 - summaries:
   - [wave2-mainnet-service-outage-latest/summary.json](/c:/projects/denotary-db-agent/data/wave2-mainnet-service-outage-latest/summary.json)
+  - [wave2-mainnet-service-outage-cassandra-latest/summary.json](/c:/projects/denotary-db-agent/data/wave2-mainnet-service-outage-cassandra-latest/summary.json)
   - [wave2-mainnet-service-outage-db2-latest/summary.json](/c:/projects/denotary-db-agent/data/wave2-mainnet-service-outage-db2-latest/summary.json)
   - [wave2-mainnet-service-outage-elasticsearch-latest/summary.json](/c:/projects/denotary-db-agent/data/wave2-mainnet-service-outage-elasticsearch-latest/summary.json)
 
@@ -101,6 +103,25 @@ Current artifact counts per passing scenario:
   - `tx_id = 23fc858d336f9f73b7f0d370e0bb77a4cb508fc881b971257c1ea9cf672a8f11`
   - `block_num = 1152767`
 
+`Apache Cassandra`
+
+- `ingress`: passed
+  - `request_id = 7ffa18f119781263da5c5e2a2b6e8ba746d64012d4a0b5068a353bf4dfad00ca`
+  - `tx_id = 34fcf73c8d720a180cb4b48375ef85171a506aa91b281bf68fe27c193136eac4`
+  - `block_num = 1254598`
+- `watcher`: passed
+  - `request_id = 2a98f8db116b4c71aff2c86df365d4a987b8b25a924190678773c19d8b910104`
+  - `tx_id = 8695ecaec77896ba219c8265fb380a97f72c77e26e619394345fcb115a0748e1`
+  - `block_num = 1254794`
+- `receipt`: passed
+  - `request_id = 9b3b1274340666ef0f9cb6f7cadb68ff5b6784c06031a1bb2e9012b89d5d8655`
+  - `tx_id = 6c16192c7cb4eab82879ccc346c5b2b48854349f0c1cc62098983bfc984ce754`
+  - `block_num = 1255038`
+- `audit`: passed
+  - `request_id = dfe9b28c45dbe01ee61acbb890290af1f1d8ef9729f3af9a1fbe9494c949f31d`
+  - `tx_id = 00f127d10e7efef7f529de306fd5e1bc9c55388f6c3931586a9a582185e341ad`
+  - `block_num = 1255356`
+
 `IBM Db2`
 
 - `ingress`: passed
@@ -145,8 +166,9 @@ This closes the first real-mainnet degraded-service recovery layer for:
 
 - file-backed edge / embedded `SQLite`
 - operational-state `Redis`
+- distributed wide-column `Apache Cassandra`
 - wide-column `ScyllaDB`
 - enterprise SQL `IBM Db2`
 - search / index `Elasticsearch`
 
-Together with real mainnet happy-path validation, these adapters now have a stronger `Wave 2` readiness story than baseline proof export alone. For `SQLite`, `Redis`, `ScyllaDB`, `IBM Db2`, and `Elasticsearch`, this layer now also stacks on top of bounded mainnet budget validation.
+Together with real mainnet happy-path validation, these adapters now have a stronger `Wave 2` readiness story than baseline proof export alone. For `SQLite`, `Redis`, `Apache Cassandra`, `ScyllaDB`, `IBM Db2`, and `Elasticsearch`, this layer now also stacks on top of bounded mainnet budget validation.
