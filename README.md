@@ -2,6 +2,8 @@
 
 `denotary-db-agent` is the CDC sidecar for enterprise database integrations.
 
+Designed to connect databases to the deNotary.io blockchain data verification contract. This will allow for confirmation of the availability and integrity of information at the time of a transaction without disclosing the information itself.
+
 Current scope:
 
 - one agent process with pluggable source adapters
