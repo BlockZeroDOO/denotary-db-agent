@@ -9,6 +9,7 @@ Current scope:
 - `IBM Db2`
 - `Apache Cassandra`
 - `ScyllaDB`
+- `Elasticsearch`
 
 The budget validation uses:
 
@@ -49,6 +50,7 @@ python scripts/run-wave2-mainnet-budget-validation.py --adapter redis --target-k
 python scripts/run-wave2-mainnet-budget-validation.py --adapter db2 --target-kib 25 --batch-size 100
 python scripts/run-wave2-mainnet-budget-validation.py --adapter cassandra --target-kib 25 --batch-size 100
 python scripts/run-wave2-mainnet-budget-validation.py --adapter scylladb --target-kib 25 --batch-size 100
+python scripts/run-wave2-mainnet-budget-validation.py --adapter elasticsearch --target-kib 25 --batch-size 100
 ```
 
 Shell:
@@ -60,6 +62,7 @@ python scripts/run-wave2-mainnet-budget-validation.py --adapter redis --target-k
 python scripts/run-wave2-mainnet-budget-validation.py --adapter db2 --target-kib 25 --batch-size 100
 python scripts/run-wave2-mainnet-budget-validation.py --adapter cassandra --target-kib 25 --batch-size 100
 python scripts/run-wave2-mainnet-budget-validation.py --adapter scylladb --target-kib 25 --batch-size 100
+python scripts/run-wave2-mainnet-budget-validation.py --adapter elasticsearch --target-kib 25 --batch-size 100
 ```
 
 To persist a stable artifact root:
@@ -100,4 +103,3 @@ It does not yet mean:
 
 - `Wave 2` has full `Wave 1`-depth soak coverage
 - every `Wave 2` adapter is mainnet-batch-validated
-- `Elasticsearch` is already mainnet-batch-validated

@@ -12,7 +12,7 @@ It is intentionally narrower than the `Wave 1` readiness matrix: most `Wave 2` s
 | ScyllaDB | yes | yes | yes, Docker-backed | yes | yes | yes | no | dedicated wide-column adapter with local full-cycle proof export, Docker-backed live validation, restart recovery, short-soak validation, real `denotary` mainnet validation, bounded mainnet batch validation, real mainnet degraded-service recovery, and deployment guidance |
 | IBM Db2 | yes | yes | yes, env-gated and local Docker-backed | yes | yes | yes | no | strong enterprise SQL baseline with tracked-table introspection, local full-cycle proof export, local Docker live validation, real `denotary` mainnet happy-path validation, bounded mainnet batch validation, and real mainnet degraded-service recovery |
 | Apache Cassandra | yes | yes | yes, env-gated and local Docker-backed | yes | yes | no | no | strong distributed wide-column baseline with tracked-table introspection, local full-cycle proof export, local Docker live validation, real `denotary` mainnet happy-path validation, and bounded mainnet batch validation |
-| Elasticsearch | yes | yes | yes, env-gated and local Docker-backed | yes | no | no | no | strong search/index baseline with tracked-index introspection, query-based polling, local Docker live validation, restart/short-soak validation, and real `denotary` mainnet happy-path validation |
+| Elasticsearch | yes | yes | yes, env-gated and local Docker-backed | yes | yes | no | no | strong search/index baseline with tracked-index introspection, query-based polling, local Docker live validation, restart/short-soak validation, real `denotary` mainnet happy-path validation, and bounded mainnet batch validation |
 | SQLite | yes | yes | file-backed adapter tests | yes | yes | yes | no | strong edge and embedded baseline with file-backed validation, local full-cycle proof export, cold restart recovery, short-soak validation, local service-outage recovery, real `denotary` mainnet validation, bounded mainnet batch validation, and real mainnet degraded-service recovery |
 
 ## Implemented Scope
@@ -41,7 +41,7 @@ Additionally implemented where applicable:
 - bounded `denotary` mainnet batch validation for `ScyllaDB`
 - real `denotary` mainnet degraded-service recovery validation for `ScyllaDB`
 - real `denotary` mainnet happy-path validation for `IBM Db2`, `Apache Cassandra`, and `Elasticsearch`
-- bounded `denotary` mainnet batch validation for `IBM Db2` and `Apache Cassandra`
+- bounded `denotary` mainnet batch validation for `IBM Db2`, `Apache Cassandra`, and `Elasticsearch`
 - real `denotary` mainnet degraded-service recovery validation for `IBM Db2`
 - local service-outage recovery validation for `SQLite` and `Redis`
 - real `denotary` mainnet validation for `SQLite` and `Redis`
@@ -57,15 +57,15 @@ The following layers still remain open for most `Wave 2` adapters:
 3. long soak validation
 4. service outage validation beyond `SQLite`, `Redis`, `ScyllaDB`, and `IBM Db2`
 5. mainnet `denotary` happy-path validation beyond `SQLite`, `Redis`, `ScyllaDB`, and `IBM Db2`
-6. bounded budget validation where commercially justified for `Elasticsearch`
+6. bounded budget validation where commercially justified for additional `Wave 2` adapters beyond the current set
 
 ## Suggested Next Steps
 
 Priority after the baseline phase:
 
 1. run the env-gated `Elasticsearch` restart and short-soak validation in a real environment
-2. bounded budget validation for `Elasticsearch`
-3. `Wave 2` service-outage validation beyond `SQLite`, `Redis`, `ScyllaDB`, and `IBM Db2`
+2. `Wave 2` service-outage validation beyond `SQLite`, `Redis`, `ScyllaDB`, and `IBM Db2`
+3. next bounded budget validations where commercially justified
 
 Mainnet-confirmed references:
 

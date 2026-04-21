@@ -27,11 +27,13 @@ Common validation baseline:
   - `data/wave2-mainnet-budget-db2-latest`
   - `data/wave2-mainnet-budget-cassandra-latest`
   - `data/wave2-mainnet-budget-scylladb-latest`
+  - `data/wave2-mainnet-budget-elasticsearch-latest`
 - summaries:
   - [wave2-mainnet-budget-latest/summary.json](/c:/projects/denotary-db-agent/data/wave2-mainnet-budget-latest/summary.json)
   - [wave2-mainnet-budget-db2-latest/summary.json](/c:/projects/denotary-db-agent/data/wave2-mainnet-budget-db2-latest/summary.json)
   - [wave2-mainnet-budget-cassandra-latest/summary.json](/c:/projects/denotary-db-agent/data/wave2-mainnet-budget-cassandra-latest/summary.json)
   - [wave2-mainnet-budget-scylladb-latest/summary.json](/c:/projects/denotary-db-agent/data/wave2-mainnet-budget-scylladb-latest/summary.json)
+  - [wave2-mainnet-budget-elasticsearch-latest/summary.json](/c:/projects/denotary-db-agent/data/wave2-mainnet-budget-elasticsearch-latest/summary.json)
 
 ## SQLite
 
@@ -103,6 +105,20 @@ Common validation baseline:
 - proof:
   - [f694b401414fb84df9384a810fb75d1bf4a4a7bbf28d7df250149ce2e30d5411.json](/c:/projects/denotary-db-agent/data/wave2-mainnet-budget-scylladb-latest/scylladb/cycle-03/proofs/scylladb-wave2-denotary-budget-03/f694b401414fb84df9384a810fb75d1bf4a4a7bbf28d7df250149ce2e30d5411.json)
 
+## Elasticsearch
+
+- result:
+  - `delivery_count = 3`
+  - `proof_count = 3`
+  - `dlq_count = 0`
+- request:
+  - `request_id = 4b6412b6205a1267139eba022f478e53a0232de26b6b704d6e026d88505b3e24`
+- chain:
+  - `tx_id = b88ff24f2ec318c19481a0f319f828b71d6b887c228f8ad6c7753795102dde6f`
+  - `block_num = 1242572`
+- proof:
+  - [4b6412b6205a1267139eba022f478e53a0232de26b6b704d6e026d88505b3e24.json](/c:/projects/denotary-db-agent/data/wave2-mainnet-budget-elasticsearch-latest/elasticsearch/cycle-03/proofs/elasticsearch-wave2-denotary-budget-03/4b6412b6205a1267139eba022f478e53a0232de26b6b704d6e026d88505b3e24.json)
+
 ## Interpretation
 
 Current `Wave 2` bounded real-mainnet budget confirmation now exists for:
@@ -112,6 +128,7 @@ Current `Wave 2` bounded real-mainnet budget confirmation now exists for:
 - `IBM Db2`
 - `Apache Cassandra`
 - `ScyllaDB`
+- `Elasticsearch`
 
 That means the current `Wave 2` set already includes:
 
