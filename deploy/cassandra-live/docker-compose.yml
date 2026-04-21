@@ -1,0 +1,8 @@
+services:
+  cassandra:
+    image: cassandra:4.1
+    container_name: denotary-db-agent-cassandra-live
+    environment:
+      CASSANDRA_CLUSTER_NAME: denotary-db-agent-live
+    ports:
+      - "59042:9042"

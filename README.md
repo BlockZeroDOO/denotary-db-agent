@@ -24,6 +24,120 @@ The first wave of database targets is:
 - Oracle Database
 - MongoDB
 
+Wave 2 planning is now defined for:
+
+- Redis
+- ScyllaDB
+- IBM Db2
+- Apache Cassandra
+- Elasticsearch
+- SQLite
+
+Current Redis Wave 2 status:
+
+- adapter registration and config surface are implemented
+- live readiness ping is implemented
+- explicit key-pattern snapshot polling is implemented
+- deterministic lexicographic key resume is implemented
+- local full-cycle proof export is implemented for the snapshot baseline
+- Docker-backed live integration and full-cycle harnesses are implemented
+- restart recovery validation is implemented
+- short-soak validation is implemented
+- local service-outage recovery validation is implemented
+- real `denotary` mainnet validation is implemented
+- bounded `denotary` mainnet batch validation is implemented
+- real `denotary` mainnet degraded-service recovery validation is implemented
+- dry-run snapshot playback is implemented for pipeline validation
+
+Current ScyllaDB Wave 2 status:
+
+- adapter registration and config surface are implemented
+- shared Cassandra-compatible snapshot / watermark baseline is implemented
+- deterministic checkpoint resume is implemented
+- local full-cycle proof export is implemented
+- Docker-backed live integration is implemented
+- restart recovery validation is implemented
+- short-soak validation is implemented
+- real `denotary` mainnet validation is implemented
+- deployment starter config and operator runbook are implemented
+
+Current IBM Db2 Wave 2 status:
+
+- adapter registration and config surface are implemented
+- live readiness ping is implemented
+- tracked-table introspection is implemented
+- watermark snapshot polling with deterministic resume is implemented
+- local full-cycle proof export is implemented
+- env-gated live integration harness is implemented
+- local Docker-backed restart validation is implemented
+- local Docker-backed short-soak validation is implemented
+- real `denotary` mainnet happy-path validation is implemented
+- bounded `denotary` mainnet budget validation is implemented
+- real `denotary` mainnet degraded-service validation is implemented
+- dry-run snapshot playback is implemented for pipeline validation
+
+Current Apache Cassandra Wave 2 status:
+
+- adapter registration and config surface are implemented
+- live cluster ping is implemented
+- tracked-table introspection is implemented
+- watermark snapshot polling with deterministic resume is implemented
+- local full-cycle proof export is implemented
+- env-gated live integration harness is implemented
+- local Docker-backed restart validation is implemented
+- local Docker-backed short-soak validation is implemented
+- real `denotary` mainnet happy-path validation is implemented
+- bounded `denotary` mainnet budget validation is implemented
+- real `denotary` mainnet degraded-service validation is implemented
+- dry-run snapshot playback is implemented for pipeline validation
+
+Current Elasticsearch Wave 2 status:
+
+- adapter registration and config surface are implemented
+- live cluster ping is implemented
+- tracked-index introspection is implemented
+- query-based snapshot polling with deterministic resume is implemented
+- local full-cycle proof export is implemented
+- env-gated live integration harness is implemented
+- env-gated restart and short-soak validation harness is implemented
+- real `denotary` mainnet happy-path validation is implemented
+- bounded `denotary` mainnet budget validation is implemented
+- real `denotary` mainnet degraded-service validation is implemented
+- dry-run snapshot playback is implemented for pipeline validation
+
+Current SQLite Wave 2 status:
+
+- adapter registration and config surface are implemented
+- file-backed readiness validation is implemented
+- tracked-table introspection is implemented
+- watermark snapshot polling with deterministic resume is implemented
+- local full-cycle proof export is implemented
+- cold restart recovery validation is implemented
+- short-soak validation is implemented
+- local service-outage recovery validation is implemented
+- real `denotary` mainnet validation is implemented
+- bounded `denotary` mainnet batch validation is implemented
+- real `denotary` mainnet degraded-service recovery validation is implemented
+- dry-run snapshot playback is implemented for pipeline validation
+
+Current Wave 2 long-soak status:
+
+- Redis long-soak is validated
+- ScyllaDB long-soak is validated
+- IBM Db2 long-soak is validated
+- Apache Cassandra long-soak is validated
+- Elasticsearch long-soak is validated
+- SQLite long-soak is validated
+
+Current Wave 2 local service-outage status:
+
+- Redis local service-outage recovery is validated
+- SQLite local service-outage recovery is validated
+- ScyllaDB local service-outage recovery is validated
+- IBM Db2 local service-outage recovery is validated
+- Apache Cassandra local service-outage recovery is validated
+- Elasticsearch local service-outage recovery is validated
+
 This initial implementation focuses on the platform layer and adapter contract. Real CDC transport details per database remain adapter-specific work on top of this package scaffold.
 
 Current PostgreSQL status:
@@ -119,6 +233,14 @@ Current Wave 1 mainnet degraded-service status:
 - `receipt` outage recovery is validated on real `denotary` mainnet path
 - `audit` outage recovery is validated on real `denotary` mainnet path
 
+Combined rollout view:
+
+- [docs/wave-rollout-pack.md](docs/wave-rollout-pack.md)
+- [docs/wave-readiness-summary.md](docs/wave-readiness-summary.md)
+- [docs/wave1-readiness-matrix.md](docs/wave1-readiness-matrix.md)
+- [docs/wave2-readiness-matrix.md](docs/wave2-readiness-matrix.md)
+- [docs/wave2-merge-prep.md](docs/wave2-merge-prep.md)
+
 ## Quick Start
 
 ```bash
@@ -160,8 +282,69 @@ See:
 - [docs/sqlserver-config-reference.md](docs/sqlserver-config-reference.md)
 - [docs/oracle-config-reference.md](docs/oracle-config-reference.md)
 - [docs/mongodb-config-reference.md](docs/mongodb-config-reference.md)
+- [docs/redis-config-reference.md](docs/redis-config-reference.md)
+- [docs/scylladb-config-reference.md](docs/scylladb-config-reference.md)
+- [docs/db2-config-reference.md](docs/db2-config-reference.md)
+- [docs/cassandra-config-reference.md](docs/cassandra-config-reference.md)
+- [docs/elasticsearch-config-reference.md](docs/elasticsearch-config-reference.md)
+- [docs/sqlite-config-reference.md](docs/sqlite-config-reference.md)
+- [scripts/run-live-redis-integration.ps1](scripts/run-live-redis-integration.ps1)
+- [scripts/run-live-scylladb-integration.ps1](scripts/run-live-scylladb-integration.ps1)
+- [scripts/run-live-db2-integration.ps1](scripts/run-live-db2-integration.ps1)
+- [scripts/run-live-cassandra-integration.ps1](scripts/run-live-cassandra-integration.ps1)
+- [scripts/run-live-elasticsearch-integration.ps1](scripts/run-live-elasticsearch-integration.ps1)
 - [docs/architecture.md](docs/architecture.md)
 - [docs/adapter-separation-architecture.md](docs/adapter-separation-architecture.md)
+- [docs/wave2-roadmap.md](docs/wave2-roadmap.md)
+- [docs/wave-readiness-summary.md](docs/wave-readiness-summary.md)
+- [docs/wave2-readiness-matrix.md](docs/wave2-readiness-matrix.md)
+- [docs/wave2-redis-validation.md](docs/wave2-redis-validation.md)
+- [docs/wave2-redis-validation-report.md](docs/wave2-redis-validation-report.md)
+- [scripts/run-wave2-redis-validation.ps1](scripts/run-wave2-redis-validation.ps1)
+- [docs/wave2-redis-runbook.md](docs/wave2-redis-runbook.md)
+- [deploy/config/redis-agent.example.json](deploy/config/redis-agent.example.json)
+- [docs/wave2-scylladb-runbook.md](docs/wave2-scylladb-runbook.md)
+- [deploy/config/scylladb-agent.example.json](deploy/config/scylladb-agent.example.json)
+- [docs/wave2-scylladb-validation.md](docs/wave2-scylladb-validation.md)
+- [docs/wave2-scylladb-validation-report.md](docs/wave2-scylladb-validation-report.md)
+- [scripts/run-wave2-scylladb-validation.ps1](scripts/run-wave2-scylladb-validation.ps1)
+- [docs/wave2-denotary-validation.md](docs/wave2-denotary-validation.md)
+- [docs/wave2-denotary-validation-report.md](docs/wave2-denotary-validation-report.md)
+- [scripts/run-wave2-denotary-validation.ps1](scripts/run-wave2-denotary-validation.ps1)
+- [docs/wave2-mainnet-budget-validation.md](docs/wave2-mainnet-budget-validation.md)
+- [docs/wave2-mainnet-budget-validation-report.md](docs/wave2-mainnet-budget-validation-report.md)
+- [scripts/run-wave2-mainnet-budget-validation.py](scripts/run-wave2-mainnet-budget-validation.py)
+- [docs/wave2-mainnet-service-outage-validation.md](docs/wave2-mainnet-service-outage-validation.md)
+- [docs/wave2-mainnet-service-outage-validation-report.md](docs/wave2-mainnet-service-outage-validation-report.md)
+- [scripts/run-wave2-mainnet-service-outage-validation.ps1](scripts/run-wave2-mainnet-service-outage-validation.ps1)
+- [docs/wave2-long-soak-validation.md](docs/wave2-long-soak-validation.md)
+- [docs/wave2-long-soak-validation-report.md](docs/wave2-long-soak-validation-report.md)
+- [scripts/run-wave2-long-soak-validation.ps1](scripts/run-wave2-long-soak-validation.ps1)
+- [docs/wave2-live-validation-checklist.md](docs/wave2-live-validation-checklist.md)
+- [docs/wave2-live-validation-runbook.md](docs/wave2-live-validation-runbook.md)
+- [examples/wave2-live.env.example](examples/wave2-live.env.example)
+- [examples/wave2-db2.env.example](examples/wave2-db2.env.example)
+- [examples/wave2-cassandra.env.example](examples/wave2-cassandra.env.example)
+- [examples/wave2-elasticsearch.env.example](examples/wave2-elasticsearch.env.example)
+- [scripts/bootstrap-wave2-live-env.ps1](scripts/bootstrap-wave2-live-env.ps1)
+- [scripts/bootstrap-wave2-live-env.sh](scripts/bootstrap-wave2-live-env.sh)
+- [scripts/run-wave2-live-validation.ps1](scripts/run-wave2-live-validation.ps1)
+- [docs/wave2-sqlite-validation.md](docs/wave2-sqlite-validation.md)
+- [docs/wave2-sqlite-validation-report.md](docs/wave2-sqlite-validation-report.md)
+- [scripts/run-wave2-sqlite-validation.ps1](scripts/run-wave2-sqlite-validation.ps1)
+- [docs/wave2-service-outage-validation.md](docs/wave2-service-outage-validation.md)
+- [docs/wave2-service-outage-validation-report.md](docs/wave2-service-outage-validation-report.md)
+- [scripts/run-wave2-service-outage-validation.ps1](scripts/run-wave2-service-outage-validation.ps1)
+- [docs/wave2-elasticsearch-validation.md](docs/wave2-elasticsearch-validation.md)
+- [scripts/run-wave2-elasticsearch-validation.ps1](scripts/run-wave2-elasticsearch-validation.ps1)
+- [docs/wave2-elasticsearch-runbook.md](docs/wave2-elasticsearch-runbook.md)
+- [deploy/config/elasticsearch-agent.example.json](deploy/config/elasticsearch-agent.example.json)
+- [docs/wave2-db2-runbook.md](docs/wave2-db2-runbook.md)
+- [deploy/config/db2-agent.example.json](deploy/config/db2-agent.example.json)
+- [docs/wave2-cassandra-runbook.md](docs/wave2-cassandra-runbook.md)
+- [deploy/config/cassandra-agent.example.json](deploy/config/cassandra-agent.example.json)
+- [docs/wave2-sqlite-edge-runbook.md](docs/wave2-sqlite-edge-runbook.md)
+- [deploy/config/sqlite-edge-agent.example.json](deploy/config/sqlite-edge-agent.example.json)
 - [docs/operator-guide.md](docs/operator-guide.md)
 - [docs/deployment-guide.md](docs/deployment-guide.md)
 - [docs/denotary-env-file-runbook.md](docs/denotary-env-file-runbook.md)

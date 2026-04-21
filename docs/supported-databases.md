@@ -28,3 +28,13 @@
 - Elasticsearch / OpenSearch
 - Cassandra
 - native in-database extensions
+## Wave 2 Targets
+
+| Adapter | Initial target path | Planned capture path | Current status |
+| --- | --- | --- | --- |
+| Redis | operational state | explicit key-pattern snapshot baseline, then local full-cycle proof export; later keyspace notifications where justified | adapter contract, config surface, live ping, snapshot baseline, local full-cycle validation, Docker-backed live validation, restart recovery, and short-soak validation implemented |
+| ScyllaDB | distributed wide-column | Cassandra-compatible snapshot / watermark baseline, later optional Scylla-specific CDC | adapter contract, config surface, shared Cassandra-compatible snapshot baseline, dedicated adapter alias, local full-cycle proof export, Docker-backed live validation, restart recovery, short-soak validation, real `denotary` mainnet validation, and deployment/runbook layer implemented |
+| IBM Db2 | enterprise | snapshot / watermark baseline, later native change capture if justified | adapter contract, config surface, live ping, tracked-table introspection, snapshot baseline, local full-cycle proof export, env-gated live validation harness, and unified live-validation checklist coverage implemented |
+| Apache Cassandra | distributed wide-column | partition-aware snapshot baseline, later optional CDC | adapter contract, config surface, live ping, tracked-table introspection, snapshot baseline, local full-cycle proof export, env-gated live validation harness, and unified live-validation checklist coverage implemented |
+| Elasticsearch | search / operational index | query-based snapshot and incremental baseline | adapter contract, config surface, live ping, tracked-index introspection, snapshot baseline, local full-cycle proof export, env-gated live validation harness, and unified live-validation checklist coverage implemented |
+| SQLite | embedded / edge | local snapshot / watermark baseline | adapter contract, config surface, file-backed readiness validation, tracked-table introspection, snapshot baseline, local full-cycle proof export, cold restart recovery, and short-soak validation implemented |

@@ -187,6 +187,92 @@ class ChainClientLocalPackingTest(unittest.TestCase):
         self.assertTrue(status["has_unlocked_wallet"])
         self.assertEqual(status["unlocked_wallet_count"], 1)
 
+    def test_cleos_wallet_accepts_subjective_cpu_response_when_tx_was_included(self) -> None:
+        client = CleosWalletChainClient(
+            rpc_url="https://history.denotary.io",
+            submitter="dbagentstest",
+            permission="dnanchor",
+            command=["wsl", "cleos"],
+        )
+
+        payload = {
+            "transaction_id": "e" * 64,
+            "processed": {
+                "block_num": 321,
+                "except": {"name": "tx_cpu_usage_exceeded"},
+                "action_traces": [
+                    {"except": None},
+                    {"except": None},
+                ],
+            },
+        }
+
+        with patch("subprocess.run") as run:
+            run.return_value = SimpleNamespace(
+                returncode=1,
+                stdout=json.dumps(payload),
+                stderr="subjective cpu error",
+            )
+            result = client.push_prepared_action(
+                {
+                    "contract": "verifbill",
+                    "action": "submit",
+                    "data": {
+                        "payer": "dbagentstest",
+                        "submitter": "dbagentstest",
+                        "schema_id": 1,
+                        "policy_id": 1,
+                        "object_hash": "1" * 64,
+                        "external_ref": "2" * 64,
+                    },
+                }
+            )
+
+        self.assertEqual(result.tx_id, "e" * 64)
+        self.assertEqual(result.block_num, 321)
+
+    def test_cleos_wallet_still_raises_on_non_recoverable_error_output(self) -> None:
+        client = CleosWalletChainClient(
+            rpc_url="https://history.denotary.io",
+            submitter="dbagentstest",
+            permission="dnanchor",
+            command=["wsl", "cleos"],
+        )
+
+        payload = {
+            "transaction_id": "f" * 64,
+            "processed": {
+                "block_num": 456,
+                "except": {"name": "eosio_assert_message_exception"},
+                "action_traces": [
+                    {"except": None},
+                    {"except": {"name": "eosio_assert_message_exception"}},
+                ],
+            },
+        }
+
+        with patch("subprocess.run") as run:
+            run.return_value = SimpleNamespace(
+                returncode=1,
+                stdout=json.dumps(payload),
+                stderr="duplicate request for submitter",
+            )
+            with self.assertRaisesRegex(RuntimeError, "duplicate request for submitter"):
+                client.push_prepared_action(
+                    {
+                        "contract": "verifbill",
+                        "action": "submit",
+                        "data": {
+                            "payer": "dbagentstest",
+                            "submitter": "dbagentstest",
+                            "schema_id": 1,
+                            "policy_id": 1,
+                            "object_hash": "1" * 64,
+                            "external_ref": "2" * 64,
+                        },
+                    }
+                )
+
     def test_build_chain_client_uses_explicit_cleos_wallet_backend(self) -> None:
         config = SimpleNamespace(
             chain_rpc_url="https://history.denotary.io",

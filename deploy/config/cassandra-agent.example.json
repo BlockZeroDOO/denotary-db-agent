@@ -1,0 +1,52 @@
+{
+  "agent_name": "cassandra-agent",
+  "log_level": "INFO",
+  "denotary": {
+    "ingress_url": "http://127.0.0.1:8080",
+    "watcher_url": "http://127.0.0.1:8081",
+    "watcher_auth_token": "replace-me",
+    "receipt_url": "http://127.0.0.1:8082",
+    "audit_url": "http://127.0.0.1:8083",
+    "chain_rpc_url": "https://history.denotary.io",
+    "submitter": "dbagentstest",
+    "submitter_permission": "dnanchor",
+    "submitter_private_key_env": "DENOTARY_SUBMITTER_PRIVATE_KEY",
+    "env_file": "/etc/denotary-db-agent/agent.secrets.env",
+    "schema_id": 1,
+    "policy_id": 1,
+    "wait_for_finality": true,
+    "finality_timeout_sec": 30,
+    "finality_poll_interval_sec": 2
+  },
+  "storage": {
+    "state_db": "/var/lib/denotary-db-agent/cassandra-agent-state.sqlite3",
+    "proof_dir": "/var/lib/denotary-db-agent/proofs"
+  },
+  "sources": [
+    {
+      "id": "cassandra-core-ledger",
+      "adapter": "cassandra",
+      "enabled": true,
+      "source_instance": "events-eu-1",
+      "database_name": "ledger",
+      "include": {
+        "ledger": ["invoices", "payments"]
+      },
+      "checkpoint_policy": "after_ack",
+      "backfill_mode": "full",
+      "connection": {
+        "hosts": ["cassandra-1.example.com", "cassandra-2.example.com"],
+        "port": 9042,
+        "username": "cassandra",
+        "password": "replace-me"
+      },
+      "options": {
+        "capture_mode": "watermark",
+        "watermark_column": "updated_at",
+        "commit_timestamp_column": "updated_at",
+        "primary_key_columns": ["id"],
+        "row_limit": 1000
+      }
+    }
+  ]
+}

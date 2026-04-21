@@ -1,0 +1,53 @@
+{
+  "agent_name": "db2-agent",
+  "log_level": "INFO",
+  "denotary": {
+    "ingress_url": "http://127.0.0.1:8080",
+    "watcher_url": "http://127.0.0.1:8081",
+    "watcher_auth_token": "replace-me",
+    "receipt_url": "http://127.0.0.1:8082",
+    "audit_url": "http://127.0.0.1:8083",
+    "chain_rpc_url": "https://history.denotary.io",
+    "submitter": "dbagentstest",
+    "submitter_permission": "dnanchor",
+    "submitter_private_key_env": "DENOTARY_SUBMITTER_PRIVATE_KEY",
+    "env_file": "/etc/denotary-db-agent/agent.secrets.env",
+    "schema_id": 1,
+    "policy_id": 1,
+    "wait_for_finality": true,
+    "finality_timeout_sec": 30,
+    "finality_poll_interval_sec": 2
+  },
+  "storage": {
+    "state_db": "/var/lib/denotary-db-agent/db2-agent-state.sqlite3",
+    "proof_dir": "/var/lib/denotary-db-agent/proofs"
+  },
+  "sources": [
+    {
+      "id": "db2-core-ledger",
+      "adapter": "db2",
+      "enabled": true,
+      "source_instance": "erp-eu-1",
+      "database_name": "LEDGER",
+      "include": {
+        "DB2INST1": ["INVOICES", "PAYMENTS"]
+      },
+      "checkpoint_policy": "after_ack",
+      "backfill_mode": "full",
+      "connection": {
+        "host": "db2.example.com",
+        "port": 50000,
+        "username": "db2inst1",
+        "password": "replace-me",
+        "database": "LEDGER"
+      },
+      "options": {
+        "capture_mode": "watermark",
+        "watermark_column": "UPDATED_AT",
+        "commit_timestamp_column": "UPDATED_AT",
+        "primary_key_columns": ["ID"],
+        "row_limit": 1000
+      }
+    }
+  ]
+}

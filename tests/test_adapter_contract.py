@@ -2,12 +2,18 @@ from __future__ import annotations
 
 import unittest
 
+from denotary_db_agent.adapters.cassandra import CassandraAdapter
+from denotary_db_agent.adapters.db2 import Db2Adapter
+from denotary_db_agent.adapters.elasticsearch import ElasticsearchAdapter
 from denotary_db_agent.adapters.mariadb import MariaDbAdapter
 from denotary_db_agent.adapters.mongodb import MongoDbAdapter
 from denotary_db_agent.adapters.mysql import MySqlAdapter
 from denotary_db_agent.adapters.oracle import OracleAdapter
 from denotary_db_agent.adapters.postgres import PostgresAdapter
+from denotary_db_agent.adapters.redis import RedisAdapter
 from denotary_db_agent.adapters.registry import ADAPTERS, build_adapter
+from denotary_db_agent.adapters.scylladb import ScyllaDbAdapter
+from denotary_db_agent.adapters.sqlite import SqliteAdapter
 from denotary_db_agent.adapters.sqlserver import SqlServerAdapter
 from denotary_db_agent.config import SourceConfig
 
@@ -21,9 +27,16 @@ class AdapterRegistryContractTest(unittest.TestCase):
             ("sqlserver", SqlServerAdapter, {"host": "127.0.0.1", "port": 1433, "username": "sa", "database": "ledger"}),
             ("oracle", OracleAdapter, {"host": "127.0.0.1", "port": 1521, "username": "denotary", "service_name": "XEPDB1"}),
             ("mongodb", MongoDbAdapter, {"uri": "mongodb://127.0.0.1:27017"}),
+            ("redis", RedisAdapter, {"host": "127.0.0.1", "port": 6379}),
+            ("scylladb", ScyllaDbAdapter, {"host": "127.0.0.1", "port": 9042, "username": "scylla", "password": "secret"}),
+            ("db2", Db2Adapter, {"host": "127.0.0.1", "port": 50000, "username": "db2inst1", "password": "secret", "database": "LEDGER"}),
+            ("cassandra", CassandraAdapter, {"host": "127.0.0.1", "port": 9042, "username": "cassandra", "password": "secret"}),
+            ("elasticsearch", ElasticsearchAdapter, {"url": "http://127.0.0.1:9200"}),
+            ("sqlite", SqliteAdapter, {"path": "C:/runtime/ledger.sqlite3"}),
         ]
 
     def _source_config(self, adapter: str, connection: dict[str, object]) -> SourceConfig:
+        default_capture_mode = "scan" if adapter == "redis" else "watermark"
         return SourceConfig(
             id=f"{adapter}-source",
             adapter=adapter,
@@ -32,7 +45,7 @@ class AdapterRegistryContractTest(unittest.TestCase):
             database_name="ledger",
             include={"ledger": ["invoices"]},
             connection=connection,
-            options={"capture_mode": "watermark"},
+            options={"capture_mode": default_capture_mode},
         )
 
     def _source_config_with_mode(self, adapter: str, connection: dict[str, object], capture_mode: str) -> SourceConfig:
@@ -95,6 +108,42 @@ class AdapterRegistryContractTest(unittest.TestCase):
                 "default_checkpoint_strategy": "document_watermark",
                 "default_activity_model": "polling",
             },
+            "redis": {
+                "default_capture_mode": "scan",
+                "cdc_modes": (),
+                "default_checkpoint_strategy": "key_lexicographic",
+                "default_activity_model": "polling",
+            },
+            "scylladb": {
+                "default_capture_mode": "watermark",
+                "cdc_modes": (),
+                "default_checkpoint_strategy": "table_watermark",
+                "default_activity_model": "polling",
+            },
+            "db2": {
+                "default_capture_mode": "watermark",
+                "cdc_modes": (),
+                "default_checkpoint_strategy": "table_watermark",
+                "default_activity_model": "polling",
+            },
+            "cassandra": {
+                "default_capture_mode": "watermark",
+                "cdc_modes": (),
+                "default_checkpoint_strategy": "table_watermark",
+                "default_activity_model": "polling",
+            },
+            "elasticsearch": {
+                "default_capture_mode": "watermark",
+                "cdc_modes": (),
+                "default_checkpoint_strategy": "document_watermark",
+                "default_activity_model": "polling",
+            },
+            "sqlite": {
+                "default_capture_mode": "watermark",
+                "cdc_modes": (),
+                "default_checkpoint_strategy": "table_watermark",
+                "default_activity_model": "polling",
+            },
         }
         for adapter_name, _adapter_class, connection in self.cases:
             with self.subTest(adapter=adapter_name):
@@ -118,6 +167,12 @@ class AdapterRegistryContractTest(unittest.TestCase):
             "sqlserver": {"change_tracking": ("change_tracking_version", "polling")},
             "oracle": {"logminer": ("logminer_scn", "polling")},
             "mongodb": {"change_streams": ("resume_token", "stream")},
+            "redis": {},
+            "scylladb": {},
+            "db2": {},
+            "cassandra": {},
+            "elasticsearch": {},
+            "sqlite": {},
         }
         for adapter_name, _adapter_class, connection in self.cases:
             for capture_mode, expected_values in expected[adapter_name].items():

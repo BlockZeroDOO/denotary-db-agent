@@ -31,6 +31,12 @@ The full agent config is split into:
 - [sqlserver-config-reference.md](sqlserver-config-reference.md)
 - [oracle-config-reference.md](oracle-config-reference.md)
 - [mongodb-config-reference.md](mongodb-config-reference.md)
+- [redis-config-reference.md](redis-config-reference.md)
+- [scylladb-config-reference.md](scylladb-config-reference.md)
+- [db2-config-reference.md](db2-config-reference.md)
+- [cassandra-config-reference.md](cassandra-config-reference.md)
+- [elasticsearch-config-reference.md](elasticsearch-config-reference.md)
+- [sqlite-config-reference.md](sqlite-config-reference.md)
 
 ## Top-Level Shape
 
@@ -129,6 +135,12 @@ Each entry in `sources` is one logical input source.
   - `"sqlserver"`
   - `"oracle"`
   - `"mongodb"`
+  - `"redis"`
+  - `"scylladb"`
+  - `"db2"`
+  - `"cassandra"`
+  - `"elasticsearch"`
+  - `"sqlite"`
 
 ### `enabled`
 
@@ -223,3 +235,15 @@ Each entry in `sources` is one logical input source.
   - [oracle-config-reference.md](oracle-config-reference.md)
 - MongoDB:
   - [mongodb-config-reference.md](mongodb-config-reference.md)
+- Redis:
+  - [redis-config-reference.md](redis-config-reference.md)
+- ScyllaDB:
+  - [scylladb-config-reference.md](scylladb-config-reference.md)
+- IBM Db2:
+  - [db2-config-reference.md](db2-config-reference.md)
+- Apache Cassandra:
+  - [cassandra-config-reference.md](cassandra-config-reference.md)
+- Elasticsearch:
+  - [elasticsearch-config-reference.md](elasticsearch-config-reference.md)
+- SQLite:
+  - [sqlite-config-reference.md](sqlite-config-reference.md)

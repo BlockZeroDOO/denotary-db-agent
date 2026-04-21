@@ -16,6 +16,42 @@ For a `denotary` mainnet deployment with an env-file-backed hot key, use:
 - [postgresql-hot-key-rotation.md](postgresql-hot-key-rotation.md)
 - [postgresql-recovery-scenarios.md](postgresql-recovery-scenarios.md)
 
+For an edge or embedded `SQLite` deployment baseline, use:
+
+- [sqlite-config-reference.md](sqlite-config-reference.md)
+- [wave2-sqlite-edge-runbook.md](wave2-sqlite-edge-runbook.md)
+- [deploy/config/sqlite-edge-agent.example.json](../deploy/config/sqlite-edge-agent.example.json)
+
+For a `Redis` operational-state deployment baseline, use:
+
+- [redis-config-reference.md](redis-config-reference.md)
+- [wave2-redis-runbook.md](wave2-redis-runbook.md)
+- [deploy/config/redis-agent.example.json](../deploy/config/redis-agent.example.json)
+
+For a `ScyllaDB` distributed wide-column deployment baseline, use:
+
+- [scylladb-config-reference.md](scylladb-config-reference.md)
+- [wave2-scylladb-runbook.md](wave2-scylladb-runbook.md)
+- [deploy/config/scylladb-agent.example.json](../deploy/config/scylladb-agent.example.json)
+
+For an `Elasticsearch` search-index deployment baseline, use:
+
+- [elasticsearch-config-reference.md](elasticsearch-config-reference.md)
+- [wave2-elasticsearch-runbook.md](wave2-elasticsearch-runbook.md)
+- [deploy/config/elasticsearch-agent.example.json](../deploy/config/elasticsearch-agent.example.json)
+
+For an `IBM Db2` enterprise SQL deployment baseline, use:
+
+- [db2-config-reference.md](db2-config-reference.md)
+- [wave2-db2-runbook.md](wave2-db2-runbook.md)
+- [deploy/config/db2-agent.example.json](../deploy/config/db2-agent.example.json)
+
+For an `Apache Cassandra` wide-column deployment baseline, use:
+
+- [cassandra-config-reference.md](cassandra-config-reference.md)
+- [wave2-cassandra-runbook.md](wave2-cassandra-runbook.md)
+- [deploy/config/cassandra-agent.example.json](../deploy/config/cassandra-agent.example.json)
+
 ## Recommended Modes
 
 - `systemd` on Linux servers
