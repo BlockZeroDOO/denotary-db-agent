@@ -14,10 +14,12 @@ Common validation baseline:
 - single-event policy path:
   - `schema_id = 1`
   - `policy_id = 1`
-- persisted run root:
+- persisted run roots:
   - `data/wave2-mainnet-service-outage-latest`
-- summary:
-  - [summary.json](/c:/projects/denotary-db-agent/data/wave2-mainnet-service-outage-latest/summary.json)
+  - `data/wave2-mainnet-service-outage-db2-latest`
+- summaries:
+  - [wave2-mainnet-service-outage-latest/summary.json](/c:/projects/denotary-db-agent/data/wave2-mainnet-service-outage-latest/summary.json)
+  - [wave2-mainnet-service-outage-db2-latest/summary.json](/c:/projects/denotary-db-agent/data/wave2-mainnet-service-outage-db2-latest/summary.json)
 
 ## Verified Recovery Pattern
 
@@ -97,6 +99,25 @@ Current artifact counts per passing scenario:
   - `tx_id = 23fc858d336f9f73b7f0d370e0bb77a4cb508fc881b971257c1ea9cf672a8f11`
   - `block_num = 1152767`
 
+`IBM Db2`
+
+- `ingress`: passed
+  - `request_id = c1b8c284d2e8248c5db75c2edadb549edff94a33402e39fe0aa998e2d0b3d112`
+  - `tx_id = c687673e07fc965c496dbdcff0d5788d1718cc5e4c30a5265c699394ecafe8da`
+  - `block_num = 1239451`
+- `watcher`: passed
+  - `request_id = 5a95af598f5d319f63da332d1ef81e512c2bfc11469fdf9b2fea96af142b7b00`
+  - `tx_id = d91f8a2faf5ffe0e6e959f6c016c1a0f3dc4ec660206b294e25ef5b1e31b161f`
+  - `block_num = 1239616`
+- `receipt`: passed
+  - `request_id = c90ab0e01e714926a3e70f990e5a2354b0b8dde3a085eee161f3510ccf0b6df3`
+  - `tx_id = eab39164a70e47dfae777ab2918add673e9248b4323faa65967d34edcd5ce781`
+  - `block_num = 1239743`
+- `audit`: passed
+  - `request_id = 46174df717be88727c3e6f0b27fd151d83caff8e9c9d5866782280d2033f43ed`
+  - `tx_id = 6b4f5b5f624e1ac8ee1c13d03f5a1f2587c48c98b145d8e49d9ef8ca8a711320`
+  - `block_num = 1239959`
+
 ## Interpretation
 
 This closes the first real-mainnet degraded-service recovery layer for:
@@ -104,5 +125,6 @@ This closes the first real-mainnet degraded-service recovery layer for:
 - file-backed edge / embedded `SQLite`
 - operational-state `Redis`
 - wide-column `ScyllaDB`
+- enterprise SQL `IBM Db2`
 
-Together with real mainnet happy-path validation, these adapters now have a stronger `Wave 2` readiness story than baseline proof export alone. For `SQLite` and `Redis`, this layer also stacks on top of bounded mainnet budget validation; for `ScyllaDB`, the next step is still the bounded budget layer.
+Together with real mainnet happy-path validation, these adapters now have a stronger `Wave 2` readiness story than baseline proof export alone. For `SQLite`, `Redis`, `ScyllaDB`, and `IBM Db2`, this layer now also stacks on top of bounded mainnet budget validation.

@@ -48,6 +48,14 @@ from cassandra_live_support import (  # type: ignore
     unique_table_name as unique_cassandra_table_name,
     wait_for_table_visibility as wait_for_cassandra_table_visibility,
 )
+from db2_live_support import (  # type: ignore
+    agent_connection_config as db2_connection_config,
+    create_connection as create_db2_connection,
+    db2_schema,
+    unique_table_name as unique_db2_table_name,
+    wait_for_db2_ready,
+    wait_for_table_visibility as wait_for_db2_table_visibility,
+)
 from scylladb_live_support import (  # type: ignore
     agent_connection_config as scylladb_connection_config,
     create_session as create_scylladb_session,
@@ -59,7 +67,7 @@ from scylladb_live_support import (  # type: ignore
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run Wave 2 denotary mainnet budget validation.")
-    parser.add_argument("--adapter", choices=("sqlite", "redis", "cassandra", "scylladb", "all"), default="all")
+    parser.add_argument("--adapter", choices=("sqlite", "redis", "cassandra", "scylladb", "db2", "all"), default="all")
     parser.add_argument("--target-kib", type=int, default=DEFAULT_TARGET_KIB)
     parser.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE)
     parser.add_argument("--output-root", default="", help="Optional persistent run directory.")
@@ -295,6 +303,53 @@ def _build_cassandra_config(
     return path
 
 
+def _build_db2_config(
+    temp_dir: Path,
+    stack: Any,
+    *,
+    source_id: str,
+    batch_size: int,
+    table_name: str,
+) -> Path:
+    config = {
+        "agent_name": source_id,
+        "log_level": "INFO",
+        "denotary": {
+            **DENOTARY_VALIDATION.build_denotary_config_for_stack(stack),
+            "policy_id": 2,
+        },
+        "storage": {
+            "state_db": str((temp_dir / "state.sqlite3").resolve()),
+            "proof_dir": str((temp_dir / "proofs").resolve()),
+        },
+        "sources": [
+            {
+                "id": source_id,
+                "adapter": "db2",
+                "enabled": True,
+                "source_instance": "wave2-db2-mainnet-budget",
+                "database_name": str(db2_connection_config()["database"]),
+                "include": {db2_schema(): [table_name]},
+                "checkpoint_policy": "after_ack",
+                "backfill_mode": "full",
+                "batch_enabled": True,
+                "batch_size": batch_size,
+                "connection": db2_connection_config(),
+                "options": {
+                    "capture_mode": "watermark",
+                    "watermark_column": "UPDATED_AT",
+                    "commit_timestamp_column": "UPDATED_AT",
+                    "primary_key_columns": ["ID"],
+                    "row_limit": batch_size,
+                },
+            }
+        ],
+    }
+    path = temp_dir / "db2-mainnet-budget-config.json"
+    path.write_text(json.dumps(config, indent=2), encoding="utf-8")
+    return path
+
+
 def _finalize_result(
     *,
     adapter: str,
@@ -495,6 +550,29 @@ def _insert_cassandra_row(table_name: str, *, row_id: int, status: str, updated_
         )
     finally:
         cluster.shutdown()
+
+
+def _ensure_db2_database(container_name: str = "denotary-db-agent-db2-live", timeout_sec: float = 480.0) -> None:
+    deadline = time.time() + timeout_sec
+    command = (
+        "su - db2inst1 -c \""
+        "db2 connect to DENOTARY >/dev/null 2>&1 || "
+        "(db2 create db DENOTARY >/dev/null 2>&1 || true); "
+        "db2 connect to DENOTARY >/dev/null 2>&1"
+        "\""
+    )
+    while time.time() < deadline:
+        result = subprocess.run(
+            ["docker", "exec", container_name, "bash", "-lc", command],
+            cwd=str(PROJECT_ROOT),
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+        if result.returncode == 0:
+            return
+        time.sleep(5)
+    raise RuntimeError("db2 database DENOTARY did not become available in time")
 
 
 def _insert_scylladb_row(table_name: str, *, row_id: int, status: str, updated_at: str) -> None:
@@ -785,9 +863,169 @@ def run_cassandra_budget(*, run_root: Path, target_kib: int, batch_size: int) ->
             subprocess.run(["docker", "compose", "-f", str(compose_file), "down", "-v"], cwd=str(PROJECT_ROOT), check=False)
 
 
+def _db2_timestamp_literal(value: str) -> str:
+    return value.replace("T", "-").replace("Z", "").replace(":", ".")
+
+
+def _insert_db2_row(table_name: str, *, row_id: int, status: str, updated_at: str) -> None:
+    connection = create_db2_connection()
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                f"""
+                insert into {db2_schema()}.{table_name} (ID, STATUS, UPDATED_AT)
+                values (?, ?, ?)
+                """,
+                (row_id, status, _db2_timestamp_literal(updated_at)),
+            )
+        connection.commit()
+    finally:
+        connection.close()
+
+
+def run_db2_budget(*, run_root: Path, target_kib: int, batch_size: int) -> dict[str, Any]:
+    adapter_root = run_root / "db2"
+    adapter_root.mkdir(parents=True, exist_ok=True)
+    cycles = _cycle_count_for_budget(target_kib, batch_size)
+    compose_file = PROJECT_ROOT / "deploy" / "db2-live" / "docker-compose.yml"
+    env = {
+        "DENOTARY_DB2_HOST": "127.0.0.1",
+        "DENOTARY_DB2_PORT": "55000",
+        "DENOTARY_DB2_USERNAME": "db2inst1",
+        "DENOTARY_DB2_PASSWORD": "password",
+        "DENOTARY_DB2_DATABASE": "DENOTARY",
+        "DENOTARY_DB2_SCHEMA": "DB2INST1",
+    }
+    with _temporary_env(env):
+        subprocess.run(["docker", "compose", "-f", str(compose_file), "down", "-v"], cwd=str(PROJECT_ROOT), check=False)
+        subprocess.run(["docker", "compose", "-f", str(compose_file), "up", "-d"], cwd=str(PROJECT_ROOT), check=True)
+        try:
+            _ensure_db2_database()
+            # Db2 cold starts on local Docker can take several minutes before the
+            # first stable host-side connection succeeds, so budget runs use a
+            # wider readiness window than lightweight live integration.
+            wait_for_db2_ready(timeout_sec=480.0, consecutive_successes=3, success_interval_sec=5.0)
+            cycle_payloads: list[dict[str, Any]] = []
+            base_time = datetime.now(timezone.utc).replace(microsecond=0)
+            base_id = int(base_time.timestamp())
+            for cycle in range(cycles):
+                cycle_root = adapter_root / f"cycle-{cycle + 1:02d}"
+                cycle_root.mkdir(parents=True, exist_ok=True)
+                cycle_state_db = cycle_root / "offchain-state.sqlite3"
+                table_name = unique_db2_table_name("DENOTARY_AGENT_BUDGET")
+                source_id = f"db2-wave2-denotary-budget-{cycle + 1:02d}"
+                connection = create_db2_connection()
+                try:
+                    with connection.cursor() as cursor:
+                        cursor.execute(
+                            f"""
+                            create table {db2_schema()}.{table_name} (
+                                ID integer not null,
+                                STATUS varchar(64),
+                                UPDATED_AT timestamp,
+                                primary key (ID)
+                            )
+                            """
+                        )
+                    connection.commit()
+                finally:
+                    connection.close()
+                wait_for_db2_table_visibility(table_name)
+                stack = DENOTARY_VALIDATION.OffchainStack(cycle_state_db)
+                stack.start()
+                try:
+                    config_path = _build_db2_config(
+                        cycle_root,
+                        stack,
+                        source_id=source_id,
+                        batch_size=batch_size,
+                        table_name=table_name,
+                    )
+                    engine = AgentEngine(load_config(config_path))
+                    try:
+                        engine.bootstrap(source_id)
+                        baseline = engine.run_once()
+                        if baseline["processed"] != 0 or baseline["failed"] != 0:
+                            raise RuntimeError(f"db2 budget baseline was not idle: {baseline}")
+                        cycle_time = base_time + timedelta(minutes=cycle * 5)
+                        for index in range(1, batch_size + 1):
+                            record_id = base_id + cycle * 1000 + index
+                            _insert_db2_row(
+                                table_name,
+                                row_id=record_id,
+                                status=f"budget-{cycle + 1}-{index}",
+                                updated_at=(cycle_time + timedelta(seconds=index)).isoformat().replace("+00:00", "Z"),
+                            )
+                        result = engine.run_once()
+                        if result["processed"] != batch_size or result["failed"] != 0:
+                            raise RuntimeError(f"db2 budget cycle {cycle + 1} produced unexpected result: {result}")
+                        cycle_payloads.append(
+                            _finalize_result(
+                                adapter="db2",
+                                capture_mode="watermark",
+                                target_kib=target_kib,
+                                batch_size=batch_size,
+                                cycles=1,
+                                source_id=source_id,
+                                engine=engine,
+                                config_path=config_path,
+                            )
+                        )
+                    finally:
+                        engine.close()
+                finally:
+                    stack.stop()
+                    connection = create_db2_connection()
+                    try:
+                        with connection.cursor() as cursor:
+                            cursor.execute(f"drop table {db2_schema()}.{table_name}")
+                        connection.commit()
+                    except Exception:
+                        connection.rollback()
+                    finally:
+                        connection.close()
+            if len(cycle_payloads) != cycles:
+                raise RuntimeError(f"db2 budget run produced only {len(cycle_payloads)} successful cycles")
+            latest_payload = cycle_payloads[-1]
+            total_dlq = sum(int(payload["dlq_count"]) for payload in cycle_payloads)
+            if total_dlq != 0:
+                raise RuntimeError(f"db2 budget run produced DLQ entries: {total_dlq}")
+            return {
+                "adapter": "db2",
+                "status": "passed",
+                "capture_mode": "watermark",
+                "target_kib": target_kib,
+                "approx_batch_kib": _approx_batch_kib(batch_size),
+                "approx_total_kib": _approx_batch_kib(batch_size) * cycles,
+                "batch_size": batch_size,
+                "cycles": cycles,
+                "delivery_count": len(cycle_payloads),
+                "proof_count": len(cycle_payloads),
+                "dlq_count": total_dlq,
+                "request_id": latest_payload["request_id"],
+                "proof_path": latest_payload["proof_path"],
+                "tx_id": latest_payload["tx_id"],
+                "block_num": latest_payload["block_num"],
+                "broadcast_backend": latest_payload["broadcast_backend"],
+                "finality_mode": latest_payload["finality_mode"],
+                "config_path": latest_payload["config_path"],
+                "cycle_results": [
+                    {
+                        "request_id": payload["request_id"],
+                        "tx_id": payload["tx_id"],
+                        "block_num": payload["block_num"],
+                        "proof_path": payload["proof_path"],
+                    }
+                    for payload in cycle_payloads
+                ],
+            }
+        finally:
+            subprocess.run(["docker", "compose", "-f", str(compose_file), "down", "-v"], cwd=str(PROJECT_ROOT), check=False)
+
+
 def main() -> None:
     args = parse_args()
-    adapters = ["sqlite", "redis", "cassandra", "scylladb"] if args.adapter == "all" else [args.adapter]
+    adapters = ["sqlite", "redis", "cassandra", "scylladb", "db2"] if args.adapter == "all" else [args.adapter]
     run_root = (
         Path(args.output_root).resolve()
         if args.output_root
@@ -803,6 +1041,8 @@ def main() -> None:
                 results.append(run_redis_budget(run_root=run_root, target_kib=args.target_kib, batch_size=args.batch_size))
             elif adapter == "cassandra":
                 results.append(run_cassandra_budget(run_root=run_root, target_kib=args.target_kib, batch_size=args.batch_size))
+            elif adapter == "db2":
+                results.append(run_db2_budget(run_root=run_root, target_kib=args.target_kib, batch_size=args.batch_size))
             else:
                 results.append(run_scylladb_budget(run_root=run_root, target_kib=args.target_kib, batch_size=args.batch_size))
         except Exception as exc:  # noqa: BLE001

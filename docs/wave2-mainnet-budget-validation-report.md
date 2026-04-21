@@ -24,10 +24,12 @@ Common validation baseline:
   - `approx_total_kib = 27`
 - persisted run roots:
   - `data/wave2-mainnet-budget-latest`
+  - `data/wave2-mainnet-budget-db2-latest`
   - `data/wave2-mainnet-budget-cassandra-latest`
   - `data/wave2-mainnet-budget-scylladb-latest`
 - summaries:
   - [wave2-mainnet-budget-latest/summary.json](/c:/projects/denotary-db-agent/data/wave2-mainnet-budget-latest/summary.json)
+  - [wave2-mainnet-budget-db2-latest/summary.json](/c:/projects/denotary-db-agent/data/wave2-mainnet-budget-db2-latest/summary.json)
   - [wave2-mainnet-budget-cassandra-latest/summary.json](/c:/projects/denotary-db-agent/data/wave2-mainnet-budget-cassandra-latest/summary.json)
   - [wave2-mainnet-budget-scylladb-latest/summary.json](/c:/projects/denotary-db-agent/data/wave2-mainnet-budget-scylladb-latest/summary.json)
 
@@ -58,6 +60,20 @@ Common validation baseline:
   - `block_num = 1110535`
 - proof:
   - [49aeed8197a3d0b9bb21df361b8bd98e1eca9396e04af916580a8a988ff1e361.json](/c:/projects/denotary-db-agent/data/wave2-mainnet-budget-latest/redis/proofs/redis-wave2-denotary-budget/49aeed8197a3d0b9bb21df361b8bd98e1eca9396e04af916580a8a988ff1e361.json)
+
+## IBM Db2
+
+- result:
+  - `delivery_count = 3`
+  - `proof_count = 3`
+  - `dlq_count = 0`
+- request:
+  - `request_id = 83772f2456dfd6c46a4432ca1b00f9192219f75ad1bf07ffa45e446507376a20`
+- chain:
+  - `tx_id = c1ed2d1df28c7474322f3a9275df737a8fc6e75c93f7524eb241c306057a8dff`
+  - `block_num = 1226375`
+- proof:
+  - [83772f2456dfd6c46a4432ca1b00f9192219f75ad1bf07ffa45e446507376a20.json](/c:/projects/denotary-db-agent/data/wave2-mainnet-budget-db2-latest/db2/cycle-03/proofs/db2-wave2-denotary-budget-03/83772f2456dfd6c46a4432ca1b00f9192219f75ad1bf07ffa45e446507376a20.json)
 
 ## Apache Cassandra
 
@@ -93,6 +109,7 @@ Current `Wave 2` bounded real-mainnet budget confirmation now exists for:
 
 - `SQLite`
 - `Redis`
+- `IBM Db2`
 - `Apache Cassandra`
 - `ScyllaDB`
 
