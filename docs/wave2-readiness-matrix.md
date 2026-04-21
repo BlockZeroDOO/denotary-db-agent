@@ -67,15 +67,17 @@ The main remaining work is now selective hardening rather than baseline coverage
 1. longer endurance runs beyond the current bounded long-soak profile
 2. additional outage duration and recovery-shape exploration beyond the current bounded local drills
 3. optional additional mainnet source-backed degraded drills where we want live source mutations instead of the current outage pattern
-4. future re-entry of `Snowflake` only when a real credentialed environment becomes available again
+4. merge planning for `wave-2 -> main`
+5. future re-entry of `Snowflake` only when a real credentialed environment becomes available again
 
 ## Suggested Next Steps
 
 Priority after the baseline phase:
 
-1. optional local service-outage symmetry beyond `SQLite` and `Redis`
-2. next endurance runs where commercially justified
-3. future credential-backed re-entry for deferred sources if needed
+1. deeper endurance runs where commercially justified
+2. deeper outage-duration drills beyond the current bounded recovery profile
+3. merge preparation and packaging for `main`
+4. future credential-backed re-entry for deferred sources if needed
 
 Mainnet-confirmed references:
 

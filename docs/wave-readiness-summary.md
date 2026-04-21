@@ -2,6 +2,10 @@
 
 This document is the compact rollout-level view across both implementation waves in `denotary-db-agent`.
 
+For the stakeholder-facing short version, see:
+
+- [wave-rollout-pack.md](wave-rollout-pack.md)
+
 It is meant to answer three questions quickly:
 
 - which adapters are already validated deeply enough to treat as strong production candidates
@@ -85,11 +89,13 @@ The main remaining work is now selective depth, not core platform coverage:
 For stakeholders, the cleanest way to present current readiness is:
 
 1. this combined summary for executive status
-2. [wave1-readiness-matrix.md](wave1-readiness-matrix.md) for production-depth adapter detail
-3. [wave2-readiness-matrix.md](wave2-readiness-matrix.md) for expansion-layer adapter detail
+2. [wave-rollout-pack.md](wave-rollout-pack.md) for stakeholder rollout framing
+3. [wave1-readiness-matrix.md](wave1-readiness-matrix.md) for production-depth adapter detail
+4. [wave2-readiness-matrix.md](wave2-readiness-matrix.md) for expansion-layer adapter detail
 
 ## Supporting Documents
 
+- [wave-rollout-pack.md](wave-rollout-pack.md)
 - [wave1-readiness-matrix.md](wave1-readiness-matrix.md)
 - [wave2-readiness-matrix.md](wave2-readiness-matrix.md)
 - [denotary-wave1-mainnet-validation-report.md](denotary-wave1-mainnet-validation-report.md)

@@ -235,6 +235,7 @@ Current Wave 1 mainnet degraded-service status:
 
 Combined rollout view:
 
+- [docs/wave-rollout-pack.md](docs/wave-rollout-pack.md)
 - [docs/wave-readiness-summary.md](docs/wave-readiness-summary.md)
 - [docs/wave1-readiness-matrix.md](docs/wave1-readiness-matrix.md)
 - [docs/wave2-readiness-matrix.md](docs/wave2-readiness-matrix.md)
