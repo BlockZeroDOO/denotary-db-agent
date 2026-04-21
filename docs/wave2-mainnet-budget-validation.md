@@ -6,6 +6,7 @@ Current scope:
 
 - `SQLite`
 - `Redis`
+- `Apache Cassandra`
 - `ScyllaDB`
 
 The budget validation uses:
@@ -44,6 +45,7 @@ PowerShell:
 python scripts/run-wave2-mainnet-budget-validation.py --adapter all --target-kib 25 --batch-size 100
 python scripts/run-wave2-mainnet-budget-validation.py --adapter sqlite --target-kib 25 --batch-size 100
 python scripts/run-wave2-mainnet-budget-validation.py --adapter redis --target-kib 25 --batch-size 100
+python scripts/run-wave2-mainnet-budget-validation.py --adapter cassandra --target-kib 25 --batch-size 100
 python scripts/run-wave2-mainnet-budget-validation.py --adapter scylladb --target-kib 25 --batch-size 100
 ```
 
@@ -53,6 +55,7 @@ Shell:
 python scripts/run-wave2-mainnet-budget-validation.py --adapter all --target-kib 25 --batch-size 100
 python scripts/run-wave2-mainnet-budget-validation.py --adapter sqlite --target-kib 25 --batch-size 100
 python scripts/run-wave2-mainnet-budget-validation.py --adapter redis --target-kib 25 --batch-size 100
+python scripts/run-wave2-mainnet-budget-validation.py --adapter cassandra --target-kib 25 --batch-size 100
 python scripts/run-wave2-mainnet-budget-validation.py --adapter scylladb --target-kib 25 --batch-size 100
 ```
 
@@ -94,4 +97,4 @@ It does not yet mean:
 
 - `Wave 2` has full `Wave 1`-depth soak coverage
 - every `Wave 2` adapter is mainnet-batch-validated
-- `Db2`, `Cassandra`, and `Elasticsearch` are already mainnet-batch-validated
+- `Db2` and `Elasticsearch` are already mainnet-batch-validated
