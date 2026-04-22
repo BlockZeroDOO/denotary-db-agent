@@ -15,6 +15,7 @@ from unittest.mock import patch
 from denotary_db_agent.transport import (
     ChainClient,
     CleosWalletChainClient,
+    WatcherClient,
     build_chain_client,
     derive_public_key_candidates,
     inspect_secret_file_permissions,
@@ -68,6 +69,34 @@ class MockChainHandler(BaseHTTPRequestHandler):
             )
             return
 
+        self.send_error(HTTPStatus.NOT_FOUND)
+
+    def _send_json(self, payload: dict[str, Any], status: int = HTTPStatus.OK) -> None:
+        encoded = json.dumps(payload).encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(encoded)))
+        self.end_headers()
+        self.wfile.write(encoded)
+
+    def log_message(self, format: str, *args: Any) -> None:
+        return
+
+
+class FlakyWatcherHandler(BaseHTTPRequestHandler):
+    poll_calls = 0
+
+    def do_POST(self) -> None:  # noqa: N802
+        if self.path.endswith("/poll"):
+            FlakyWatcherHandler.poll_calls += 1
+            if FlakyWatcherHandler.poll_calls == 1:
+                self._send_json(
+                    {"error": "rpc call failed: <urlopen error The read operation timed out>"},
+                    status=HTTPStatus.BAD_GATEWAY,
+                )
+                return
+            self._send_json({"status": "finalized", "inclusion_verified": True})
+            return
         self.send_error(HTTPStatus.NOT_FOUND)
 
     def _send_json(self, payload: dict[str, Any], status: int = HTTPStatus.OK) -> None:
@@ -402,3 +431,26 @@ class ChainClientLocalPackingTest(unittest.TestCase):
         pushed = MockChainHandler.push_payloads[0]
         self.assertEqual(len(pushed["signatures"]), 1)
         self.assertTrue(pushed["packed_trx"])
+
+
+class WatcherClientRetryTest(unittest.TestCase):
+    def setUp(self) -> None:
+        FlakyWatcherHandler.poll_calls = 0
+        self.port = free_port()
+        self.server = ThreadingHTTPServer(("127.0.0.1", self.port), FlakyWatcherHandler)
+        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
+        self.thread.start()
+
+    def tearDown(self) -> None:
+        self.server.shutdown()
+        self.server.server_close()
+        self.thread.join(timeout=2)
+
+    def test_wait_for_finalized_retries_after_transient_poll_gateway_error(self) -> None:
+        client = WatcherClient(f"http://127.0.0.1:{self.port}")
+
+        payload = client.wait_for_finalized("request-1", timeout_sec=2, poll_interval_sec=0.01)
+
+        self.assertEqual(payload["status"], "finalized")
+        self.assertTrue(payload["inclusion_verified"])
+        self.assertEqual(FlakyWatcherHandler.poll_calls, 2)

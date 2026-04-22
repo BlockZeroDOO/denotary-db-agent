@@ -305,9 +305,89 @@ class EngineTest(unittest.TestCase):
         engine._process_event(runtime, event)
 
         self.assertEqual(len(prepare_calls), 1)
-        self.assertEqual(register_calls, [("request-retry-1", "trace-retry-1"), ("request-retry-1", "trace-retry-1")])
+        self.assertEqual(register_calls, [("request-retry-1", "trace-retry-1")])
         self.assertEqual(failed_calls, [("request-retry-1", "db_agent_delivery_failed")])
         self.assertEqual(included_calls, [("request-retry-1", "a" * 64, 321)])
+        checkpoints = engine.checkpoint_summary()
+        self.assertEqual(len(checkpoints), 1)
+        self.assertEqual(checkpoints[0]["token"], "lsn:1")
+
+    def test_process_event_recovers_finalization_from_receipt_without_marking_included_request_failed(self) -> None:
+        engine = AgentEngine(load_config(self.config_path))
+        runtime = engine.runtimes()[0]
+        engine.config.denotary.wait_for_finality = True
+        event_payload = engine.config.sources[0].options["dry_run_events"][0]
+        event = ChangeEvent(
+            source_id=runtime.config.id,
+            source_type="postgresql",
+            source_instance=runtime.config.source_instance,
+            database_name=runtime.config.database_name,
+            **event_payload,
+        )
+
+        prepared = SimpleNamespace(
+            request_id="request-finality-1",
+            trace_id="trace-finality-1",
+            prepared_action={"contract": "verifbill", "action": "submit", "data": {"submitter": "enterpriseac1"}},
+        )
+        chain_calls: list[dict[str, object]] = []
+        register_calls: list[tuple[str, str]] = []
+        included_calls: list[tuple[str, str, int]] = []
+        failed_calls: list[tuple[str, str]] = []
+        wait_calls: list[str] = []
+
+        def prepare_single(payload):
+            return prepared
+
+        class IncludedOnceChain:
+            def push_prepared_action(self, prepared_action):
+                chain_calls.append(prepared_action)
+                return SimpleNamespace(tx_id="c" * 64, block_num=654)
+
+        class FlakyWatcher:
+            def register(self, prepared_obj, envelope):
+                register_calls.append((prepared_obj.request_id, prepared_obj.trace_id))
+
+            def mark_failed(self, request_id, reason, details=None):
+                failed_calls.append((request_id, reason))
+
+            def mark_included(self, request_id, tx_id, block_num):
+                included_calls.append((request_id, tx_id, block_num))
+
+            def wait_for_finalized(self, request_id, timeout_sec, poll_interval_sec):
+                wait_calls.append(request_id)
+                if len(wait_calls) == 1:
+                    raise RuntimeError(
+                        "http request failed: 502 {'error': 'rpc call failed: <urlopen error The read operation timed out>'}"
+                    )
+
+        engine.ingress = SimpleNamespace(prepare_single=prepare_single)
+        engine.chain = IncludedOnceChain()
+        engine.watcher = FlakyWatcher()
+        engine.receipt = SimpleNamespace(
+            get_receipt=lambda request_id: {
+                "request_id": request_id,
+                "tx_id": "c" * 64,
+                "block_num": 654,
+                "finality_flag": True,
+                "trust_state": "finalized_verified",
+                "finalized_at": "2026-04-18T10:00:05Z",
+            }
+        )
+        engine.audit = SimpleNamespace(get_chain=lambda request_id: {"request_id": request_id, "links": []})
+
+        engine._process_event(runtime, event)
+
+        self.assertEqual(len(chain_calls), 1)
+        self.assertEqual(register_calls, [("request-finality-1", "trace-finality-1")])
+        self.assertEqual(included_calls, [("request-finality-1", "c" * 64, 654)])
+        self.assertEqual(failed_calls, [])
+        self.assertEqual(wait_calls, ["request-finality-1"])
+        proof = engine.store.get_proof("request-finality-1")
+        self.assertIsNotNone(proof)
+        delivery = engine.store.list_deliveries(runtime.config.id)[0]
+        self.assertEqual(delivery["status"], "finalized_exported")
+        self.assertEqual(delivery["tx_id"], "c" * 64)
         checkpoints = engine.checkpoint_summary()
         self.assertEqual(len(checkpoints), 1)
         self.assertEqual(checkpoints[0]["token"], "lsn:1")

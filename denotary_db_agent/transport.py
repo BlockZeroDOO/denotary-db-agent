@@ -574,18 +574,45 @@ class WatcherClient:
         )
         return body
 
+    @staticmethod
+    def _is_retryable_poll_error(error_text: str) -> bool:
+        text = str(error_text or "").lower()
+        if not text:
+            return False
+        retryable_markers = (
+            "http request failed: 502",
+            "http request failed: 503",
+            "http request failed: 504",
+            "rpc call failed:",
+            "timed out",
+            "temporarily unavailable",
+            "connection reset",
+            "connection aborted",
+            "connection refused",
+        )
+        return any(marker in text for marker in retryable_markers)
+
     def wait_for_finalized(self, request_id: str, timeout_sec: int, poll_interval_sec: float) -> dict[str, Any]:
         deadline = time.time() + timeout_sec
         last_status: dict[str, Any] | None = None
+        last_error: str | None = None
         while time.time() < deadline:
-            last_status = self.poll_request(request_id)
+            try:
+                last_status = self.poll_request(request_id)
+            except RuntimeError as exc:
+                if not self._is_retryable_poll_error(str(exc)):
+                    raise
+                last_error = str(exc)
+                time.sleep(poll_interval_sec)
+                continue
             status = str(last_status.get("status") or "")
             if status == "failed":
                 raise RuntimeError(f"watcher marked request failed: {last_status}")
             if status == "finalized" and last_status.get("inclusion_verified") is True:
                 return last_status
             time.sleep(poll_interval_sec)
-        raise TimeoutError(f"request {request_id} did not finalize in time: {last_status}")
+        timeout_state: object = last_status if last_status is not None else last_error
+        raise TimeoutError(f"request {request_id} did not finalize in time: {timeout_state}")
 
     def _post_json(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
         _, body = _request_json(

@@ -76,6 +76,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--adapter", choices=("sqlite", "redis", "cassandra", "scylladb", "db2", "elasticsearch", "all"), default="all")
     parser.add_argument("--target-kib", type=int, default=DEFAULT_TARGET_KIB)
     parser.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE)
+    parser.add_argument("--mode", choices=("batch", "single"), default="batch")
     parser.add_argument("--output-root", default="", help="Optional persistent run directory.")
     return parser.parse_args()
 
@@ -106,6 +107,18 @@ def _cycle_count_for_budget(target_kib: int, batch_size: int) -> int:
     return max(1, math.ceil(target_kib / _approx_batch_kib(batch_size)))
 
 
+def _policy_id_for_mode(mode: str) -> int:
+    return 2 if mode == "batch" else 1
+
+
+def _batch_enabled_for_mode(mode: str) -> bool:
+    return mode == "batch"
+
+
+def _expected_export_count(*, cycles: int, batch_size: int, mode: str) -> int:
+    return cycles if mode == "batch" else cycles * batch_size
+
+
 def _proof_payload(proof_entry: dict[str, Any]) -> dict[str, Any]:
     export_path = Path(str(proof_entry["export_path"]))
     return json.loads(export_path.read_text(encoding="utf-8"))
@@ -131,13 +144,14 @@ def _build_sqlite_config(
     *,
     source_id: str,
     batch_size: int,
+    mode: str,
 ) -> Path:
     config = {
         "agent_name": source_id,
         "log_level": "INFO",
         "denotary": {
             **DENOTARY_VALIDATION.build_denotary_config_for_stack(stack),
-            "policy_id": 2,
+            "policy_id": _policy_id_for_mode(mode),
         },
         "storage": {
             "state_db": str((temp_dir / "state.sqlite3").resolve()),
@@ -153,7 +167,7 @@ def _build_sqlite_config(
                 "include": {"main": ["invoices"]},
                 "checkpoint_policy": "after_ack",
                 "backfill_mode": "full",
-                "batch_enabled": True,
+                "batch_enabled": _batch_enabled_for_mode(mode),
                 "batch_size": batch_size,
                 "connection": {"path": str(database_path.resolve())},
                 "options": {
@@ -177,13 +191,14 @@ def _build_redis_config(
     *,
     source_id: str,
     batch_size: int,
+    mode: str,
 ) -> Path:
     config = {
         "agent_name": source_id,
         "log_level": "INFO",
         "denotary": {
             **DENOTARY_VALIDATION.build_denotary_config_for_stack(stack),
-            "policy_id": 2,
+            "policy_id": _policy_id_for_mode(mode),
         },
         "storage": {
             "state_db": str((temp_dir / "state.sqlite3").resolve()),
@@ -199,7 +214,7 @@ def _build_redis_config(
                 "include": {"0": ["orders:*"]},
                 "checkpoint_policy": "after_ack",
                 "backfill_mode": "full",
-                "batch_enabled": True,
+                "batch_enabled": _batch_enabled_for_mode(mode),
                 "batch_size": batch_size,
                 "connection": {"host": "127.0.0.1", "port": DENOTARY_VALIDATION.REDIS_PORT},
                 "options": {
@@ -222,13 +237,14 @@ def _build_scylladb_config(
     source_id: str,
     batch_size: int,
     table_name: str,
+    mode: str,
 ) -> Path:
     config = {
         "agent_name": source_id,
         "log_level": "INFO",
         "denotary": {
             **DENOTARY_VALIDATION.build_denotary_config_for_stack(stack),
-            "policy_id": 2,
+            "policy_id": _policy_id_for_mode(mode),
         },
         "storage": {
             "state_db": str((temp_dir / "state.sqlite3").resolve()),
@@ -244,7 +260,7 @@ def _build_scylladb_config(
                 "include": {scylladb_keyspace(): [table_name]},
                 "checkpoint_policy": "after_ack",
                 "backfill_mode": "full",
-                "batch_enabled": True,
+                "batch_enabled": _batch_enabled_for_mode(mode),
                 "batch_size": batch_size,
                 "connection": scylladb_connection_config(),
                 "options": {
@@ -269,13 +285,14 @@ def _build_cassandra_config(
     source_id: str,
     batch_size: int,
     table_name: str,
+    mode: str,
 ) -> Path:
     config = {
         "agent_name": source_id,
         "log_level": "INFO",
         "denotary": {
             **DENOTARY_VALIDATION.build_denotary_config_for_stack(stack),
-            "policy_id": 2,
+            "policy_id": _policy_id_for_mode(mode),
         },
         "storage": {
             "state_db": str((temp_dir / "state.sqlite3").resolve()),
@@ -291,7 +308,7 @@ def _build_cassandra_config(
                 "include": {cassandra_keyspace(): [table_name]},
                 "checkpoint_policy": "after_ack",
                 "backfill_mode": "full",
-                "batch_enabled": True,
+                "batch_enabled": _batch_enabled_for_mode(mode),
                 "batch_size": batch_size,
                 "connection": cassandra_connection_config(),
                 "options": {
@@ -316,13 +333,14 @@ def _build_db2_config(
     source_id: str,
     batch_size: int,
     table_name: str,
+    mode: str,
 ) -> Path:
     config = {
         "agent_name": source_id,
         "log_level": "INFO",
         "denotary": {
             **DENOTARY_VALIDATION.build_denotary_config_for_stack(stack),
-            "policy_id": 2,
+            "policy_id": _policy_id_for_mode(mode),
         },
         "storage": {
             "state_db": str((temp_dir / "state.sqlite3").resolve()),
@@ -338,7 +356,7 @@ def _build_db2_config(
                 "include": {db2_schema(): [table_name]},
                 "checkpoint_policy": "after_ack",
                 "backfill_mode": "full",
-                "batch_enabled": True,
+                "batch_enabled": _batch_enabled_for_mode(mode),
                 "batch_size": batch_size,
                 "connection": db2_connection_config(),
                 "options": {
@@ -363,13 +381,14 @@ def _build_elasticsearch_config(
     source_id: str,
     batch_size: int,
     index_name: str,
+    mode: str,
 ) -> Path:
     config = {
         "agent_name": source_id,
         "log_level": "INFO",
         "denotary": {
             **DENOTARY_VALIDATION.build_denotary_config_for_stack(stack),
-            "policy_id": 2,
+            "policy_id": _policy_id_for_mode(mode),
         },
         "storage": {
             "state_db": str((temp_dir / "state.sqlite3").resolve()),
@@ -385,7 +404,7 @@ def _build_elasticsearch_config(
                 "include": {"default": [index_name]},
                 "checkpoint_policy": "after_ack",
                 "backfill_mode": "full",
-                "batch_enabled": True,
+                "batch_enabled": _batch_enabled_for_mode(mode),
                 "batch_size": batch_size,
                 "connection": elasticsearch_connection_config(),
                 "options": {
@@ -444,7 +463,7 @@ def _finalize_result(
     }
 
 
-def run_sqlite_budget(*, run_root: Path, target_kib: int, batch_size: int) -> dict[str, Any]:
+def run_sqlite_budget(*, run_root: Path, target_kib: int, batch_size: int, mode: str) -> dict[str, Any]:
     adapter_root = run_root / "sqlite"
     adapter_root.mkdir(parents=True, exist_ok=True)
     database_path = adapter_root / "ledger.sqlite3"
@@ -461,6 +480,7 @@ def run_sqlite_budget(*, run_root: Path, target_kib: int, batch_size: int) -> di
             stack,
             source_id=source_id,
             batch_size=batch_size,
+            mode=mode,
         )
         engine = AgentEngine(load_config(config_path))
         try:
@@ -493,7 +513,8 @@ def run_sqlite_budget(*, run_root: Path, target_kib: int, batch_size: int) -> di
                 engine=engine,
                 config_path=config_path,
             )
-            if payload["proof_count"] != cycles or payload["delivery_count"] != cycles or payload["dlq_count"] != 0:
+            expected_exports = _expected_export_count(cycles=cycles, batch_size=batch_size, mode=mode)
+            if payload["proof_count"] != expected_exports or payload["delivery_count"] != expected_exports or payload["dlq_count"] != 0:
                 raise RuntimeError(f"sqlite budget run exported unexpected counts: {payload}")
             return payload
         finally:
@@ -502,7 +523,7 @@ def run_sqlite_budget(*, run_root: Path, target_kib: int, batch_size: int) -> di
         stack.stop()
 
 
-def run_redis_budget(*, run_root: Path, target_kib: int, batch_size: int) -> dict[str, Any]:
+def run_redis_budget(*, run_root: Path, target_kib: int, batch_size: int, mode: str) -> dict[str, Any]:
     adapter_root = run_root / "redis"
     adapter_root.mkdir(parents=True, exist_ok=True)
     state_db = adapter_root / "offchain-state.sqlite3"
@@ -520,6 +541,7 @@ def run_redis_budget(*, run_root: Path, target_kib: int, batch_size: int) -> dic
             stack,
             source_id=source_id,
             batch_size=batch_size,
+            mode=mode,
         )
         engine = AgentEngine(load_config(config_path))
         try:
@@ -555,7 +577,8 @@ def run_redis_budget(*, run_root: Path, target_kib: int, batch_size: int) -> dic
                 engine=engine,
                 config_path=config_path,
             )
-            if payload["proof_count"] != cycles or payload["delivery_count"] != cycles or payload["dlq_count"] != 0:
+            expected_exports = _expected_export_count(cycles=cycles, batch_size=batch_size, mode=mode)
+            if payload["proof_count"] != expected_exports or payload["delivery_count"] != expected_exports or payload["dlq_count"] != 0:
                 raise RuntimeError(f"redis budget run exported unexpected counts: {payload}")
             return payload
         finally:
@@ -658,7 +681,7 @@ def _insert_scylladb_row(table_name: str, *, row_id: int, status: str, updated_a
         cluster.shutdown()
 
 
-def run_scylladb_budget(*, run_root: Path, target_kib: int, batch_size: int) -> dict[str, Any]:
+def run_scylladb_budget(*, run_root: Path, target_kib: int, batch_size: int, mode: str) -> dict[str, Any]:
     adapter_root = run_root / "scylladb"
     adapter_root.mkdir(parents=True, exist_ok=True)
     cycles = _cycle_count_for_budget(target_kib, batch_size)
@@ -715,6 +738,7 @@ def run_scylladb_budget(*, run_root: Path, target_kib: int, batch_size: int) -> 
                         stack,
                         source_id=source_id,
                         batch_size=batch_size,
+                        mode=mode,
                         table_name=table_name,
                     )
                     engine = AgentEngine(load_config(config_path))
@@ -747,6 +771,9 @@ def run_scylladb_budget(*, run_root: Path, target_kib: int, batch_size: int) -> 
                                 config_path=config_path,
                             )
                         )
+                        expected_cycle_exports = 1 if mode == "batch" else batch_size
+                        if cycle_payloads[-1]["proof_count"] != expected_cycle_exports or cycle_payloads[-1]["delivery_count"] != expected_cycle_exports or cycle_payloads[-1]["dlq_count"] != 0:
+                            raise RuntimeError(f"scylladb budget cycle {cycle + 1} exported unexpected counts: {cycle_payloads[-1]}")
                     finally:
                         engine.close()
                 finally:
@@ -771,8 +798,8 @@ def run_scylladb_budget(*, run_root: Path, target_kib: int, batch_size: int) -> 
                 "approx_total_kib": _approx_batch_kib(batch_size) * cycles,
                 "batch_size": batch_size,
                 "cycles": cycles,
-                "delivery_count": len(cycle_payloads),
-                "proof_count": len(cycle_payloads),
+                "delivery_count": sum(int(payload["delivery_count"]) for payload in cycle_payloads),
+                "proof_count": sum(int(payload["proof_count"]) for payload in cycle_payloads),
                 "dlq_count": total_dlq,
                 "request_id": latest_payload["request_id"],
                 "proof_path": latest_payload["proof_path"],
@@ -795,7 +822,7 @@ def run_scylladb_budget(*, run_root: Path, target_kib: int, batch_size: int) -> 
             subprocess.run(["docker", "compose", "-f", str(compose_file), "down", "-v"], cwd=str(PROJECT_ROOT), check=False)
 
 
-def run_cassandra_budget(*, run_root: Path, target_kib: int, batch_size: int) -> dict[str, Any]:
+def run_cassandra_budget(*, run_root: Path, target_kib: int, batch_size: int, mode: str) -> dict[str, Any]:
     adapter_root = run_root / "cassandra"
     adapter_root.mkdir(parents=True, exist_ok=True)
     cycles = _cycle_count_for_budget(target_kib, batch_size)
@@ -852,6 +879,7 @@ def run_cassandra_budget(*, run_root: Path, target_kib: int, batch_size: int) ->
                         stack,
                         source_id=source_id,
                         batch_size=batch_size,
+                        mode=mode,
                         table_name=table_name,
                     )
                     engine = AgentEngine(load_config(config_path))
@@ -884,6 +912,9 @@ def run_cassandra_budget(*, run_root: Path, target_kib: int, batch_size: int) ->
                                 config_path=config_path,
                             )
                         )
+                        expected_cycle_exports = 1 if mode == "batch" else batch_size
+                        if cycle_payloads[-1]["proof_count"] != expected_cycle_exports or cycle_payloads[-1]["delivery_count"] != expected_cycle_exports or cycle_payloads[-1]["dlq_count"] != 0:
+                            raise RuntimeError(f"cassandra budget cycle {cycle + 1} exported unexpected counts: {cycle_payloads[-1]}")
                     finally:
                         engine.close()
                 finally:
@@ -908,8 +939,8 @@ def run_cassandra_budget(*, run_root: Path, target_kib: int, batch_size: int) ->
                 "approx_total_kib": _approx_batch_kib(batch_size) * cycles,
                 "batch_size": batch_size,
                 "cycles": cycles,
-                "delivery_count": len(cycle_payloads),
-                "proof_count": len(cycle_payloads),
+                "delivery_count": sum(int(payload["delivery_count"]) for payload in cycle_payloads),
+                "proof_count": sum(int(payload["proof_count"]) for payload in cycle_payloads),
                 "dlq_count": total_dlq,
                 "request_id": latest_payload["request_id"],
                 "proof_path": latest_payload["proof_path"],
@@ -995,7 +1026,7 @@ def _index_elasticsearch_document(index_name: str, *, record_id: str, status: st
         client.close()
 
 
-def run_db2_budget(*, run_root: Path, target_kib: int, batch_size: int) -> dict[str, Any]:
+def run_db2_budget(*, run_root: Path, target_kib: int, batch_size: int, mode: str) -> dict[str, Any]:
     adapter_root = run_root / "db2"
     adapter_root.mkdir(parents=True, exist_ok=True)
     cycles = _cycle_count_for_budget(target_kib, batch_size)
@@ -1051,6 +1082,7 @@ def run_db2_budget(*, run_root: Path, target_kib: int, batch_size: int) -> dict[
                         stack,
                         source_id=source_id,
                         batch_size=batch_size,
+                        mode=mode,
                         table_name=table_name,
                     )
                     engine = AgentEngine(load_config(config_path))
@@ -1083,6 +1115,9 @@ def run_db2_budget(*, run_root: Path, target_kib: int, batch_size: int) -> dict[
                                 config_path=config_path,
                             )
                         )
+                        expected_cycle_exports = 1 if mode == "batch" else batch_size
+                        if cycle_payloads[-1]["proof_count"] != expected_cycle_exports or cycle_payloads[-1]["delivery_count"] != expected_cycle_exports or cycle_payloads[-1]["dlq_count"] != 0:
+                            raise RuntimeError(f"db2 budget cycle {cycle + 1} exported unexpected counts: {cycle_payloads[-1]}")
                     finally:
                         engine.close()
                 finally:
@@ -1111,8 +1146,8 @@ def run_db2_budget(*, run_root: Path, target_kib: int, batch_size: int) -> dict[
                 "approx_total_kib": _approx_batch_kib(batch_size) * cycles,
                 "batch_size": batch_size,
                 "cycles": cycles,
-                "delivery_count": len(cycle_payloads),
-                "proof_count": len(cycle_payloads),
+                "delivery_count": sum(int(payload["delivery_count"]) for payload in cycle_payloads),
+                "proof_count": sum(int(payload["proof_count"]) for payload in cycle_payloads),
                 "dlq_count": total_dlq,
                 "request_id": latest_payload["request_id"],
                 "proof_path": latest_payload["proof_path"],
@@ -1135,7 +1170,7 @@ def run_db2_budget(*, run_root: Path, target_kib: int, batch_size: int) -> dict[
             subprocess.run(["docker", "compose", "-f", str(compose_file), "down", "-v"], cwd=str(PROJECT_ROOT), check=False)
 
 
-def run_elasticsearch_budget(*, run_root: Path, target_kib: int, batch_size: int) -> dict[str, Any]:
+def run_elasticsearch_budget(*, run_root: Path, target_kib: int, batch_size: int, mode: str) -> dict[str, Any]:
     adapter_root = run_root / "elasticsearch"
     adapter_root.mkdir(parents=True, exist_ok=True)
     cycles = _cycle_count_for_budget(target_kib, batch_size)
@@ -1167,6 +1202,7 @@ def run_elasticsearch_budget(*, run_root: Path, target_kib: int, batch_size: int
                         stack,
                         source_id=source_id,
                         batch_size=batch_size,
+                        mode=mode,
                         index_name=index_name,
                     )
                     engine = AgentEngine(load_config(config_path))
@@ -1199,6 +1235,9 @@ def run_elasticsearch_budget(*, run_root: Path, target_kib: int, batch_size: int
                                 config_path=config_path,
                             )
                         )
+                        expected_cycle_exports = 1 if mode == "batch" else batch_size
+                        if cycle_payloads[-1]["proof_count"] != expected_cycle_exports or cycle_payloads[-1]["delivery_count"] != expected_cycle_exports or cycle_payloads[-1]["dlq_count"] != 0:
+                            raise RuntimeError(f"elasticsearch budget cycle {cycle + 1} exported unexpected counts: {cycle_payloads[-1]}")
                     finally:
                         engine.close()
                 finally:
@@ -1219,8 +1258,8 @@ def run_elasticsearch_budget(*, run_root: Path, target_kib: int, batch_size: int
                 "approx_total_kib": _approx_batch_kib(batch_size) * cycles,
                 "batch_size": batch_size,
                 "cycles": cycles,
-                "delivery_count": len(cycle_payloads),
-                "proof_count": len(cycle_payloads),
+                "delivery_count": sum(int(payload["delivery_count"]) for payload in cycle_payloads),
+                "proof_count": sum(int(payload["proof_count"]) for payload in cycle_payloads),
                 "dlq_count": total_dlq,
                 "request_id": latest_payload["request_id"],
                 "proof_path": latest_payload["proof_path"],
@@ -1249,28 +1288,29 @@ def main() -> None:
     run_root = (
         Path(args.output_root).resolve()
         if args.output_root
-        else (DATA_ROOT / f"wave2-mainnet-budget-{utc_stamp().lower()}").resolve()
+        else (DATA_ROOT / f"wave2-mainnet-{'budget' if args.mode == 'batch' else 'single'}-{utc_stamp().lower()}").resolve()
     )
     run_root.mkdir(parents=True, exist_ok=True)
     results: list[dict[str, Any]] = []
     for adapter in adapters:
         try:
             if adapter == "sqlite":
-                results.append(run_sqlite_budget(run_root=run_root, target_kib=args.target_kib, batch_size=args.batch_size))
+                results.append(run_sqlite_budget(run_root=run_root, target_kib=args.target_kib, batch_size=args.batch_size, mode=args.mode))
             elif adapter == "redis":
-                results.append(run_redis_budget(run_root=run_root, target_kib=args.target_kib, batch_size=args.batch_size))
+                results.append(run_redis_budget(run_root=run_root, target_kib=args.target_kib, batch_size=args.batch_size, mode=args.mode))
             elif adapter == "cassandra":
-                results.append(run_cassandra_budget(run_root=run_root, target_kib=args.target_kib, batch_size=args.batch_size))
+                results.append(run_cassandra_budget(run_root=run_root, target_kib=args.target_kib, batch_size=args.batch_size, mode=args.mode))
             elif adapter == "db2":
-                results.append(run_db2_budget(run_root=run_root, target_kib=args.target_kib, batch_size=args.batch_size))
+                results.append(run_db2_budget(run_root=run_root, target_kib=args.target_kib, batch_size=args.batch_size, mode=args.mode))
             elif adapter == "elasticsearch":
-                results.append(run_elasticsearch_budget(run_root=run_root, target_kib=args.target_kib, batch_size=args.batch_size))
+                results.append(run_elasticsearch_budget(run_root=run_root, target_kib=args.target_kib, batch_size=args.batch_size, mode=args.mode))
             else:
-                results.append(run_scylladb_budget(run_root=run_root, target_kib=args.target_kib, batch_size=args.batch_size))
+                results.append(run_scylladb_budget(run_root=run_root, target_kib=args.target_kib, batch_size=args.batch_size, mode=args.mode))
         except Exception as exc:  # noqa: BLE001
             results.append({"adapter": adapter, "status": "failed", "error": str(exc)})
     summary = {
         "network": "denotary",
+        "mode": args.mode,
         "target_kib_per_adapter": args.target_kib,
         "batch_size": args.batch_size,
         "approx_batch_kib": _approx_batch_kib(args.batch_size),

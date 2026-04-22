@@ -50,6 +50,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--config", default=str(DEFAULT_BASE_CONFIG), help="Base live denotary config for signer/off-chain settings.")
     parser.add_argument("--target-kib", type=int, default=DEFAULT_TARGET_KIB, help="Approximate KiB budget per adapter.")
     parser.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE, help="Events per batch transaction.")
+    parser.add_argument("--mode", choices=["batch", "single"], default="batch", help="Batch anchoring or single-submit mode.")
     parser.add_argument("--adapter", choices=["mysql", "mariadb", "sqlserver", "oracle", "mongodb"])
     parser.add_argument("--mongodb-sleep-after-write", type=float, default=DEFAULT_MONGODB_SLEEP_AFTER_WRITE)
     parser.add_argument("--oracle-sleep-after-write", type=float, default=DEFAULT_ORACLE_SLEEP_AFTER_WRITE)
@@ -75,6 +76,18 @@ def _approx_batch_kib(batch_size: int) -> int:
 
 def _cycle_count_for_budget(target_kib: int, batch_size: int) -> int:
     return max(1, math.ceil(target_kib / _approx_batch_kib(batch_size)))
+
+
+def _policy_id_for_mode(mode: str) -> int:
+    return 2 if mode == "batch" else 1
+
+
+def _batch_enabled_for_mode(mode: str) -> bool:
+    return mode == "batch"
+
+
+def _expected_export_count(*, cycles: int, batch_size: int, mode: str) -> int:
+    return cycles if mode == "batch" else cycles * batch_size
 
 
 def _load_base_denotary(config_path: Path) -> dict[str, Any]:
@@ -177,7 +190,7 @@ def _drain_cycle(
     return {"processed": total_processed, "failed": total_failed}
 
 
-def mysql_budget_run(*, denotary: dict[str, Any], target_kib: int, batch_size: int, run_root: Path) -> dict[str, Any]:
+def mysql_budget_run(*, denotary: dict[str, Any], target_kib: int, batch_size: int, run_root: Path, mode: str) -> dict[str, Any]:
     cycles = _cycle_count_for_budget(target_kib, batch_size)
     timestamp = utc_stamp()
     adapter_root = run_root / f"mysql-{timestamp}"
@@ -215,7 +228,7 @@ def mysql_budget_run(*, denotary: dict[str, Any], target_kib: int, batch_size: i
 
     source_id = f"mysql-mainnet-budget-{timestamp.lower()}"
     config = _build_runtime_config(
-        denotary={**denotary, "policy_id": 2},
+        denotary={**denotary, "policy_id": _policy_id_for_mode(mode)},
         agent_name=f"denotary-db-agent-{source_id}",
         state_db=state_db,
         proof_dir=proof_dir,
@@ -227,7 +240,7 @@ def mysql_budget_run(*, denotary: dict[str, Any], target_kib: int, batch_size: i
             "database_name": "ledger",
             "include": {"ledger": ["invoices"]},
             "backfill_mode": "none",
-            "batch_enabled": True,
+            "batch_enabled": _batch_enabled_for_mode(mode),
             "batch_size": batch_size,
             "connection": {
                 "host": "127.0.0.1",
@@ -282,7 +295,7 @@ def mysql_budget_run(*, denotary: dict[str, Any], target_kib: int, batch_size: i
             source_id=source_id,
             engine=engine,
         )
-        if payload["proof_count"] != cycles or payload["dlq_count"] != 0:
+        if payload["proof_count"] != _expected_export_count(cycles=cycles, batch_size=batch_size, mode=mode) or payload["dlq_count"] != 0:
             raise RuntimeError(f"mysql mainnet budget run exported unexpected counts: {payload}")
         payload["status"] = "passed"
         payload["config_path"] = str(config_path)
@@ -292,7 +305,7 @@ def mysql_budget_run(*, denotary: dict[str, Any], target_kib: int, batch_size: i
         HELPERS.docker_compose(HELPERS.MYSQL_COMPOSE_FILE, "down", "-v")
 
 
-def mariadb_budget_run(*, denotary: dict[str, Any], target_kib: int, batch_size: int, run_root: Path) -> dict[str, Any]:
+def mariadb_budget_run(*, denotary: dict[str, Any], target_kib: int, batch_size: int, run_root: Path, mode: str) -> dict[str, Any]:
     cycles = _cycle_count_for_budget(target_kib, batch_size)
     timestamp = utc_stamp()
     adapter_root = run_root / f"mariadb-{timestamp}"
@@ -330,7 +343,7 @@ def mariadb_budget_run(*, denotary: dict[str, Any], target_kib: int, batch_size:
 
     source_id = f"mariadb-mainnet-budget-{timestamp.lower()}"
     config = _build_runtime_config(
-        denotary={**denotary, "policy_id": 2},
+        denotary={**denotary, "policy_id": _policy_id_for_mode(mode)},
         agent_name=f"denotary-db-agent-{source_id}",
         state_db=state_db,
         proof_dir=proof_dir,
@@ -342,7 +355,7 @@ def mariadb_budget_run(*, denotary: dict[str, Any], target_kib: int, batch_size:
             "database_name": "ledger",
             "include": {"ledger": ["invoices"]},
             "backfill_mode": "none",
-            "batch_enabled": True,
+            "batch_enabled": _batch_enabled_for_mode(mode),
             "batch_size": batch_size,
             "connection": {
                 "host": "127.0.0.1",
@@ -397,7 +410,7 @@ def mariadb_budget_run(*, denotary: dict[str, Any], target_kib: int, batch_size:
             source_id=source_id,
             engine=engine,
         )
-        if payload["proof_count"] != cycles or payload["dlq_count"] != 0:
+        if payload["proof_count"] != _expected_export_count(cycles=cycles, batch_size=batch_size, mode=mode) or payload["dlq_count"] != 0:
             raise RuntimeError(f"mariadb mainnet budget run exported unexpected counts: {payload}")
         payload["status"] = "passed"
         payload["config_path"] = str(config_path)
@@ -407,7 +420,7 @@ def mariadb_budget_run(*, denotary: dict[str, Any], target_kib: int, batch_size:
         HELPERS.docker_compose(HELPERS.MARIADB_COMPOSE_FILE, "down", "-v")
 
 
-def sqlserver_budget_run(*, denotary: dict[str, Any], target_kib: int, batch_size: int, run_root: Path) -> dict[str, Any]:
+def sqlserver_budget_run(*, denotary: dict[str, Any], target_kib: int, batch_size: int, run_root: Path, mode: str) -> dict[str, Any]:
     cycles = _cycle_count_for_budget(target_kib, batch_size)
     timestamp = utc_stamp()
     adapter_root = run_root / f"sqlserver-{timestamp}"
@@ -441,7 +454,7 @@ def sqlserver_budget_run(*, denotary: dict[str, Any], target_kib: int, batch_siz
 
     source_id = f"sqlserver-mainnet-budget-{timestamp.lower()}"
     config = _build_runtime_config(
-        denotary={**denotary, "policy_id": 2},
+        denotary={**denotary, "policy_id": _policy_id_for_mode(mode)},
         agent_name=f"denotary-db-agent-{source_id}",
         state_db=state_db,
         proof_dir=proof_dir,
@@ -453,7 +466,7 @@ def sqlserver_budget_run(*, denotary: dict[str, Any], target_kib: int, batch_siz
             "database_name": "ledger",
             "include": {"dbo": ["invoices"]},
             "backfill_mode": "none",
-            "batch_enabled": True,
+            "batch_enabled": _batch_enabled_for_mode(mode),
             "batch_size": batch_size,
             "connection": {
                 "host": "127.0.0.1",
@@ -517,7 +530,7 @@ def sqlserver_budget_run(*, denotary: dict[str, Any], target_kib: int, batch_siz
             source_id=source_id,
             engine=engine,
         )
-        if payload["proof_count"] != cycles or payload["dlq_count"] != 0:
+        if payload["proof_count"] != _expected_export_count(cycles=cycles, batch_size=batch_size, mode=mode) or payload["dlq_count"] != 0:
             raise RuntimeError(f"sqlserver mainnet budget run exported unexpected counts: {payload}")
         payload["status"] = "passed"
         payload["config_path"] = str(config_path)
@@ -533,6 +546,7 @@ def oracle_budget_run(
     target_kib: int,
     batch_size: int,
     run_root: Path,
+    mode: str,
     oracle_sleep_after_write: float,
 ) -> dict[str, Any]:
     cycles = _cycle_count_for_budget(target_kib, batch_size)
@@ -578,7 +592,7 @@ def oracle_budget_run(
             cycle_source_id = f"{base_source_id}-c{cycle + 1:02d}"
             cycle_state_db = adapter_root / f"agent-state-{cycle + 1:02d}.sqlite3"
             config = _build_runtime_config(
-                denotary={**denotary, "policy_id": 2},
+                denotary={**denotary, "policy_id": _policy_id_for_mode(mode)},
                 agent_name=f"denotary-db-agent-{cycle_source_id}",
                 state_db=cycle_state_db,
                 proof_dir=proof_dir,
@@ -590,7 +604,7 @@ def oracle_budget_run(
                     "database_name": "ledger",
                     "include": {"DENOTARY": ["INVOICES"]},
                     "backfill_mode": "none",
-                    "batch_enabled": True,
+                    "batch_enabled": _batch_enabled_for_mode(mode),
                     "batch_size": batch_size,
                     "connection": {
                         "host": "127.0.0.1",
@@ -661,7 +675,8 @@ def oracle_budget_run(
                     source_id=cycle_source_id,
                     engine=engine,
                 )
-                if cycle_payload["proof_count"] != 1 or cycle_payload["delivery_count"] != 1 or cycle_payload["dlq_count"] != 0:
+                expected_cycle_exports = 1 if mode == "batch" else batch_size
+                if cycle_payload["proof_count"] != expected_cycle_exports or cycle_payload["delivery_count"] != expected_cycle_exports or cycle_payload["dlq_count"] != 0:
                     raise RuntimeError(f"oracle cycle {cycle} exported unexpected counts: {cycle_payload}")
                 total_deliveries += int(cycle_payload["delivery_count"])
                 total_proofs += int(cycle_payload["proof_count"])
@@ -695,6 +710,7 @@ def mongodb_budget_run(
     target_kib: int,
     batch_size: int,
     run_root: Path,
+    mode: str,
     mongodb_sleep_after_write: float,
 ) -> dict[str, Any]:
     cycles = _cycle_count_for_budget(target_kib, batch_size)
@@ -723,7 +739,7 @@ def mongodb_budget_run(
 
     source_id = f"mongodb-mainnet-budget-{timestamp.lower()}"
     config = _build_runtime_config(
-        denotary={**denotary, "policy_id": 2},
+        denotary={**denotary, "policy_id": _policy_id_for_mode(mode)},
         agent_name=f"denotary-db-agent-{source_id}",
         state_db=state_db,
         proof_dir=proof_dir,
@@ -735,7 +751,7 @@ def mongodb_budget_run(
             "database_name": "ledger",
             "include": {"ledger": ["invoices"]},
             "backfill_mode": "none",
-            "batch_enabled": True,
+            "batch_enabled": _batch_enabled_for_mode(mode),
             "batch_size": batch_size,
             "connection": {"uri": HELPERS.MONGODB_URI},
             "options": {
@@ -787,7 +803,7 @@ def mongodb_budget_run(
             source_id=source_id,
             engine=engine,
         )
-        if payload["proof_count"] != cycles or payload["dlq_count"] != 0:
+        if payload["proof_count"] != _expected_export_count(cycles=cycles, batch_size=batch_size, mode=mode) or payload["dlq_count"] != 0:
             raise RuntimeError(f"mongodb mainnet budget run exported unexpected counts: {payload}")
         payload["status"] = "passed"
         payload["config_path"] = str(config_path)
@@ -803,18 +819,20 @@ def build_runners(
     target_kib: int,
     batch_size: int,
     run_root: Path,
+    mode: str,
     mongodb_sleep_after_write: float,
     oracle_sleep_after_write: float,
 ) -> dict[str, Callable[[], dict[str, Any]]]:
     return {
-        "mysql": lambda: mysql_budget_run(denotary=denotary, target_kib=target_kib, batch_size=batch_size, run_root=run_root),
-        "mariadb": lambda: mariadb_budget_run(denotary=denotary, target_kib=target_kib, batch_size=batch_size, run_root=run_root),
-        "sqlserver": lambda: sqlserver_budget_run(denotary=denotary, target_kib=target_kib, batch_size=batch_size, run_root=run_root),
+        "mysql": lambda: mysql_budget_run(denotary=denotary, target_kib=target_kib, batch_size=batch_size, run_root=run_root, mode=mode),
+        "mariadb": lambda: mariadb_budget_run(denotary=denotary, target_kib=target_kib, batch_size=batch_size, run_root=run_root, mode=mode),
+        "sqlserver": lambda: sqlserver_budget_run(denotary=denotary, target_kib=target_kib, batch_size=batch_size, run_root=run_root, mode=mode),
         "oracle": lambda: oracle_budget_run(
             denotary=denotary,
             target_kib=target_kib,
             batch_size=batch_size,
             run_root=run_root,
+            mode=mode,
             oracle_sleep_after_write=oracle_sleep_after_write,
         ),
         "mongodb": lambda: mongodb_budget_run(
@@ -822,6 +840,7 @@ def build_runners(
             target_kib=target_kib,
             batch_size=batch_size,
             run_root=run_root,
+            mode=mode,
             mongodb_sleep_after_write=mongodb_sleep_after_write,
         ),
     }
@@ -831,13 +850,15 @@ def main() -> None:
     args = parse_args()
     denotary = _load_base_denotary(Path(args.config))
     _ensure_offchain_services_ready(denotary)
-    run_root = DATA_ROOT / f"wave1-mainnet-budget-{utc_stamp().lower()}"
+    mode_suffix = "budget" if args.mode == "batch" else "single"
+    run_root = DATA_ROOT / f"wave1-mainnet-{mode_suffix}-{utc_stamp().lower()}"
     run_root.mkdir(parents=True, exist_ok=True)
     runners = build_runners(
         denotary=denotary,
         target_kib=args.target_kib,
         batch_size=args.batch_size,
         run_root=run_root,
+        mode=args.mode,
         mongodb_sleep_after_write=args.mongodb_sleep_after_write,
         oracle_sleep_after_write=args.oracle_sleep_after_write,
     )
@@ -849,6 +870,7 @@ def main() -> None:
         except Exception as exc:  # noqa: BLE001
             results.append({"adapter": adapter, "status": "failed", "error": str(exc)})
     summary = {
+        "mode": args.mode,
         "target_kib_per_adapter": args.target_kib,
         "batch_size": args.batch_size,
         "approx_batch_kib": _approx_batch_kib(args.batch_size),

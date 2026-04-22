@@ -62,6 +62,7 @@ class NotarizationPipeline:
         for delay in [0.0, *self.retry_delays]:
             if delay:
                 time.sleep(delay)
+            broadcast: BroadcastResult | None = None
             try:
                 if prepared is None:
                     prepared = self.ingress.prepare_single(payload)
@@ -81,6 +82,17 @@ class NotarizationPipeline:
                             updated_at=now,
                         )
                     )
+                    existing_delivery = {
+                        "request_id": prepared.request_id,
+                        "trace_id": prepared.trace_id,
+                        "source_id": runtime.config.id,
+                        "external_ref": envelope.external_ref,
+                        "tx_id": None,
+                        "status": "prepared_registered",
+                        "prepared_action": prepared.prepared_action,
+                        "last_error": None,
+                        "updated_at": now,
+                    }
                 else:
                     now = utc_now().isoformat()
 
@@ -122,6 +134,17 @@ class NotarizationPipeline:
                             updated_at=now,
                         )
                     )
+                    existing_delivery = {
+                        "request_id": prepared.request_id,
+                        "trace_id": prepared.trace_id,
+                        "source_id": runtime.config.id,
+                        "external_ref": envelope.external_ref,
+                        "tx_id": broadcast.tx_id,
+                        "status": "broadcast_included",
+                        "prepared_action": prepared.prepared_action,
+                        "last_error": None,
+                        "updated_at": now,
+                    }
 
                 if self.config.denotary.wait_for_finality and self.receipt is not None and self.audit is not None:
                     self.finalize_request(runtime, event, envelope, prepared, broadcast)
@@ -134,7 +157,7 @@ class NotarizationPipeline:
             except Exception as exc:  # noqa: BLE001
                 last_error = str(exc)
                 try:
-                    if prepared is not None:
+                    if prepared is not None and self.should_mark_failed(existing_delivery, broadcast, last_error):
                         self.watcher.mark_failed(
                             prepared.request_id,
                             "db_agent_delivery_failed",
@@ -192,6 +215,7 @@ class NotarizationPipeline:
         for delay in [0.0, *self.retry_delays]:
             if delay:
                 time.sleep(delay)
+            broadcast: BroadcastResult | None = None
             try:
                 if prepared is None:
                     prepared = self.ingress.prepare_batch(payload)
@@ -211,6 +235,17 @@ class NotarizationPipeline:
                             updated_at=now,
                         )
                     )
+                    existing_delivery = {
+                        "request_id": prepared.request_id,
+                        "trace_id": prepared.trace_id,
+                        "source_id": runtime.config.id,
+                        "external_ref": payload["external_ref"],
+                        "tx_id": None,
+                        "status": "prepared_registered",
+                        "prepared_action": prepared.prepared_action,
+                        "last_error": None,
+                        "updated_at": now,
+                    }
                 else:
                     now = utc_now().isoformat()
 
@@ -252,6 +287,17 @@ class NotarizationPipeline:
                             updated_at=now,
                         )
                     )
+                    existing_delivery = {
+                        "request_id": prepared.request_id,
+                        "trace_id": prepared.trace_id,
+                        "source_id": runtime.config.id,
+                        "external_ref": payload["external_ref"],
+                        "tx_id": broadcast.tx_id,
+                        "status": "broadcast_included",
+                        "prepared_action": prepared.prepared_action,
+                        "last_error": None,
+                        "updated_at": now,
+                    }
 
                 if self.config.denotary.wait_for_finality and self.receipt is not None and self.audit is not None:
                     self.finalize_batch_request(runtime, events, envelopes, payload["external_ref"], prepared, broadcast)
@@ -264,7 +310,7 @@ class NotarizationPipeline:
             except Exception as exc:  # noqa: BLE001
                 last_error = str(exc)
                 try:
-                    if prepared is not None:
+                    if prepared is not None and self.should_mark_failed(existing_delivery, broadcast, last_error):
                         self.watcher.mark_failed(
                             prepared.request_id,
                             "db_agent_batch_delivery_failed",
@@ -293,6 +339,43 @@ class NotarizationPipeline:
     def is_duplicate_submit_error(exc: Exception) -> bool:
         message = str(exc or "")
         return "duplicate request for submitter" in message or "duplicate batch request for submitter" in message
+
+    @staticmethod
+    def is_retryable_finality_error(error_text: str) -> bool:
+        text = str(error_text or "").lower()
+        if not text:
+            return False
+        retryable_markers = (
+            "http request failed: 502",
+            "http request failed: 503",
+            "http request failed: 504",
+            "rpc call failed:",
+            "timed out",
+            "did not finalize in time",
+            "temporarily unavailable",
+            "connection reset",
+            "connection aborted",
+            "connection refused",
+        )
+        return any(marker in text for marker in retryable_markers)
+
+    @classmethod
+    def should_mark_failed(
+        cls,
+        existing_delivery: dict[str, object | None] | None,
+        broadcast: BroadcastResult | None,
+        error_text: str,
+    ) -> bool:
+        if not cls.is_retryable_finality_error(error_text):
+            return True
+        if broadcast is not None and broadcast.block_num > 0:
+            return False
+        if existing_delivery is None:
+            return True
+        status = str(existing_delivery.get("status") or "")
+        if status == "broadcast_included" and existing_delivery.get("tx_id"):
+            return False
+        return True
 
     def find_resumable_delivery(self, source_id: str, external_ref: str) -> dict[str, object | None] | None:
         candidates = [
@@ -339,13 +422,7 @@ class NotarizationPipeline:
         prepared: PreparedRequest,
         broadcast: BroadcastResult | None,
     ) -> None:
-        self.watcher.wait_for_finalized(
-            prepared.request_id,
-            self.config.denotary.finality_timeout_sec,
-            self.config.denotary.finality_poll_interval_sec,
-        )
-        receipt = self.receipt.get_receipt(prepared.request_id)
-        audit_chain = self.audit.get_chain(prepared.request_id)
+        receipt, audit_chain = self.wait_for_finalized_or_recover(prepared.request_id)
         receipt_tx_id = str(receipt.get("tx_id") or (broadcast.tx_id if broadcast is not None else "") or "")
         receipt_block_num = int(receipt.get("block_num") or (broadcast.block_num if broadcast is not None else 0) or 0)
         export_path = export_proof_bundle(
@@ -395,13 +472,7 @@ class NotarizationPipeline:
         prepared: PreparedRequest,
         broadcast: BroadcastResult | None,
     ) -> None:
-        self.watcher.wait_for_finalized(
-            prepared.request_id,
-            self.config.denotary.finality_timeout_sec,
-            self.config.denotary.finality_poll_interval_sec,
-        )
-        receipt = self.receipt.get_receipt(prepared.request_id)
-        audit_chain = self.audit.get_chain(prepared.request_id)
+        receipt, audit_chain = self.wait_for_finalized_or_recover(prepared.request_id)
         receipt_tx_id = str(receipt.get("tx_id") or (broadcast.tx_id if broadcast is not None else "") or "")
         receipt_block_num = int(receipt.get("block_num") or (broadcast.block_num if broadcast is not None else 0) or 0)
         export_path = export_batch_proof_bundle(
@@ -486,3 +557,34 @@ class NotarizationPipeline:
             prepared,
             existing_broadcast,
         )
+
+    def wait_for_finalized_or_recover(self, request_id: str) -> tuple[dict[str, Any], dict[str, Any]]:
+        try:
+            self.watcher.wait_for_finalized(
+                request_id,
+                self.config.denotary.finality_timeout_sec,
+                self.config.denotary.finality_poll_interval_sec,
+            )
+        except Exception as exc:  # noqa: BLE001
+            if not self.is_retryable_finality_error(str(exc)):
+                raise
+            receipt = self.receipt.get_receipt(request_id)
+            if not self.receipt_is_finalized(receipt):
+                raise
+            audit_chain = self.audit.get_chain(request_id)
+            return receipt, audit_chain
+
+        receipt = self.receipt.get_receipt(request_id)
+        audit_chain = self.audit.get_chain(request_id)
+        return receipt, audit_chain
+
+    @staticmethod
+    def receipt_is_finalized(receipt: dict[str, Any]) -> bool:
+        trust_state = str(receipt.get("trust_state") or "").lower()
+        if trust_state in {"finalized_verified", "finalized"}:
+            return True
+        if receipt.get("finality_flag") is True:
+            return True
+        if receipt.get("finalized_at"):
+            return True
+        return False
