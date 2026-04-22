@@ -1,5 +1,8 @@
 # Wave 2 ScyllaDB Validation
 
+[BlockZero DOO, Serbia https://blockzero.rs](https://blockzero.rs)
+Telegram group: [DeNotaryGroup](https://t.me/DeNotaryGroup)
+
 This document describes the next validation layer prepared for the `Wave 2` `ScyllaDB` adapter.
 
 Current scope:

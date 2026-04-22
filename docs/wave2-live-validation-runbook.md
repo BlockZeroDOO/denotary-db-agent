@@ -1,5 +1,8 @@
 # Wave 2 Live Validation Runbook
 
+[BlockZero DOO, Serbia https://blockzero.rs](https://blockzero.rs)
+Telegram group: [DeNotaryGroup](https://t.me/DeNotaryGroup)
+
 This runbook explains how to prepare real-environment credentials for the current `Wave 2` live harnesses and execute them through one unified entry point.
 
 Current scope:

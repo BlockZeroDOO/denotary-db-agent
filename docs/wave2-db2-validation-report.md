@@ -1,5 +1,8 @@
 # Wave 2 IBM Db2 Validation Report
 
+[BlockZero DOO, Serbia https://blockzero.rs](https://blockzero.rs)
+Telegram group: [DeNotaryGroup](https://t.me/DeNotaryGroup)
+
 This report captures the first deeper local validation layer for the `Wave 2` `IBM Db2` adapter.
 
 ## Validation Summary

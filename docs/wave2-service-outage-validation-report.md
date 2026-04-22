@@ -1,5 +1,8 @@
 # Wave 2 Local Service-Outage Validation Report
 
+[BlockZero DOO, Serbia https://blockzero.rs](https://blockzero.rs)
+Telegram group: [DeNotaryGroup](https://t.me/DeNotaryGroup)
+
 This report captures the current local outage-recovery validation state for the `Wave 2` adapters that already have repeatable local harnesses.
 
 Validated adapters:

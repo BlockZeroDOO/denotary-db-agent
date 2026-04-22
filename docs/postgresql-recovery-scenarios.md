@@ -1,5 +1,8 @@
 # PostgreSQL Recovery Scenarios
 
+[BlockZero DOO, Serbia https://blockzero.rs](https://blockzero.rs)
+Telegram group: [DeNotaryGroup](https://t.me/DeNotaryGroup)
+
 This runbook describes the current PostgreSQL recovery policy for `denotary-db-agent`.
 
 It is focused on logical PostgreSQL sources that use:

@@ -1,5 +1,8 @@
 # Wave 1 Service Outage Validation Report
 
+[BlockZero DOO, Serbia https://blockzero.rs](https://blockzero.rs)
+Telegram group: [DeNotaryGroup](https://t.me/DeNotaryGroup)
+
 This report captures one reproducible local run of temporary off-chain service outage recovery using mocked `ingress / watcher / receipt / audit` services.
 
 Run command:

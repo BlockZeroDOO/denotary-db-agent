@@ -1,5 +1,8 @@
 # Wave 2 Merge Preparation
 
+[BlockZero DOO, Serbia https://blockzero.rs](https://blockzero.rs)
+Telegram group: [DeNotaryGroup](https://t.me/DeNotaryGroup)
+
 This document describes the recommended path for merging `wave-2` back into `main`.
 
 It is not a code-level changelog. It is a rollout and integration checklist for deciding when and how to merge the branch safely.

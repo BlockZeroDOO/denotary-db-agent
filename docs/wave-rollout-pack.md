@@ -1,5 +1,8 @@
 # Wave Rollout Pack
 
+[BlockZero DOO, Serbia https://blockzero.rs](https://blockzero.rs)
+Telegram group: [DeNotaryGroup](https://t.me/DeNotaryGroup)
+
 This document is the stakeholder-facing rollout pack for `denotary-db-agent`.
 
 It is intentionally shorter than the detailed readiness matrices and validation reports.

@@ -1,5 +1,8 @@
 # Supported Database Targets
 
+[BlockZero DOO, Serbia https://blockzero.rs](https://blockzero.rs)
+Telegram group: [DeNotaryGroup](https://t.me/DeNotaryGroup)
+
 ## Wave 1 Targets
 
 | Adapter | Target path | Minimum version | CDC path | Current production-validation status |

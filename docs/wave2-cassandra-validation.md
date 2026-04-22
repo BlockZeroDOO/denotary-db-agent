@@ -1,5 +1,8 @@
 # Wave 2 Apache Cassandra Validation
 
+[BlockZero DOO, Serbia https://blockzero.rs](https://blockzero.rs)
+Telegram group: [DeNotaryGroup](https://t.me/DeNotaryGroup)
+
 This document describes the first deeper local validation layer for the `Wave 2` `Apache Cassandra` adapter.
 
 Current scope:

@@ -1,5 +1,8 @@
 # deNotary DB Agent Architecture
 
+[BlockZero DOO, Serbia https://blockzero.rs](https://blockzero.rs)
+Telegram group: [DeNotaryGroup](https://t.me/DeNotaryGroup)
+
 ## Purpose
 
 `denotary-db-agent` is the enterprise CDC sidecar that bridges database change events into the existing deNotary off-chain stack.

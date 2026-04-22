@@ -1,5 +1,8 @@
 # Wave 2 denotary Mainnet Budget Validation Report
 
+[BlockZero DOO, Serbia https://blockzero.rs](https://blockzero.rs)
+Telegram group: [DeNotaryGroup](https://t.me/DeNotaryGroup)
+
 This report captures the current persisted bounded real-mainnet batch validation runs for the `Wave 2` adapters already exercised against the production `denotary` chain path.
 
 Common validation baseline:

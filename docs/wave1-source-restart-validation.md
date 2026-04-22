@@ -1,5 +1,8 @@
 # Wave 1 Source Restart Validation
 
+[BlockZero DOO, Serbia https://blockzero.rs](https://blockzero.rs)
+Telegram group: [DeNotaryGroup](https://t.me/DeNotaryGroup)
+
 This runbook defines a reproducible source-restart drill for the Wave 1 adapters:
 
 - MySQL

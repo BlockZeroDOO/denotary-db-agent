@@ -1,5 +1,8 @@
 # IBM Db2 Config Reference
 
+[BlockZero DOO, Serbia https://blockzero.rs](https://blockzero.rs)
+Telegram group: [DeNotaryGroup](https://t.me/DeNotaryGroup)
+
 `IBM Db2` is part of the `Wave 2` roadmap.
 
 Current baseline:

@@ -1,5 +1,8 @@
 # Wave 2 Local Service-Outage Validation
 
+[BlockZero DOO, Serbia https://blockzero.rs](https://blockzero.rs)
+Telegram group: [DeNotaryGroup](https://t.me/DeNotaryGroup)
+
 This document describes the current local service-outage validation layer for the `Wave 2` adapters that already have repeatable local validation harnesses:
 
 - `SQLite`

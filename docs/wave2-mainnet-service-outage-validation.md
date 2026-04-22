@@ -1,5 +1,8 @@
 # Wave 2 denotary Mainnet Service-Outage Validation
 
+[BlockZero DOO, Serbia https://blockzero.rs](https://blockzero.rs)
+Telegram group: [DeNotaryGroup](https://t.me/DeNotaryGroup)
+
 This runbook defines the controlled degraded-service drill for the `Wave 2` adapters already confirmed on real `denotary` mainnet.
 
 Current scope:

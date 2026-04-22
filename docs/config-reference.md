@@ -1,5 +1,8 @@
 # deNotary DB Agent Config Reference
 
+[BlockZero DOO, Serbia https://blockzero.rs](https://blockzero.rs)
+Telegram group: [DeNotaryGroup](https://t.me/DeNotaryGroup)
+
 This document is now the entry point for configuration documentation.
 
 Use it together with:

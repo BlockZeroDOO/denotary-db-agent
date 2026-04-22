@@ -1,5 +1,8 @@
 # Wave 2 ScyllaDB Validation Report
 
+[BlockZero DOO, Serbia https://blockzero.rs](https://blockzero.rs)
+Telegram group: [DeNotaryGroup](https://t.me/DeNotaryGroup)
+
 Validation date:
 
 - `2026-04-20`

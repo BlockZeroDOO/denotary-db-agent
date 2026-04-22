@@ -1,5 +1,8 @@
 # denotary Wave 1 Mainnet Validation Report
 
+[BlockZero DOO, Serbia https://blockzero.rs](https://blockzero.rs)
+Telegram group: [DeNotaryGroup](https://t.me/DeNotaryGroup)
+
 This report captures the real mainnet `denotary` validation runs for the Wave 1 database adapters beyond the already documented PostgreSQL path.
 
 Common validation baseline:

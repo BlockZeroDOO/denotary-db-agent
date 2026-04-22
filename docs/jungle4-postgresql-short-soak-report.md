@@ -1,5 +1,8 @@
 # Jungle4 PostgreSQL Short Soak Report
 
+[BlockZero DOO, Serbia https://blockzero.rs](https://blockzero.rs)
+Telegram group: [DeNotaryGroup](https://t.me/DeNotaryGroup)
+
 This report captures the current stable short soak baseline for PostgreSQL
 against the `Jungle4` validation environment.
 

@@ -1,5 +1,8 @@
 # Wave 2 Jungle4 Validation
 
+[BlockZero DOO, Serbia https://blockzero.rs](https://blockzero.rs)
+Telegram group: [DeNotaryGroup](https://t.me/DeNotaryGroup)
+
 This document describes the current Jungle4 validation path for `Wave 2` adapters that can be executed with local source harnesses today.
 
 Current scope:

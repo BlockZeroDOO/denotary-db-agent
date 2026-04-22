@@ -1,5 +1,8 @@
 # Adapter Separation Architecture
 
+[BlockZero DOO, Serbia https://blockzero.rs](https://blockzero.rs)
+Telegram group: [DeNotaryGroup](https://t.me/DeNotaryGroup)
+
 ## Goal
 
 `denotary-db-agent` should treat database capture and deNotary notarization as two separate layers:

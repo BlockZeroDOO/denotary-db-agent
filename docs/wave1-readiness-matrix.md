@@ -1,5 +1,8 @@
 # Wave 1 Readiness Matrix
 
+[BlockZero DOO, Serbia https://blockzero.rs](https://blockzero.rs)
+Telegram group: [DeNotaryGroup](https://t.me/DeNotaryGroup)
+
 This document is the compact readiness view for the Wave 1 adapters:
 
 - PostgreSQL

@@ -1,5 +1,8 @@
 # SQLite Config Reference
 
+[BlockZero DOO, Serbia https://blockzero.rs](https://blockzero.rs)
+Telegram group: [DeNotaryGroup](https://t.me/DeNotaryGroup)
+
 `SQLite` is part of the `Wave 2` roadmap.
 
 Current baseline:

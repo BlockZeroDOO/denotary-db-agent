@@ -1,5 +1,8 @@
 # MySQL Config Reference
 
+[BlockZero DOO, Serbia https://blockzero.rs](https://blockzero.rs)
+Telegram group: [DeNotaryGroup](https://t.me/DeNotaryGroup)
+
 This document describes MySQL-specific `connection` and `options` fields.
 
 ## Current Status

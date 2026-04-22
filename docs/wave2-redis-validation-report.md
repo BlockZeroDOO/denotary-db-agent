@@ -1,5 +1,8 @@
 # Wave 2 Redis Validation Report
 
+[BlockZero DOO, Serbia https://blockzero.rs](https://blockzero.rs)
+Telegram group: [DeNotaryGroup](https://t.me/DeNotaryGroup)
+
 This report captures the first deeper validation layer for the `Wave 2` `Redis` adapter.
 
 ## Validation Summary

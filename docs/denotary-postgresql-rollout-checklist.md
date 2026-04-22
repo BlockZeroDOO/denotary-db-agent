@@ -1,5 +1,8 @@
 # deNotary PostgreSQL Rollout Checklist
 
+[BlockZero DOO, Serbia https://blockzero.rs](https://blockzero.rs)
+Telegram group: [DeNotaryGroup](https://t.me/DeNotaryGroup)
+
 Use this checklist when promoting a PostgreSQL source to `denotary` mainnet.
 
 ## Before Host Setup

@@ -1,5 +1,8 @@
 # Wave 1 Recovery Validation
 
+[BlockZero DOO, Serbia https://blockzero.rs](https://blockzero.rs)
+Telegram group: [DeNotaryGroup](https://t.me/DeNotaryGroup)
+
 This runbook defines the short recovery baseline for the Wave 1 adapters beyond PostgreSQL:
 
 - MySQL

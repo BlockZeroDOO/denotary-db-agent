@@ -1,5 +1,8 @@
 # deNotary Enterprise Permission Model for `verifbill`
 
+[BlockZero DOO, Serbia https://blockzero.rs](https://blockzero.rs)
+Telegram group: [DeNotaryGroup](https://t.me/DeNotaryGroup)
+
 This document describes the recommended Antelope permission layout for enterprise broadcasting through `verifbill` without exposing the account `owner` key.
 
 ## Goal

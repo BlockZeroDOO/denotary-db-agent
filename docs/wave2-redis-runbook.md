@@ -1,5 +1,8 @@
 # Wave 2 Redis Runbook
 
+[BlockZero DOO, Serbia https://blockzero.rs](https://blockzero.rs)
+Telegram group: [DeNotaryGroup](https://t.me/DeNotaryGroup)
+
 This runbook describes the recommended baseline for deploying `denotary-db-agent` against `Redis` in operational state and cache-adjacent scenarios.
 
 The target model is:

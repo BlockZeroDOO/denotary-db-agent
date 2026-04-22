@@ -1,5 +1,8 @@
 # Wave 1 Source Restart Validation Report
 
+[BlockZero DOO, Serbia https://blockzero.rs](https://blockzero.rs)
+Telegram group: [DeNotaryGroup](https://t.me/DeNotaryGroup)
+
 This report captures the current state of the native-CDC source restart drill for the Wave 1 adapters.
 
 Validation date:

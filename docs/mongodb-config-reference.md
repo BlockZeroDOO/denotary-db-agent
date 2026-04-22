@@ -1,5 +1,8 @@
 # MongoDB Config Reference
 
+[BlockZero DOO, Serbia https://blockzero.rs](https://blockzero.rs)
+Telegram group: [DeNotaryGroup](https://t.me/DeNotaryGroup)
+
 This document describes MongoDB-specific configuration.
 
 ## Current Status

@@ -1,5 +1,8 @@
 # Wave 2 Live Validation Checklist
 
+[BlockZero DOO, Serbia https://blockzero.rs](https://blockzero.rs)
+Telegram group: [DeNotaryGroup](https://t.me/DeNotaryGroup)
+
 This checklist provides one operator-facing entry point for the `Wave 2` adapters that already have env-gated live harnesses.
 
 Current scope:

@@ -1,5 +1,8 @@
 # ScyllaDB Config Reference
 
+[BlockZero DOO, Serbia https://blockzero.rs](https://blockzero.rs)
+Telegram group: [DeNotaryGroup](https://t.me/DeNotaryGroup)
+
 `ScyllaDB` is part of the active `Wave 2` roadmap.
 
 Current baseline:

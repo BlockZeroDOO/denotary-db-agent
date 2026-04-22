@@ -1,5 +1,8 @@
 # Wave 2 Long-Soak Validation
 
+[BlockZero DOO, Serbia https://blockzero.rs](https://blockzero.rs)
+Telegram group: [DeNotaryGroup](https://t.me/DeNotaryGroup)
+
 This document defines the bounded long-soak profile for the active `Wave 2` adapters:
 
 - Redis

@@ -1,5 +1,8 @@
 # Wave 1 Long Soak Validation
 
+[BlockZero DOO, Serbia https://blockzero.rs](https://blockzero.rs)
+Telegram group: [DeNotaryGroup](https://t.me/DeNotaryGroup)
+
 This runbook defines a heavier sustained-load validation for the Wave 1 non-PostgreSQL adapters:
 
 - MySQL

@@ -1,5 +1,8 @@
 # Wave 2 denotary Mainnet Service-Outage Validation Report
 
+[BlockZero DOO, Serbia https://blockzero.rs](https://blockzero.rs)
+Telegram group: [DeNotaryGroup](https://t.me/DeNotaryGroup)
+
 This report captures the current persisted degraded-service validation state for the `Wave 2` adapters already exercised on the real `denotary` mainnet path.
 
 Common validation baseline:

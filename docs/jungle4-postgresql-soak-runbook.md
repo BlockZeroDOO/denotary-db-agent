@@ -1,5 +1,8 @@
 # Jungle4 PostgreSQL Soak Runbook
 
+[BlockZero DOO, Serbia https://blockzero.rs](https://blockzero.rs)
+Telegram group: [DeNotaryGroup](https://t.me/DeNotaryGroup)
+
 Use this runbook to execute a long-running PostgreSQL soak test against the
 `Jungle4` validation deployment before promoting operational changes to `denotary`.
 

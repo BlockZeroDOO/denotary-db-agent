@@ -1,5 +1,8 @@
 # deNotary Mainnet Env-File Runbook
 
+[BlockZero DOO, Serbia https://blockzero.rs](https://blockzero.rs)
+Telegram group: [DeNotaryGroup](https://t.me/DeNotaryGroup)
+
 This runbook describes the recommended production baseline for running `denotary-db-agent` against `denotary` mainnet with an env-file-backed hot key.
 
 The target model is:

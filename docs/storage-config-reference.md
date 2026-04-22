@@ -1,5 +1,8 @@
 # Storage Config Reference
 
+[BlockZero DOO, Serbia https://blockzero.rs](https://blockzero.rs)
+Telegram group: [DeNotaryGroup](https://t.me/DeNotaryGroup)
+
 This document describes the `storage` section of the agent config.
 
 ## Example

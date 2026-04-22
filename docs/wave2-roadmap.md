@@ -1,5 +1,8 @@
 # Wave 2 Database Roadmap
 
+[BlockZero DOO, Serbia https://blockzero.rs](https://blockzero.rs)
+Telegram group: [DeNotaryGroup](https://t.me/DeNotaryGroup)
+
 `Wave 2` expands `denotary-db-agent` beyond the current `Wave 1` production set and targets the next commercially relevant database classes that remain in active scope.
 
 ## Goal

@@ -1,5 +1,8 @@
 # deNotary DB Agent Operator Guide
 
+[BlockZero DOO, Serbia https://blockzero.rs](https://blockzero.rs)
+Telegram group: [DeNotaryGroup](https://t.me/DeNotaryGroup)
+
 ## Commands
 
 ### Validate

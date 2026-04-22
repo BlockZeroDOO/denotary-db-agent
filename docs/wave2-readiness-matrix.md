@@ -1,5 +1,8 @@
 # Wave 2 Readiness Matrix
 
+[BlockZero DOO, Serbia https://blockzero.rs](https://blockzero.rs)
+Telegram group: [DeNotaryGroup](https://t.me/DeNotaryGroup)
+
 This document summarizes the current implementation state of `Wave 2` adapters in `denotary-db-agent`.
 
 For the combined rollout view across both implementation waves, see:

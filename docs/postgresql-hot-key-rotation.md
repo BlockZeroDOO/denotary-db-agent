@@ -1,5 +1,8 @@
 # PostgreSQL Hot Key Rotation
 
+[BlockZero DOO, Serbia https://blockzero.rs](https://blockzero.rs)
+Telegram group: [DeNotaryGroup](https://t.me/DeNotaryGroup)
+
 This runbook describes how to rotate the PostgreSQL enterprise hot key used by
 `denotary-db-agent` for:
 

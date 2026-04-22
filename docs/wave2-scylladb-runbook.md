@@ -1,5 +1,8 @@
 # Wave 2 ScyllaDB Runbook
 
+[BlockZero DOO, Serbia https://blockzero.rs](https://blockzero.rs)
+Telegram group: [DeNotaryGroup](https://t.me/DeNotaryGroup)
+
 This runbook describes the recommended baseline for deploying `denotary-db-agent` against `ScyllaDB`.
 
 The target model is:

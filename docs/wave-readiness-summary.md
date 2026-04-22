@@ -1,5 +1,8 @@
 # Wave 1 and Wave 2 Readiness Summary
 
+[BlockZero DOO, Serbia https://blockzero.rs](https://blockzero.rs)
+Telegram group: [DeNotaryGroup](https://t.me/DeNotaryGroup)
+
 This document is the compact rollout-level view across both implementation waves in `denotary-db-agent`.
 
 For the stakeholder-facing short version, see:

@@ -1,5 +1,8 @@
 # Wave 2 Long-Soak Validation Report
 
+[BlockZero DOO, Serbia https://blockzero.rs](https://blockzero.rs)
+Telegram group: [DeNotaryGroup](https://t.me/DeNotaryGroup)
+
 This report captures the current bounded long-soak result for the active `Wave 2` adapters.
 
 Profile:

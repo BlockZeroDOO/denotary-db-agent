@@ -1,5 +1,8 @@
 # Wave 1 Recovery Validation Report
 
+[BlockZero DOO, Serbia https://blockzero.rs](https://blockzero.rs)
+Telegram group: [DeNotaryGroup](https://t.me/DeNotaryGroup)
+
 This report captures one reproducible sequential recovery-baseline run for the Wave 1 non-PostgreSQL adapters using the local live Docker harnesses.
 
 Run command:

@@ -1,5 +1,8 @@
 # Wave 2 denotary Mainnet Validation
 
+[BlockZero DOO, Serbia https://blockzero.rs](https://blockzero.rs)
+Telegram group: [DeNotaryGroup](https://t.me/DeNotaryGroup)
+
 This runbook defines the current real `denotary` mainnet validation path for the `Wave 2` adapters that can already be exercised with local source harnesses.
 
 Current scope:

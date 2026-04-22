@@ -1,5 +1,8 @@
 # deNotary DB Agent Deployment Guide
 
+[BlockZero DOO, Serbia https://blockzero.rs](https://blockzero.rs)
+Telegram group: [DeNotaryGroup](https://t.me/DeNotaryGroup)
+
 This guide describes the supported production packaging patterns for `denotary-db-agent`.
 
 For a `denotary` mainnet deployment with an env-file-backed hot key, use:

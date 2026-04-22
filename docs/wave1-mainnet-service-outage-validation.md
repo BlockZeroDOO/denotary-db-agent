@@ -1,5 +1,8 @@
 # Wave 1 Mainnet Service Outage Validation
 
+[BlockZero DOO, Serbia https://blockzero.rs](https://blockzero.rs)
+Telegram group: [DeNotaryGroup](https://t.me/DeNotaryGroup)
+
 This runbook defines a controlled degraded-service drill for the real `denotary` mainnet path.
 
 It validates temporary outages in the local off-chain stack while keeping:

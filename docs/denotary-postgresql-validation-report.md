@@ -1,5 +1,8 @@
 # deNotary PostgreSQL Validation Report
 
+[BlockZero DOO, Serbia https://blockzero.rs](https://blockzero.rs)
+Telegram group: [DeNotaryGroup](https://t.me/DeNotaryGroup)
+
 This report captures the current live PostgreSQL validation status against `denotary` mainnet.
 
 ## Scope

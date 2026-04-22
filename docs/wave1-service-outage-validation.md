@@ -1,5 +1,8 @@
 # Wave 1 Service Outage Validation
 
+[BlockZero DOO, Serbia https://blockzero.rs](https://blockzero.rs)
+Telegram group: [DeNotaryGroup](https://t.me/DeNotaryGroup)
+
 This runbook defines a bounded recovery drill for temporary off-chain service outages during the notarization pipeline.
 
 It validates recovery for:

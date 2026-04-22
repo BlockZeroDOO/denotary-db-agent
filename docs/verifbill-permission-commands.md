@@ -1,5 +1,8 @@
 # `verifbill` Enterprise Permission Commands
 
+[BlockZero DOO, Serbia https://blockzero.rs](https://blockzero.rs)
+Telegram group: [DeNotaryGroup](https://t.me/DeNotaryGroup)
+
 These commands set up a dedicated enterprise broadcaster permission without exposing the `owner` key in application infrastructure.
 
 Example account:

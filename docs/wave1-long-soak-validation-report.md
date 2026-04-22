@@ -1,5 +1,8 @@
 # Wave 1 Long Soak Validation Report
 
+[BlockZero DOO, Serbia https://blockzero.rs](https://blockzero.rs)
+Telegram group: [DeNotaryGroup](https://t.me/DeNotaryGroup)
+
 This report captures the first sustained long-soak pass for the Wave 1 non-PostgreSQL adapters.
 
 Validation command:

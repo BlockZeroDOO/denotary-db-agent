@@ -1,5 +1,8 @@
 # Wave 1 Short Soak Validation Report
 
+[BlockZero DOO, Serbia https://blockzero.rs](https://blockzero.rs)
+Telegram group: [DeNotaryGroup](https://t.me/DeNotaryGroup)
+
 This report captures one reproducible sequential short-soak run for the Wave 1 non-PostgreSQL adapters using the local live Docker harnesses and local mocked off-chain services.
 
 Run command:
