@@ -172,10 +172,17 @@ docker compose -f deploy/docker-compose.example.yml logs -f
 - prefer `broadcast_backend = "private_key_env"` with a restricted `env_file`
 - keep any inline `submitter_private_key` out of git and reserve it for debug/bootstrap only
 - prefer `submitter_permission = "dnanchor"`
+- keep `Ingress`, `Watcher`, `Receipt`, and `Audit` local/private to the same
+  trusted boundary as the agent
 - set `proof_retention`, `delivery_retention`, and `dlq_retention`
 - enable `diagnostics_snapshot_interval_sec` if you want autonomous operator snapshots
 - use `metrics` and `diagnostics` in health checks and runbooks
 - run `doctor` before first production enablement, after key rotation, and before moving the agent to a new host
+- expect `doctor --strict` to catch public-looking deNotary backend topology,
+  `owner` / `active`, broad secret-file permissions, and broad local artifact
+  path permissions
+- expect live daemon mode to fail closed if the signer / broadcaster path is
+  not ready
 - start from the platform-specific config packs and then replace:
   - watcher token
   - PostgreSQL password

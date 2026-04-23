@@ -32,12 +32,13 @@ For each enabled source, the runtime flow is:
    `capture_mode`
 5. canonicalize each event into a stable envelope and `external_ref`
 6. prepare a notarization request through `Ingress API`
-7. register the request in `Finality Watcher`
-8. sign and broadcast the prepared action through the configured enterprise
-   signer when chain broadcasting is enabled
-9. wait for inclusion/finality when `wait_for_finality = true`
-10. retrieve receipt and audit-chain data
-11. export the local proof bundle and advance the source checkpoint
+7. validate the returned `prepared_action` against the locally expected payload
+8. register the request in `Finality Watcher`
+9. sign and broadcast the prepared action through the configured enterprise
+   signer
+10. wait for inclusion/finality when `wait_for_finality = true`
+11. retrieve receipt and audit-chain data
+12. export the local proof bundle and advance the source checkpoint
 
 If a request was already prepared or broadcast earlier, the agent can resume
 from stored delivery state instead of rebuilding the whole flow from scratch.
@@ -131,6 +132,8 @@ Key modules:
 Main responsibilities:
 
 - prepare requests through `Ingress API`
+- validate `prepared_action` against the locally expected payload before
+  registration and signing
 - register requests with `Finality Watcher`
 - sign and broadcast prepared actions to the chain
 - detect and recover duplicate-submit cases
@@ -286,6 +289,8 @@ Current platform-wide boundaries:
   full adapter set
 - the architecture supports both live chain delivery and local/offline proof
   flows depending on configuration
+- the live notarization path is fail-closed when the signer / broadcaster is
+  not ready
 
 ## Related Documents
 

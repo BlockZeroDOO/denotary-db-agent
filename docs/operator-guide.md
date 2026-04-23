@@ -61,6 +61,11 @@ In the current scaffold this is intended for:
 - local integration with `Ingress API`, `Finality Watcher`, `Receipt Service`, and `Audit API`
 - built-in `verifbill` signing/broadcast using the configured hot permission key
 
+For live notarization, the current runtime is fail-closed:
+
+- if the chain signer / broadcaster is not ready, the agent does not register
+  requests and does not advance checkpoints
+
 ### Run As Daemon
 
 ```bash
@@ -117,17 +122,21 @@ Returns one compact live preflight report for deploy readiness with:
 
 - config path checks
 - reachability of configured deNotary services
+- trusted-boundary warnings when deNotary backend URLs are not obviously
+  local/private
 - chain RPC readiness
 - signer readiness for `submitter@submitter_permission`
 - billing account existence
 - per-source connectivity and tracked-table visibility
 - hot key / on-chain permission key matching
+- local artifact path checks for `state_db` parent and `proof_dir`
 - hot-permission breadth warnings, such as:
   - multiple permission keys
   - linked account permissions
   - delayed waits
   - threshold above `1`
-- warnings when `owner` or `active` is used as the runtime permission
+- `critical` policy violations when `owner` or `active` is used as the runtime
+  permission
 
 Use this before:
 
@@ -153,6 +162,12 @@ mandatory before:
 - key rotation
 - backend topology changes
 - enabling a new source in a live environment
+
+On POSIX hosts, expect `doctor` to downgrade or fail preflight when:
+
+- `env_file` permissions are too broad
+- `state_db` parent or `proof_dir` permissions are too broad for sensitive
+  local artifacts
 
 For PostgreSQL hot-key rotation, see:
 

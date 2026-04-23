@@ -28,6 +28,8 @@ Use this checklist when promoting a PostgreSQL source to `denotary` mainnet.
   - config JSON
   - secret env file
   - state/proof directories
+- Keep runtime state and proof directories service-owned rather than shared
+  temp or broadly accessible paths
 
 ## Service Dependencies
 
@@ -80,6 +82,8 @@ python -m denotary_db_agent --config /etc/denotary-db-agent/agent.json diagnosti
 - `permission_exists = true`
 - `billing_account_exists = true`
 - source connectivity is healthy
+- no trusted-boundary warnings for `Ingress`, `Watcher`, `Receipt`, or `Audit`
+- no `critical` config-path findings for `state_db` parent or `proof_dir`
 - no `critical` or `error` severity
 
 On POSIX hosts also expect:
@@ -100,6 +104,12 @@ python -m denotary_db_agent --config /etc/denotary-db-agent/agent.json run --onc
   - `processed = 1`
   - `failed = 0`
 4. Confirm proof bundle export under `storage.proof_dir`.
+
+If the signer / broadcaster path is missing or unusable, stop there:
+
+- the current runtime is fail-closed
+- `run --once` should not be treated as successful
+- do not continue to daemon enablement until `doctor --strict` is clean
 
 ## On-Chain Verification
 

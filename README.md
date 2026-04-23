@@ -35,6 +35,8 @@ Minimum baseline:
 - keep the hot key in `env_file` or a secret mount, not inline in config
 - treat `state_db`, `proof_dir`, and saved evidence snapshots as sensitive
   local artifacts
+- expect live notarization to fail closed: without a ready signer / broadcaster
+  the agent does not register requests or advance source checkpoints
 
 See:
 
@@ -399,8 +401,14 @@ Note:
 - `doctor --save-snapshot` stores the same preflight report under the local runtime directory for rollout evidence
 - `doctor --strict` exits nonzero only for `critical` / `error` overall severity, so it can be wired into CI/CD and service pre-start checks without failing on normal `degraded` warnings
 - on POSIX hosts, `doctor` also checks whether an env-file hot key is stored in a `0600`-style secret file and raises severity when permissions are too broad
+- on POSIX hosts, `doctor` also checks whether the `state_db` parent and
+  `proof_dir` are broader than recommended for sensitive local artifacts
 - for inline/env-backed hot keys, `doctor` also compares the derived public key with the keys on `submitter@submitter_permission`
 - `doctor` also warns when the runtime permission is broader than recommended, for example multiple keys, linked accounts, waits, or a threshold above `1`
+- `doctor` now treats `owner` or `active` as a `critical` signer-policy violation
+- `doctor` also marks `Ingress`, `Watcher`, `Receipt`, and `Audit` as
+  `degraded` when their URLs are not obviously local/private to the same
+  trusted boundary
 - `report --save-snapshot` exports one rollout evidence bundle that combines:
   - `doctor`
   - `metrics`
@@ -446,6 +454,9 @@ Note:
   - `broadcast_backend = "private_key_env"` and a hot key loaded from `env_file`
   - `broadcast_backend = "private_key"` for inline/debug-only WIF in config
   - `broadcast_backend = "cleos_wallet"` only as a temporary manual fallback
+- live `run` is fail-closed when the signer / broadcaster is not ready, so the
+  agent does not silently register requests or advance checkpoints without a
+  usable chain path
 - `run` without `--once` keeps the agent in daemon mode and, for PostgreSQL trigger sources, waits on `LISTEN/NOTIFY` before the fallback interval elapses
 - for PostgreSQL `pgoutput`, bounded replication-protocol streaming is now the default runtime path
 - `logical_runtime_mode = "peek"` remains available as an explicit fallback

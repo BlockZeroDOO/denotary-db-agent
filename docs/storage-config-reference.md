@@ -25,12 +25,18 @@ This document describes the `storage` section of the agent config.
 - Type: `string`
 - Required: yes
 - Purpose: SQLite file used for checkpoints, deliveries, proofs, and control state
+- Security:
+  - keep the parent directory service-owned
+  - do not place it under shared temp or broadly accessible directories
 
 ### `proof_dir`
 
 - Type: `string`
 - Required: no
 - Default: `"runtime/proofs"`
+- Security:
+  - treat exported proof bundles as sensitive local artifacts
+  - keep this directory service-owned and access-controlled
 
 ### `proof_retention`
 
@@ -79,3 +85,5 @@ This document describes the `storage` section of the agent config.
 
 - proof bundle files are pruned together with their SQLite metadata rows
 - diagnostics snapshots and evidence manifest retention are separate controls
+- on POSIX hosts, `doctor` also checks `state_db` parent and `proof_dir`
+  permissions because they hold sensitive local operator artifacts

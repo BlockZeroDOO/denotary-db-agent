@@ -55,6 +55,23 @@ Recommended baseline:
 - treat chain RPC separately from the local deNotary backend; chain RPC can be
   remote, but the off-chain notarization services should remain private
 
+## Current Runtime Guardrails
+
+The current runtime baseline also enforces several safety checks directly in
+the agent:
+
+- live notarization is fail-closed: without a ready signer / broadcaster the
+  agent does not register requests or advance source checkpoints
+- the agent validates `prepared_action` against the locally expected payload
+  before registration and signing
+- `doctor` treats `owner` and `active` as `critical` runtime signer-policy
+  violations
+- `doctor` marks `Ingress`, `Watcher`, `Receipt`, and `Audit` as `degraded`
+  when their endpoints are not obviously local/private to the same trusted
+  boundary
+- on POSIX hosts, `doctor` also checks `state_db` parent and `proof_dir`
+  permissions because those locations hold sensitive operational artifacts
+
 ## Enterprise Signer Baseline
 
 The recommended signer model is:
@@ -139,4 +156,3 @@ Before first production start:
 - [operator-guide.md](operator-guide.md)
 - [denotary-env-file-runbook.md](denotary-env-file-runbook.md)
 - [verifbill-permission-model.md](verifbill-permission-model.md)
-

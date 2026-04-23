@@ -36,12 +36,16 @@ This document describes the `denotary` section of the agent config.
 - Type: `string`
 - Required: yes
 - Purpose: base URL of the deNotary Ingress API
+- Recommendation:
+  - keep it local/private to the same trusted boundary as the agent
 
 ### `watcher_url`
 
 - Type: `string`
 - Required: yes
 - Purpose: base URL of Finality Watcher
+- Recommendation:
+  - keep it local/private to the same trusted boundary as the agent
 
 ### `watcher_auth_token`
 
@@ -54,12 +58,16 @@ This document describes the `denotary` section of the agent config.
 - Type: `string`
 - Required: no
 - Default: `""`
+- Recommendation:
+  - keep it local/private to the same trusted boundary as the agent
 
 ### `audit_url`
 
 - Type: `string`
 - Required: no
 - Default: `""`
+- Recommendation:
+  - keep it local/private to the same trusted boundary as the agent
 
 ### `chain_rpc_url`
 
@@ -80,7 +88,7 @@ This document describes the `denotary` section of the agent config.
 - Default: `"dnanchor"`
 - Recommendation:
   - use a dedicated custom permission such as `dnanchor`
-  - avoid `owner` and `active` in production
+  - do not use `owner` or `active` in production
 
 ### `broadcast_backend`
 
@@ -128,6 +136,7 @@ This document describes the `denotary` section of the agent config.
 - Recommendation:
   - debug/bootstrap only
   - prefer `private_key_env` + `env_file`
+  - inline key material is treated as non-recommended in `doctor`
 
 ### `schema_id`
 
@@ -169,3 +178,8 @@ This document describes the `denotary` section of the agent config.
 - Do not place `active` on the DB Agent host.
 - Prefer a minimal hot permission such as `dnanchor`.
 - Prefer `private_key_env` with a restricted `env_file`.
+- Keep `Ingress`, `Watcher`, `Receipt`, and `Audit` in the same trusted
+  local/private boundary as the agent.
+- The live notarization path is fail-closed when the signer / broadcaster is
+  not ready.
+- `doctor` treats `owner` or `active` as `critical` signer-policy violations.

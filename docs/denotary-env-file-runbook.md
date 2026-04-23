@@ -161,10 +161,17 @@ Healthy preflight should include:
 - `broadcast_ready = true`
 - `permission_exists = true`
 - `billing_account_exists = true`
+- deNotary backend services in the same trusted boundary as the agent, without
+  public-topology warnings
+- config path checks that do not flag `state_db` parent or `proof_dir` as too
+  broad for sensitive local artifacts
 
 On Linux / POSIX, `doctor` should stay `healthy` when the secret file is `0600` or stricter.
 If the file is group/world-readable it should become `degraded`.
 If the file is group/world-writable it should become `critical`.
+
+If `submitter_permission` is `owner` or `active`, `doctor` should become
+`critical`.
 
 ## On-Chain Verification
 
@@ -222,6 +229,12 @@ Typical causes:
 - old key still present in file after permission rotation
 - missing `dnanchor` permission on chain
 - no active enterprise entitlement
+- missing or unusable chain signer / broadcaster path
+
+When the live chain path is not ready, the current runtime is fail-closed:
+
+- the agent does not register a live request
+- the agent does not advance the source checkpoint
 
 ## Operational Notes
 
