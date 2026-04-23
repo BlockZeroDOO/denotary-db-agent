@@ -9,7 +9,10 @@ For the combined rollout view across both implementation waves, see:
 
 - [wave-readiness-summary.md](wave-readiness-summary.md)
 
-It is intentionally narrower than the `Wave 1` readiness matrix: most `Wave 2` sources are still at the baseline and local-validation stage, while deeper restart/soak/mainnet validation remains future work.
+This matrix started narrower than the `Wave 1` readiness matrix, but the active
+`Wave 2` set now has broad restart, soak, local service-outage, and real-mainnet
+validation coverage. The main remaining work is selective production hardening,
+not baseline adapter implementation.
 
 ## Current Matrix
 

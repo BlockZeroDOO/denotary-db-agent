@@ -3,16 +3,17 @@
 [BlockZero DOO, Serbia https://blockzero.rs](https://blockzero.rs)
 Telegram group: [DeNotaryGroup](https://t.me/DeNotaryGroup)
 
-`Redis` is part of the `Wave 2` roadmap.
+`Redis` is part of the active `Wave 2` adapter set.
 
-Current baseline:
+Current supported model:
 
-- explicit key-pattern snapshot polling
+- explicit key-pattern polling through `SCAN`
 - live `PING` readiness validation
 - deterministic lexicographic key resume
 - dry-run snapshot playback for local pipeline validation
 
-Native keyspace notifications or stream-style CDC are not implemented yet.
+Native keyspace notifications or stream-style CDC are not part of the current
+baseline.
 
 ## Source Example
 
@@ -61,7 +62,8 @@ Native keyspace notifications or stream-style CDC are not implemented yet.
 - Type: `integer`
 - Required: no
 - Default: `0`
-- Purpose: default database number when `include` uses `"default"` or an empty namespace
+- Purpose: default database number when `include` uses `"default"` or an empty
+  namespace
 
 ### `connection.username`
 
@@ -104,13 +106,15 @@ Notes:
 
 - keys are Redis database numbers serialized as strings
 - values must be explicit key patterns
-- the current baseline does not support an implicit “all keys everywhere” mode
+- the current baseline does not support an implicit "all keys everywhere" mode
 
 ## Adapter Options
 
 ### `options.capture_mode`
 
-- Value today: `"scan"`
+- Type: `string`
+- Supported values: `"scan"`
+- Default: `"scan"`
 
 ### `options.row_limit`
 
@@ -132,24 +136,32 @@ Notes:
 - Required: no
 - Purpose: local adapter and pipeline testing without a live Redis instance
 
-## Current Validation Scope
+## Current Validation Status
 
-Implemented now:
+The current `Redis` validation already confirms:
 
-- adapter registration
-- config surface
-- live readiness ping
-- snapshot polling baseline
-- deterministic checkpoint resume
+- Docker-backed live baseline validation
 - local full-cycle proof export
-- Docker-backed live integration and full-cycle harnesses
+- restart recovery validation
+- short-soak validation
+- bounded long-soak validation
+- local service-outage recovery validation
+- real `denotary` mainnet happy-path validation
+- bounded mainnet budget validation
+- real mainnet degraded-service recovery validation
 
-Planned next:
+## Current Limits
 
-- optional keyspace notification CDC path if justified
+The current baseline does not yet provide:
 
-See also:
+- keyspace notification CDC
+- Redis Streams consumption
+- wildcard full-database discovery
+- delete tombstone reconstruction after a key disappears between polls
 
+## Related Docs
+
+- [wave2-redis-runbook.md](wave2-redis-runbook.md)
 - [wave2-redis-validation.md](wave2-redis-validation.md)
 - [wave2-redis-validation-report.md](wave2-redis-validation-report.md)
-- [wave2-redis-runbook.md](wave2-redis-runbook.md)
+- [wave2-readiness-matrix.md](wave2-readiness-matrix.md)

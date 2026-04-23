@@ -3,17 +3,18 @@
 [BlockZero DOO, Serbia https://blockzero.rs](https://blockzero.rs)
 Telegram group: [DeNotaryGroup](https://t.me/DeNotaryGroup)
 
-`SQLite` is part of the `Wave 2` roadmap.
+`SQLite` is part of the active `Wave 2` adapter set.
 
-Current baseline:
+Current supported model:
 
 - file-backed readiness validation
 - tracked-table introspection through `PRAGMA table_info`
 - watermark snapshot polling
 - deterministic checkpoint resume
 - dry-run snapshot playback for local pipeline validation
+- local full-cycle proof export
 
-Native SQLite CDC is not implemented in the current baseline.
+Native SQLite CDC is not part of the current baseline.
 
 ## Source Example
 
@@ -51,7 +52,8 @@ Native SQLite CDC is not implemented in the current baseline.
 Notes:
 
 - the current baseline expects an existing file-backed database
-- for safety, the adapter does not silently create a new empty database during validation
+- for safety, the adapter does not silently create a new empty database during
+  validation
 
 ## Include Layout
 
@@ -78,7 +80,9 @@ Notes:
 
 ### `options.capture_mode`
 
-- Value today: `"watermark"`
+- Type: `string`
+- Supported values: `"watermark"`
+- Default: `"watermark"`
 
 ### `options.watermark_column`
 
@@ -96,7 +100,8 @@ Notes:
 
 - Type: `string[]`
 - Required: no
-- Default: discovered from the SQLite table primary key when available; otherwise falls back to `["id"]`
+- Default: discovered from the SQLite table primary key when available;
+  otherwise falls back to `["id"]`
 
 ### `options.primary_key_column`
 
@@ -118,26 +123,32 @@ Notes:
 - Required: no
 - Purpose: local adapter and pipeline testing without reading a live SQLite file
 
-## Current Validation Scope
+## Current Validation Status
 
-Implemented now:
+The current `SQLite` validation already confirms:
 
-- adapter registration
-- config surface
-- file-backed readiness validation
-- tracked-table introspection
-- watermark snapshot polling baseline
-- deterministic checkpoint resume
+- file-backed baseline validation
 - local full-cycle proof export
-- dry-run snapshot playback
+- cold restart recovery validation
+- short-soak validation
+- bounded long-soak validation
+- local service-outage recovery validation
+- real `denotary` mainnet happy-path validation
+- bounded mainnet budget validation
+- real mainnet degraded-service recovery validation
 
-Planned next:
+## Current Limits
 
-- edge-focused runbooks
-- bounded soak validation for embedded and local-first scenarios
+The current baseline does not yet provide:
 
-See also:
+- native SQLite CDC
+- file-watch driven wakeups
+- wildcard table discovery
+- automatic schema migration handling for edge files
 
+## Related Docs
+
+- [wave2-sqlite-edge-runbook.md](wave2-sqlite-edge-runbook.md)
 - [wave2-sqlite-validation.md](wave2-sqlite-validation.md)
 - [wave2-sqlite-validation-report.md](wave2-sqlite-validation-report.md)
-- [wave2-sqlite-edge-runbook.md](wave2-sqlite-edge-runbook.md)
+- [wave2-readiness-matrix.md](wave2-readiness-matrix.md)

@@ -3,9 +3,9 @@
 [BlockZero DOO, Serbia https://blockzero.rs](https://blockzero.rs)
 Telegram group: [DeNotaryGroup](https://t.me/DeNotaryGroup)
 
-`IBM Db2` is part of the `Wave 2` roadmap.
+`IBM Db2` is part of the active `Wave 2` adapter set.
 
-Current baseline:
+Current supported model:
 
 - connection-shape validation
 - live ping through `ibm_db`
@@ -14,9 +14,8 @@ Current baseline:
 - deterministic checkpoint resume
 - dry-run snapshot playback
 - local full-cycle proof export
-- env-gated live integration harness
 
-Native Db2 CDC is not implemented yet.
+Native Db2 CDC is not part of the current baseline.
 
 ## Source Example
 
@@ -48,34 +47,123 @@ Native Db2 CDC is not implemented yet.
 
 ## Connection Fields
 
-- `host`: `string`, required
-- `port`: `integer`, required
-- `username`: `string`, required
-- `password`: `string`, required
-- `database`: `string`, required
+### `connection.host`
 
-## Options
+- Type: `string`
+- Required: yes
 
-Supported now:
+### `connection.port`
 
-- `capture_mode`
-  - supported values: `"watermark"`
-- `watermark_column`
-- `commit_timestamp_column`
-- `primary_key_column`
-- `primary_key_columns`
-- `row_limit`
-- `dry_run_events`
+- Type: `integer`
+- Required: yes
 
-## Notes
+### `connection.username`
 
-- schemas and table names are normalized to uppercase for the baseline implementation
-- current work focuses on a snapshot / watermark baseline first
-- local proof export is already covered with dry-run snapshot playback
-- live validation can be driven through `scripts/run-live-db2-integration.ps1` once Db2 credentials are available in the environment
-- native Db2 change capture can be added later if commercially justified
+- Type: `string`
+- Required: yes
 
-Deployment guidance:
+### `connection.password`
+
+- Type: `string`
+- Required: yes
+
+### `connection.database`
+
+- Type: `string`
+- Required: yes
+
+## Include Layout
+
+`include` maps schemas to explicitly tracked tables.
+
+Example:
+
+```json
+{
+  "include": {
+    "DB2INST1": ["INVOICES", "PAYMENTS"],
+    "REPORTING": ["DAILY_TOTALS"]
+  }
+}
+```
+
+Notes:
+
+- keys are schema names
+- values must be explicit table names
+- the baseline normalizes schema and table names to uppercase
+
+## Adapter Options
+
+### `options.capture_mode`
+
+- Type: `string`
+- Supported values: `"watermark"`
+- Default: `"watermark"`
+
+### `options.watermark_column`
+
+- Type: `string`
+- Required: no
+- Default: `"UPDATED_AT"`
+
+### `options.commit_timestamp_column`
+
+- Type: `string`
+- Required: no
+- Default: same as `watermark_column`
+
+### `options.primary_key_columns`
+
+- Type: `string[]`
+- Required: no
+
+### `options.primary_key_column`
+
+- Type: `string`
+- Required: no
+
+### `options.row_limit`
+
+- Type: `integer`
+- Required: no
+- Default: inherits the source `batch_size`
+
+### `options.dry_run_events`
+
+- Type: `array`
+- Required: no
+- Purpose: local adapter and pipeline testing without a live Db2 instance
+
+## Current Validation Status
+
+The current `Db2` validation already confirms:
+
+- env-gated live baseline validation
+- local Docker-backed validation
+- local full-cycle proof export
+- restart recovery validation
+- short-soak validation
+- bounded long-soak validation
+- local service-outage recovery validation
+- real `denotary` mainnet happy-path validation
+- bounded mainnet budget validation
+- real mainnet degraded-service recovery validation
+
+## Current Limits
+
+The current baseline does not yet provide:
+
+- native Db2 CDC integration
+- delete tombstone reconstruction after a row disappears between polls
+- wildcard table discovery
+- a production-scale replacement for native log-based capture
+
+## Related Docs
 
 - [wave2-db2-runbook.md](wave2-db2-runbook.md)
+- [wave2-db2-validation.md](wave2-db2-validation.md)
+- [wave2-mainnet-budget-validation-report.md](wave2-mainnet-budget-validation-report.md)
+- [wave2-mainnet-service-outage-validation-report.md](wave2-mainnet-service-outage-validation-report.md)
+- [wave2-readiness-matrix.md](wave2-readiness-matrix.md)
 - [../deploy/config/db2-agent.example.json](../deploy/config/db2-agent.example.json)

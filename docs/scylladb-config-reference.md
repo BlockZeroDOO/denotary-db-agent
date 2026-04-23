@@ -3,23 +3,20 @@
 [BlockZero DOO, Serbia https://blockzero.rs](https://blockzero.rs)
 Telegram group: [DeNotaryGroup](https://t.me/DeNotaryGroup)
 
-`ScyllaDB` is part of the active `Wave 2` roadmap.
+`ScyllaDB` is part of the active `Wave 2` adapter set.
 
-Current baseline:
+Current supported model:
 
 - connection-shape validation
-- Cassandra-compatible live cluster ping through `cassandra-driver`
+- Cassandra-compatible live cluster ping
 - tracked-table introspection
 - watermark snapshot polling
 - deterministic checkpoint resume
 - dry-run snapshot playback
 - local full-cycle proof export
-- Docker-backed live integration harness
 
-Current implementation note:
-
-- the `scylladb` adapter reuses the shared Cassandra-compatible baseline
-- native Scylla-specific CDC is not implemented yet
+The `scylladb` adapter currently reuses the Cassandra-compatible watermark
+baseline. Native Scylla-specific CDC is not part of the current baseline.
 
 ## Source Example
 
@@ -50,37 +47,123 @@ Current implementation note:
 
 ## Connection Fields
 
-- `host`: `string`, required unless `hosts` is provided
-- `hosts`: `string[]`, optional multi-node contact points
-- `port`: `integer`, optional, default `9042`
-- `username`: `string`, optional
-- `password`: `string`, optional
+### `connection.host`
 
-## Options
+- Type: `string`
+- Required: yes, unless `connection.hosts` is used
 
-Supported now:
+### `connection.hosts`
 
-- `capture_mode`
-  - supported values: `"watermark"`
-- `watermark_column`
-- `commit_timestamp_column`
-- `primary_key_column`
-- `primary_key_columns`
-- `row_limit`
-- `dry_run_events`
+- Type: `string[]`
+- Required: no
+- Purpose: optional multi-node contact points
 
-## Notes
+### `connection.port`
 
-- the current baseline is intentionally snapshot-first
-- live reads use tracked tables and a watermark field with deterministic client-side resume
-- the baseline query path may rely on `ALLOW FILTERING`, so it is aimed at validation and early production rollout rather than high-throughput CDC
-- native Scylla-specific CDC can be added later if commercially justified
-- local validation can be driven through:
-  - `scripts/run-live-scylladb-integration.ps1`
-  - `scripts/run-wave2-scylladb-validation.ps1`
+- Type: `integer`
+- Required: no
+- Default: `9042`
 
-Deployment guidance:
+### `connection.username`
+
+- Type: `string`
+- Required: no
+
+### `connection.password`
+
+- Type: `string`
+- Required: no
+
+## Include Layout
+
+`include` maps keyspaces to explicitly tracked tables.
+
+Example:
+
+```json
+{
+  "include": {
+    "ledger": ["invoices", "payments"],
+    "reporting": ["daily_totals"]
+  }
+}
+```
+
+Notes:
+
+- keys are keyspace names
+- values must be explicit table names
+- the current baseline does not support wildcard table discovery
+
+## Adapter Options
+
+### `options.capture_mode`
+
+- Type: `string`
+- Supported values: `"watermark"`
+- Default: `"watermark"`
+
+### `options.watermark_column`
+
+- Type: `string`
+- Required: no
+- Default: `"updated_at"`
+
+### `options.commit_timestamp_column`
+
+- Type: `string`
+- Required: no
+- Default: same as `watermark_column`
+
+### `options.primary_key_columns`
+
+- Type: `string[]`
+- Required: no
+
+### `options.primary_key_column`
+
+- Type: `string`
+- Required: no
+
+### `options.row_limit`
+
+- Type: `integer`
+- Required: no
+- Default: inherits the source `batch_size`
+
+### `options.dry_run_events`
+
+- Type: `array`
+- Required: no
+- Purpose: local adapter and pipeline testing without a live cluster
+
+## Current Validation Status
+
+The current `ScyllaDB` validation already confirms:
+
+- Docker-backed live baseline validation
+- local full-cycle proof export
+- restart recovery validation
+- short-soak validation
+- bounded long-soak validation
+- local service-outage recovery validation
+- real `denotary` mainnet happy-path validation
+- bounded mainnet budget validation
+- real mainnet degraded-service recovery validation
+
+## Current Limits
+
+The current baseline does not yet provide:
+
+- native Scylla-specific CDC
+- delete tombstone reconstruction after a row disappears between polls
+- wildcard table discovery
+- a production-scale replacement for native mutation streaming
+
+## Related Docs
 
 - [wave2-scylladb-runbook.md](wave2-scylladb-runbook.md)
 - [wave2-scylladb-validation.md](wave2-scylladb-validation.md)
+- [wave2-scylladb-validation-report.md](wave2-scylladb-validation-report.md)
+- [wave2-readiness-matrix.md](wave2-readiness-matrix.md)
 - [../deploy/config/scylladb-agent.example.json](../deploy/config/scylladb-agent.example.json)

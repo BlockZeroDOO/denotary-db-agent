@@ -17,7 +17,6 @@ Current scope:
 - built-in enterprise signing and broadcast through `verifbill`
 - Finality Watcher registration and inclusion/finality updates
 - receipt / audit-chain retrieval and local proof bundle export
-- CLI for run / validate / status / health / diagnostics / bootstrap / inspect / refresh / pause / resume / replay / checkpoint / proof
 - CLI for run / validate / status / health / doctor / metrics / diagnostics / bootstrap / inspect / refresh / pause / resume / replay / checkpoint / proof
 
 The first wave of database targets is:
@@ -29,7 +28,7 @@ The first wave of database targets is:
 - Oracle Database
 - MongoDB
 
-Wave 2 planning is now defined for:
+The active `Wave 2` adapter set is:
 
 - Redis
 - ScyllaDB
@@ -40,90 +39,45 @@ Wave 2 planning is now defined for:
 
 Current Redis Wave 2 status:
 
-- adapter registration and config surface are implemented
-- live readiness ping is implemented
-- explicit key-pattern snapshot polling is implemented
-- deterministic lexicographic key resume is implemented
-- local full-cycle proof export is implemented for the snapshot baseline
-- Docker-backed live integration and full-cycle harnesses are implemented
-- restart recovery validation is implemented
-- short-soak validation is implemented
-- local service-outage recovery validation is implemented
-- real `denotary` mainnet validation is implemented
-- bounded `denotary` mainnet batch validation is implemented
-- real `denotary` mainnet degraded-service recovery validation is implemented
-- dry-run snapshot playback is implemented for pipeline validation
+- supported baseline: explicit key-pattern polling via `SCAN`
+- local validation depth: full-cycle, restart, short-soak, long-soak, and local service-outage recovery
+- real `denotary` validation depth: happy-path, bounded budget, and degraded-service recovery
+- current limit: native Redis CDC is not implemented
 
 Current ScyllaDB Wave 2 status:
 
-- adapter registration and config surface are implemented
-- shared Cassandra-compatible snapshot / watermark baseline is implemented
-- deterministic checkpoint resume is implemented
-- local full-cycle proof export is implemented
-- Docker-backed live integration is implemented
-- restart recovery validation is implemented
-- short-soak validation is implemented
-- real `denotary` mainnet validation is implemented
-- deployment starter config and operator runbook are implemented
+- supported baseline: Cassandra-compatible table polling via `watermark`
+- local validation depth: full-cycle, restart, short-soak, long-soak, and local service-outage recovery
+- real `denotary` validation depth: happy-path, bounded budget, and degraded-service recovery
+- current limit: native Scylla-specific CDC is not implemented
 
 Current IBM Db2 Wave 2 status:
 
-- adapter registration and config surface are implemented
-- live readiness ping is implemented
-- tracked-table introspection is implemented
-- watermark snapshot polling with deterministic resume is implemented
-- local full-cycle proof export is implemented
-- env-gated live integration harness is implemented
-- local Docker-backed restart validation is implemented
-- local Docker-backed short-soak validation is implemented
-- real `denotary` mainnet happy-path validation is implemented
-- bounded `denotary` mainnet budget validation is implemented
-- real `denotary` mainnet degraded-service validation is implemented
-- dry-run snapshot playback is implemented for pipeline validation
+- supported baseline: tracked-table polling via `watermark`
+- local validation depth: full-cycle, restart, short-soak, long-soak, and local service-outage recovery
+- real `denotary` validation depth: happy-path, bounded budget, and degraded-service recovery
+- current limit: native Db2 CDC is not implemented
 
 Current Apache Cassandra Wave 2 status:
 
-- adapter registration and config surface are implemented
-- live cluster ping is implemented
-- tracked-table introspection is implemented
-- watermark snapshot polling with deterministic resume is implemented
-- local full-cycle proof export is implemented
-- env-gated live integration harness is implemented
-- local Docker-backed restart validation is implemented
-- local Docker-backed short-soak validation is implemented
-- real `denotary` mainnet happy-path validation is implemented
-- bounded `denotary` mainnet budget validation is implemented
-- real `denotary` mainnet degraded-service validation is implemented
-- dry-run snapshot playback is implemented for pipeline validation
+- supported baseline: tracked-table polling via `watermark`
+- local validation depth: full-cycle, restart, short-soak, long-soak, and local service-outage recovery
+- real `denotary` validation depth: happy-path, bounded budget, and degraded-service recovery
+- current limit: native Cassandra CDC is not implemented
 
 Current Elasticsearch Wave 2 status:
 
-- adapter registration and config surface are implemented
-- live cluster ping is implemented
-- tracked-index introspection is implemented
-- query-based snapshot polling with deterministic resume is implemented
-- local full-cycle proof export is implemented
-- env-gated live integration harness is implemented
-- env-gated restart and short-soak validation harness is implemented
-- real `denotary` mainnet happy-path validation is implemented
-- bounded `denotary` mainnet budget validation is implemented
-- real `denotary` mainnet degraded-service validation is implemented
-- dry-run snapshot playback is implemented for pipeline validation
+- supported baseline: tracked-index polling via `watermark`
+- local validation depth: full-cycle, restart, short-soak, long-soak, and local service-outage recovery
+- real `denotary` validation depth: happy-path, bounded budget, and degraded-service recovery
+- current limit: native Elasticsearch CDC is not implemented
 
 Current SQLite Wave 2 status:
 
-- adapter registration and config surface are implemented
-- file-backed readiness validation is implemented
-- tracked-table introspection is implemented
-- watermark snapshot polling with deterministic resume is implemented
-- local full-cycle proof export is implemented
-- cold restart recovery validation is implemented
-- short-soak validation is implemented
-- local service-outage recovery validation is implemented
-- real `denotary` mainnet validation is implemented
-- bounded `denotary` mainnet batch validation is implemented
-- real `denotary` mainnet degraded-service recovery validation is implemented
-- dry-run snapshot playback is implemented for pipeline validation
+- supported baseline: file-backed tracked-table polling via `watermark`
+- local validation depth: full-cycle, cold restart, short-soak, long-soak, and local service-outage recovery
+- real `denotary` validation depth: happy-path, bounded budget, and degraded-service recovery
+- current limit: native SQLite CDC is not implemented
 
 Current Wave 2 long-soak status:
 

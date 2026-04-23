@@ -3,23 +3,30 @@
 [BlockZero DOO, Serbia https://blockzero.rs](https://blockzero.rs)
 Telegram group: [DeNotaryGroup](https://t.me/DeNotaryGroup)
 
-This runbook describes the recommended baseline for deploying `denotary-db-agent` against `Elasticsearch`.
+This runbook describes the current release-oriented baseline for deploying
+`denotary-db-agent` against `Elasticsearch`.
 
-The target model is:
+The supported source model today is:
 
 - `Elasticsearch` remains the operational search and index layer
-- `denotary-db-agent` polls explicit index patterns through the `Elasticsearch` adapter
-- notarization proofs are exported locally and anchored through the normal `deNotary` service stack
+- `denotary-db-agent` polls explicit index patterns through the `elasticsearch`
+  adapter
+- notarization proofs are exported locally and anchored through the normal
+  `deNotary` service stack
 - checkpoint state survives process restarts in the local `state_db`
+
+Native Elasticsearch CDC is not part of the current baseline.
 
 ## Recommended Fit
 
 Use the `Elasticsearch` adapter when:
 
-- the business workflow depends on the indexed representation exposed through search
+- the business workflow depends on the indexed representation exposed through
+  search
 - explicit index-pattern selection is acceptable
 - bounded polling is acceptable
-- the goal is to prove the search-visible record set rather than reconstruct a full source-of-truth transaction log
+- the goal is to prove the search-visible record set rather than reconstruct a
+  full source-of-truth transaction log
 
 Good examples:
 
@@ -32,7 +39,7 @@ Good examples:
 
 Starter config:
 
-- [../deploy/config/elasticsearch-agent.example.json](../deploy/config/elasticsearch-agent.example.json)
+- [deploy/config/elasticsearch-agent.example.json](../deploy/config/elasticsearch-agent.example.json)
 
 Reference docs:
 
@@ -56,14 +63,10 @@ Before starting the agent, confirm:
 
 Example Linux layout:
 
-- Elasticsearch endpoint:
-  - `https://elasticsearch.example.com:9200`
-- agent state:
-  - `/var/lib/denotary-db-agent/elasticsearch-agent-state.sqlite3`
-- proof export directory:
-  - `/var/lib/denotary-db-agent/proofs`
-- env-file secret:
-  - `/etc/denotary-db-agent/agent.secrets.env`
+- Elasticsearch endpoint: `https://elasticsearch.example.com:9200`
+- agent state: `/var/lib/denotary-db-agent/elasticsearch-agent-state.sqlite3`
+- proof export directory: `/var/lib/denotary-db-agent/proofs`
+- env-file secret: `/etc/denotary-db-agent/agent.secrets.env`
 
 ## Recommended Source Settings
 
@@ -135,24 +138,35 @@ Healthy baseline should include:
 - explicit tracked index patterns
 - tracked objects under `tracked_tables`
 - `cdc.runtime.transport = "polling"`
+- `cdc.runtime.effective_runtime_mode = "watermark"`
 
 ## Validation Status
 
-The current `Elasticsearch` implementation already confirms:
+The current `Elasticsearch` validation already confirms:
 
 - env-gated live baseline validation
+- local Docker-backed validation
 - local full-cycle proof export
-- env-gated restart and short-soak validation harness
+- restart recovery validation
+- short-soak validation
+- bounded long-soak validation
+- local service-outage recovery validation
+- real `denotary` mainnet happy-path validation
+- bounded mainnet budget validation
+- real mainnet degraded-service recovery validation
 
 Reference:
 
 - [wave2-elasticsearch-validation.md](wave2-elasticsearch-validation.md)
+- [wave2-mainnet-budget-validation-report.md](wave2-mainnet-budget-validation-report.md)
+- [wave2-mainnet-service-outage-validation-report.md](wave2-mainnet-service-outage-validation-report.md)
 - [wave2-readiness-matrix.md](wave2-readiness-matrix.md)
 
 ## Operational Notes
 
 - keep index patterns explicit and narrow
-- treat the current adapter as proof of the indexed operational view, not necessarily the canonical source-of-truth record
+- treat the current adapter as proof of the indexed operational view, not
+  necessarily the canonical source-of-truth record
 - keep watermark and primary key fields stable across the tracked indices
 - bound proof retention for high-volume search workloads
 - prefer polling intervals that reflect actual document churn
@@ -164,11 +178,11 @@ The current baseline does not yet provide:
 - native change-stream style CDC
 - delete tombstone reconstruction after a document disappears between polls
 - full index-agnostic discovery
-- mainnet `denotary` validation
+- a production-scale replacement for mutation-stream capture
 
-For now, the strongest production posture is:
+For the current release posture, prefer:
 
 - explicit index-pattern coverage
 - bounded polling
 - regular `doctor`, `inspect`, and `report` checks
-- env-gated restart and short-soak validation before promoting a pattern set to production
+- release or rollout evidence based on restart, soak, and degraded-service runs

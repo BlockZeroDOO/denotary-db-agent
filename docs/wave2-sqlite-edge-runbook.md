@@ -3,14 +3,19 @@
 [BlockZero DOO, Serbia https://blockzero.rs](https://blockzero.rs)
 Telegram group: [DeNotaryGroup](https://t.me/DeNotaryGroup)
 
-This runbook describes the recommended baseline for deploying `denotary-db-agent` against a file-backed `SQLite` database in edge, embedded, desktop, or local-first environments.
+This runbook describes the current release-oriented baseline for deploying
+`denotary-db-agent` against a file-backed `SQLite` database in edge, embedded,
+desktop, or local-first environments.
 
-The target model is:
+The supported source model today is:
 
 - `SQLite` remains the local system-of-record for the edge workload
 - `denotary-db-agent` polls tracked tables on a bounded interval
-- notarization proofs are exported locally and anchored through the normal `deNotary` service stack
+- notarization proofs are exported locally and anchored through the normal
+  `deNotary` service stack
 - the local checkpoint store survives process restarts
+
+Native SQLite CDC is not part of the current baseline.
 
 ## Recommended Fit
 
@@ -48,25 +53,20 @@ Before starting the agent, confirm:
 
 1. the `SQLite` file already exists
 2. tracked tables already exist inside the file
-3. each tracked table has:
-   - a stable primary key
-   - a monotonic watermark column such as `updated_at`
-4. the service user can read the `SQLite` file
-5. the service user can write the configured `storage.state_db` and `proof_dir`
-6. the `deNotary` service stack and signer are already reachable
+3. each tracked table has a stable primary key
+4. each tracked table has a monotonic watermark column such as `updated_at`
+5. the service user can read the `SQLite` file
+6. the service user can write the configured `storage.state_db` and `proof_dir`
+7. the `deNotary` service stack and signer are already reachable
 
 ## Recommended Layout
 
 Example Linux layout:
 
-- application database:
-  - `/var/lib/edge-app/ledger.sqlite3`
-- agent state:
-  - `/var/lib/denotary-db-agent/sqlite-edge-state.sqlite3`
-- proof export directory:
-  - `/var/lib/denotary-db-agent/proofs`
-- env-file secret:
-  - `/etc/denotary-db-agent/agent.secrets.env`
+- application database: `/var/lib/edge-app/ledger.sqlite3`
+- agent state: `/var/lib/denotary-db-agent/sqlite-edge-state.sqlite3`
+- proof export directory: `/var/lib/denotary-db-agent/proofs`
+- env-file secret: `/etc/denotary-db-agent/agent.secrets.env`
 
 Keep the agent checkpoint database separate from the application database.
 
@@ -134,30 +134,38 @@ Healthy baseline should include:
 
 - `adapter = "sqlite"`
 - `capture_mode = "watermark"`
-- tracked tables under `main`
+- tracked tables under `tracked_tables`
 - configured `watermark_column`
 - configured or discovered primary key columns
 - `cdc.runtime.transport = "polling"`
 
-## Restart Behavior
+## Validation Status
 
 The current `SQLite` validation already confirms:
 
-- cold agent restart recovery
-- continued checkpoint use from the same `storage.state_db`
-- no duplicated proof export during the validated restart drill
+- file-backed baseline validation
+- local full-cycle proof export
+- cold restart recovery validation
+- short-soak validation
+- bounded long-soak validation
+- local service-outage recovery validation
+- real `denotary` mainnet happy-path validation
+- bounded mainnet budget validation
+- real mainnet degraded-service recovery validation
 
 Reference:
 
 - [wave2-sqlite-validation.md](wave2-sqlite-validation.md)
 - [wave2-sqlite-validation-report.md](wave2-sqlite-validation-report.md)
+- [wave2-readiness-matrix.md](wave2-readiness-matrix.md)
 
 ## Operational Notes
 
 - prefer polling intervals that match the write pattern of the edge app
 - avoid tables whose watermark can move backward
 - keep proof retention bounded on storage-constrained hosts
-- archive proof bundles during uplink windows if the device is intermittently connected
+- archive proof bundles during uplink windows if the device is intermittently
+  connected
 - keep the application database and agent checkpoint database as separate files
 
 ## Current Limits
@@ -169,9 +177,10 @@ The current baseline does not yet provide:
 - wildcard table discovery
 - automatic schema migration handling for edge files
 
-For now, the strongest production posture is:
+For the current release posture, prefer:
 
 - explicit tracked tables
 - explicit PK and watermark configuration
 - bounded polling
-- periodic validation using the existing `doctor`, `inspect`, and `report` flows
+- regular `doctor`, `inspect`, and `report` checks
+- release or rollout evidence based on restart, soak, and degraded-service runs

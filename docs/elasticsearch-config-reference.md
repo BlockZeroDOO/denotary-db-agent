@@ -3,9 +3,9 @@
 [BlockZero DOO, Serbia https://blockzero.rs](https://blockzero.rs)
 Telegram group: [DeNotaryGroup](https://t.me/DeNotaryGroup)
 
-`Elasticsearch` is part of the `Wave 2` roadmap.
+`Elasticsearch` is part of the active `Wave 2` adapter set.
 
-Current baseline:
+Current supported model:
 
 - connection-shape validation
 - live cluster ping through `elasticsearch`
@@ -14,10 +14,8 @@ Current baseline:
 - deterministic checkpoint resume
 - dry-run snapshot playback
 - local full-cycle proof export
-- env-gated live integration harness
-- env-gated restart and short-soak validation harness
 
-Native Elasticsearch CDC is not implemented yet.
+Native Elasticsearch CDC is not part of the current baseline.
 
 ## Source Example
 
@@ -46,38 +44,134 @@ Native Elasticsearch CDC is not implemented yet.
 
 ## Connection Fields
 
-- `url`: `string`, required unless `host` or `hosts` is provided
-- `host`: `string`, optional
-- `hosts`: `string[]`, optional
-- `port`: `integer`, optional, default `9200`
-- `scheme`: `string`, optional, default `http`
-- `username`: `string`, optional
-- `password`: `string`, optional
-- `verify_certs`: `boolean`, optional
+### `connection.url`
 
-## Options
+- Type: `string`
+- Required: yes, unless `connection.host` or `connection.hosts` is used
 
-Supported now:
+### `connection.host`
 
-- `capture_mode`
-  - supported values: `"watermark"`
-- `watermark_field`
-- `commit_timestamp_field`
-- `primary_key_field`
-- `row_limit`
-- `dry_run_events`
+- Type: `string`
+- Required: no
 
-## Notes
+### `connection.hosts`
 
-- the current baseline is intentionally snapshot-first
-- tracked documents are read via sorted search requests using the watermark field and `_id`
-- this baseline is useful for validating search-backed evidence, not for replacing a true source-of-truth CDC feed
-- local proof export is already covered with dry-run snapshot playback
-- live validation can be driven through `scripts/run-live-elasticsearch-integration.ps1` once Elasticsearch credentials are available in the environment
-- deeper restart and short-soak validation can be driven through `scripts/run-wave2-elasticsearch-validation.ps1`
-- native Elasticsearch CDC can be added later if commercially justified
+- Type: `string[]`
+- Required: no
 
-Deployment guidance:
+### `connection.port`
+
+- Type: `integer`
+- Required: no
+- Default: `9200`
+
+### `connection.scheme`
+
+- Type: `string`
+- Required: no
+- Default: `"http"`
+
+### `connection.username`
+
+- Type: `string`
+- Required: no
+
+### `connection.password`
+
+- Type: `string`
+- Required: no
+
+### `connection.verify_certs`
+
+- Type: `boolean`
+- Required: no
+
+## Include Layout
+
+`include` maps logical namespaces to explicitly tracked index names or patterns.
+
+Example:
+
+```json
+{
+  "include": {
+    "default": ["orders-*", "payments-*"]
+  }
+}
+```
+
+Notes:
+
+- values must be explicit index names or patterns
+- the current baseline does not support index-agnostic discovery
+
+## Adapter Options
+
+### `options.capture_mode`
+
+- Type: `string`
+- Supported values: `"watermark"`
+- Default: `"watermark"`
+
+### `options.watermark_field`
+
+- Type: `string`
+- Required: no
+- Default: `"updated_at"`
+
+### `options.commit_timestamp_field`
+
+- Type: `string`
+- Required: no
+- Default: same as `watermark_field`
+
+### `options.primary_key_field`
+
+- Type: `string`
+- Required: no
+- Default: `"_id"`
+
+### `options.row_limit`
+
+- Type: `integer`
+- Required: no
+- Default: inherits the source `batch_size`
+
+### `options.dry_run_events`
+
+- Type: `array`
+- Required: no
+- Purpose: local adapter and pipeline testing without a live cluster
+
+## Current Validation Status
+
+The current `Elasticsearch` validation already confirms:
+
+- env-gated live baseline validation
+- local Docker-backed validation
+- local full-cycle proof export
+- restart recovery validation
+- short-soak validation
+- bounded long-soak validation
+- local service-outage recovery validation
+- real `denotary` mainnet happy-path validation
+- bounded mainnet budget validation
+- real mainnet degraded-service recovery validation
+
+## Current Limits
+
+The current baseline does not yet provide:
+
+- native change-stream style CDC
+- delete tombstone reconstruction after a document disappears between polls
+- full index-agnostic discovery
+- a production-scale replacement for mutation-stream capture
+
+## Related Docs
 
 - [wave2-elasticsearch-runbook.md](wave2-elasticsearch-runbook.md)
+- [wave2-elasticsearch-validation.md](wave2-elasticsearch-validation.md)
+- [wave2-mainnet-budget-validation-report.md](wave2-mainnet-budget-validation-report.md)
+- [wave2-mainnet-service-outage-validation-report.md](wave2-mainnet-service-outage-validation-report.md)
+- [wave2-readiness-matrix.md](wave2-readiness-matrix.md)
 - [../deploy/config/elasticsearch-agent.example.json](../deploy/config/elasticsearch-agent.example.json)

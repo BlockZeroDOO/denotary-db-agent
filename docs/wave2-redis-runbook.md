@@ -3,14 +3,18 @@
 [BlockZero DOO, Serbia https://blockzero.rs](https://blockzero.rs)
 Telegram group: [DeNotaryGroup](https://t.me/DeNotaryGroup)
 
-This runbook describes the recommended baseline for deploying `denotary-db-agent` against `Redis` in operational state and cache-adjacent scenarios.
+This runbook describes the current release-oriented baseline for deploying
+`denotary-db-agent` against `Redis`.
 
-The target model is:
+The supported source model today is:
 
 - `Redis` remains the operational state store
 - `denotary-db-agent` polls explicit key patterns through `SCAN`
-- notarization proofs are exported locally and anchored through the normal `deNotary` service stack
+- notarization proofs are exported locally and anchored through the normal
+  `deNotary` service stack
 - checkpoint state survives process restarts in the local `state_db`
+
+Native Redis CDC is not part of the current baseline.
 
 ## Recommended Fit
 
@@ -19,7 +23,8 @@ Use the `Redis` adapter when:
 - the business workflow depends on specific Redis keys or namespaces
 - explicit key-pattern selection is acceptable
 - bounded polling is acceptable
-- the goal is to prove the state exposed through Redis rather than reconstruct an internal event log
+- the goal is to prove the state exposed through Redis rather than reconstruct
+  an internal event log
 
 Good examples:
 
@@ -55,14 +60,10 @@ Before starting the agent, confirm:
 
 Example Linux layout:
 
-- application Redis:
-  - `127.0.0.1:6379`
-- agent state:
-  - `/var/lib/denotary-db-agent/redis-agent-state.sqlite3`
-- proof export directory:
-  - `/var/lib/denotary-db-agent/proofs`
-- env-file secret:
-  - `/etc/denotary-db-agent/agent.secrets.env`
+- application Redis: `127.0.0.1:6379`
+- agent state: `/var/lib/denotary-db-agent/redis-agent-state.sqlite3`
+- proof export directory: `/var/lib/denotary-db-agent/proofs`
+- env-file secret: `/etc/denotary-db-agent/agent.secrets.env`
 
 ## Recommended Source Settings
 
@@ -131,6 +132,7 @@ Healthy baseline should include:
 - explicit tracked key patterns
 - per-database tracked keys under `tracked_keys`
 - `cdc.runtime.transport = "polling"`
+- `cdc.runtime.effective_runtime_mode = "scan"`
 
 ## Validation Status
 
@@ -140,16 +142,22 @@ The current `Redis` validation already confirms:
 - local full-cycle proof export
 - restart recovery validation
 - short-soak validation
+- bounded long-soak validation
+- local service-outage recovery validation
+- real `denotary` mainnet happy-path validation
+- bounded mainnet budget validation
+- real mainnet degraded-service recovery validation
 
 Reference:
 
 - [wave2-redis-validation.md](wave2-redis-validation.md)
 - [wave2-redis-validation-report.md](wave2-redis-validation-report.md)
+- [wave2-readiness-matrix.md](wave2-readiness-matrix.md)
 
 ## Operational Notes
 
 - keep key patterns explicit and narrow
-- avoid using the current baseline as an implicit “all keys” scraper
+- avoid treating the current baseline as an implicit "all keys" scraper
 - size `row_limit` and `scan_count` to fit the expected key volume
 - bound proof retention for cache-heavy workloads
 - prefer polling intervals that reflect how fast the tracked keys actually change
@@ -163,9 +171,9 @@ The current baseline does not yet provide:
 - wildcard full-database discovery
 - delete tombstone reconstruction after a key disappears between polls
 
-For now, the strongest production posture is:
+For the current release posture, prefer:
 
 - explicit key-pattern coverage
 - bounded polling
 - regular `doctor`, `inspect`, and `report` checks
-- restart and short-soak validation before promoting a pattern set to production
+- release or rollout evidence based on restart, soak, and degraded-service runs
