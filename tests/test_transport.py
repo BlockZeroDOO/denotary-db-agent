@@ -18,6 +18,8 @@ from denotary_db_agent.transport import (
     WatcherClient,
     build_chain_client,
     derive_public_key_candidates,
+    export_batch_proof_bundle,
+    export_proof_bundle,
     inspect_secret_file_permissions,
     resolve_private_key,
 )
@@ -454,3 +456,79 @@ class WatcherClientRetryTest(unittest.TestCase):
         self.assertEqual(payload["status"], "finalized")
         self.assertTrue(payload["inclusion_verified"])
         self.assertEqual(FlakyWatcherHandler.poll_calls, 2)
+
+
+class ProofExportPathSafetyTest(unittest.TestCase):
+    def test_export_proof_bundle_rejects_path_traversal_components(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            envelope = SimpleNamespace(
+                source_type="postgresql",
+                source_instance="erp-eu-1",
+                database_name="ledger",
+                schema_or_namespace="public",
+                table_or_collection="invoices",
+                operation="update",
+                primary_key={"id": 1},
+                change_version="lsn:1",
+                commit_timestamp="2026-04-17T10:11:12Z",
+                before_hash="a" * 64,
+                after_hash="b" * 64,
+                metadata_hash="c" * 64,
+                external_ref="d" * 64,
+                trace_id="trace-1",
+            )
+            prepared = SimpleNamespace(
+                trace_id="trace-1",
+                prepared_action={"contract": "verifbill", "action": "submit", "data": {}},
+            )
+            broadcast = SimpleNamespace(tx_id="e" * 64, block_num=123)
+
+            with self.assertRaisesRegex(RuntimeError, "request_id must not contain path separators or drive prefixes"):
+                export_proof_bundle(
+                    temp_dir,
+                    "pg-core-ledger",
+                    "../escape",
+                    envelope,
+                    prepared,
+                    broadcast,
+                    {"request_id": "request-1"},
+                    {"links": []},
+                )
+
+    def test_export_batch_proof_bundle_writes_inside_proof_dir(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            envelope = SimpleNamespace(
+                source_type="postgresql",
+                source_instance="erp-eu-1",
+                database_name="ledger",
+                schema_or_namespace="public",
+                table_or_collection="invoices",
+                operation="update",
+                primary_key={"id": 1},
+                change_version="lsn:1",
+                commit_timestamp="2026-04-17T10:11:12Z",
+                before_hash="a" * 64,
+                after_hash="b" * 64,
+                metadata_hash="c" * 64,
+                external_ref="d" * 64,
+                trace_id="trace-1",
+            )
+            prepared = SimpleNamespace(
+                trace_id="trace-1",
+                prepared_action={"contract": "verifbill", "action": "submitroot", "data": {}},
+            )
+            broadcast = SimpleNamespace(tx_id="e" * 64, block_num=123)
+
+            export_path = export_batch_proof_bundle(
+                temp_dir,
+                "pg-core-ledger",
+                "request-1",
+                [envelope],
+                prepared,
+                broadcast,
+                {"request_id": "request-1"},
+                {"links": []},
+            )
+
+            self.assertTrue(Path(export_path).exists())
+            self.assertTrue(Path(export_path).resolve().is_relative_to(Path(temp_dir).resolve()))

@@ -33,9 +33,9 @@ class MockIngressHandler(BaseHTTPRequestHandler):
         response = {
             "request_id": "request-1",
             "trace_id": "trace-1",
-            "external_ref_hash": "1" * 64,
+            "external_ref_hash": payload["external_ref"],
             "object_hash": "2" * 64,
-            "verification_account": "verif",
+            "verification_account": "verifbill",
             "prepared_action": {
                 "contract": "verifbill",
                 "action": "submit",
@@ -45,7 +45,7 @@ class MockIngressHandler(BaseHTTPRequestHandler):
                     "schema_id": 1,
                     "policy_id": 1,
                     "object_hash": "2" * 64,
-                    "external_ref": "1" * 64,
+                    "external_ref": payload["external_ref"],
                 },
             },
         }
@@ -269,11 +269,6 @@ class EngineTest(unittest.TestCase):
             **event_payload,
         )
 
-        prepared = SimpleNamespace(
-            request_id="request-retry-1",
-            trace_id="trace-retry-1",
-            prepared_action={"contract": "verifbill", "action": "submit", "data": {"submitter": "enterpriseac1"}},
-        )
         prepare_calls: list[dict[str, object]] = []
         register_calls: list[tuple[str, str]] = []
         included_calls: list[tuple[str, str, int]] = []
@@ -281,7 +276,28 @@ class EngineTest(unittest.TestCase):
 
         def prepare_single(payload):
             prepare_calls.append(payload)
-            return prepared
+            return SimpleNamespace(
+                request_id="request-retry-1",
+                trace_id="trace-retry-1",
+                external_ref_hash=str(payload["external_ref"]),
+                object_hash="2" * 64,
+                root_hash=None,
+                manifest_hash=None,
+                leaf_count=None,
+                verification_account="verifbill",
+                prepared_action={
+                    "contract": "verifbill",
+                    "action": "submit",
+                    "data": {
+                        "payer": payload["submitter"],
+                        "submitter": payload["submitter"],
+                        "schema_id": int(payload["schema"]["id"]),
+                        "policy_id": int(payload["policy"]["id"]),
+                        "object_hash": "2" * 64,
+                        "external_ref": str(payload["external_ref"]),
+                    },
+                },
+            )
 
         class FlakyChain:
             def __init__(self) -> None:
@@ -325,11 +341,6 @@ class EngineTest(unittest.TestCase):
             **event_payload,
         )
 
-        prepared = SimpleNamespace(
-            request_id="request-finality-1",
-            trace_id="trace-finality-1",
-            prepared_action={"contract": "verifbill", "action": "submit", "data": {"submitter": "enterpriseac1"}},
-        )
         chain_calls: list[dict[str, object]] = []
         register_calls: list[tuple[str, str]] = []
         included_calls: list[tuple[str, str, int]] = []
@@ -337,7 +348,28 @@ class EngineTest(unittest.TestCase):
         wait_calls: list[str] = []
 
         def prepare_single(payload):
-            return prepared
+            return SimpleNamespace(
+                request_id="request-finality-1",
+                trace_id="trace-finality-1",
+                external_ref_hash=str(payload["external_ref"]),
+                object_hash="2" * 64,
+                root_hash=None,
+                manifest_hash=None,
+                leaf_count=None,
+                verification_account="verifbill",
+                prepared_action={
+                    "contract": "verifbill",
+                    "action": "submit",
+                    "data": {
+                        "payer": payload["submitter"],
+                        "submitter": payload["submitter"],
+                        "schema_id": int(payload["schema"]["id"]),
+                        "policy_id": int(payload["policy"]["id"]),
+                        "object_hash": "2" * 64,
+                        "external_ref": str(payload["external_ref"]),
+                    },
+                },
+            )
 
         class IncludedOnceChain:
             def push_prepared_action(self, prepared_action):
@@ -491,7 +523,7 @@ class EngineTest(unittest.TestCase):
                         "schema_id": 1,
                         "policy_id": 1,
                         "object_hash": "2" * 64,
-                        "external_ref": "1" * 64,
+                        "external_ref": "external-ref-1",
                     },
                 },
                 last_error=None,
@@ -543,6 +575,8 @@ class EngineTest(unittest.TestCase):
                     trace_id="trace-live-1",
                     to_prepare_payload=lambda submitter, schema_id, policy_id: {
                         "submitter": submitter,
+                        "schema": {"id": schema_id},
+                        "policy": {"id": policy_id},
                         "payload": {"mode": "single"},
                         "external_ref": "external-ref-1",
                     },
@@ -650,7 +684,7 @@ class EngineTest(unittest.TestCase):
                         "root_hash": "3" * 64,
                         "manifest_hash": "4" * 64,
                         "leaf_count": 2,
-                        "external_ref": "5" * 64,
+                        "external_ref": batch_external_ref,
                     },
                 },
                 last_error=None,
@@ -1378,9 +1412,120 @@ class EngineTest(unittest.TestCase):
         with patch("denotary_db_agent.engine.derive_public_key_candidates", return_value={"EOS": "EOS_OWNER"}):
             report = engine.doctor("pg-core-ledger")
 
+        self.assertEqual(report["signer"]["severity"], "critical")
+        self.assertFalse(report["signer"]["broadcast_ready"])
+        self.assertIn(
+            "submitter_permission is owner; use a dedicated hot permission such as dnanchor for runtime notarization",
+            report["errors"],
+        )
+
+    def test_doctor_marks_active_permission_as_critical_when_otherwise_ready(self) -> None:
+        config = json.loads(self.config_path.read_text(encoding="utf-8"))
+        config["denotary"]["chain_rpc_url"] = "https://history.denotary.io"
+        config["denotary"]["submitter_private_key"] = "test-wif"
+        config["denotary"]["submitter_permission"] = "active"
+        self.config_path.write_text(json.dumps(config), encoding="utf-8")
+
+        engine = AgentEngine(load_config(self.config_path))
+        engine.chain = SimpleNamespace(
+            health=lambda: {"server_version_string": "v1", "chain_id": "abc"},
+            get_account=lambda account: {"account_name": account, "permissions": [{"perm_name": "active"}]},
+        )
+
+        with patch("denotary_db_agent.engine.derive_public_key_candidates", return_value={"EOS": "EOS_ACTIVE"}):
+            report = engine.doctor("pg-core-ledger")
+
+        self.assertEqual(report["signer"]["severity"], "critical")
+        self.assertFalse(report["signer"]["broadcast_ready"])
+        self.assertIn(
+            "submitter_permission is active; use a dedicated hot permission such as dnanchor for runtime notarization",
+            report["errors"],
+        )
+
+    def test_doctor_marks_inline_hot_key_as_degraded(self) -> None:
+        config = json.loads(self.config_path.read_text(encoding="utf-8"))
+        config["denotary"]["chain_rpc_url"] = "https://history.denotary.io"
+        config["denotary"]["submitter_private_key"] = "test-wif"
+        self.config_path.write_text(json.dumps(config), encoding="utf-8")
+
+        engine = AgentEngine(load_config(self.config_path))
+        engine.chain = SimpleNamespace(
+            health=lambda: {"server_version_string": "v1", "chain_id": "abc"},
+            get_account=lambda account: {
+                "account_name": account,
+                "permissions": [
+                    {
+                        "perm_name": "dnanchor",
+                        "required_auth": {"keys": [{"key": "EOS_MATCH", "weight": 1}]},
+                    }
+                ],
+            },
+        )
+
+        with patch("denotary_db_agent.engine.derive_public_key_candidates", return_value={"EOS": "EOS_MATCH"}):
+            report = engine.doctor("pg-core-ledger")
+
         self.assertEqual(report["signer"]["severity"], "degraded")
+        self.assertEqual(report["signer"]["private_key_source"], "inline")
         self.assertTrue(report["signer"]["broadcast_ready"])
-        self.assertIn("submitter_permission is owner; a dedicated hot permission such as dnanchor is recommended", report["warnings"])
+        self.assertIn("inline submitter_private_key is configured", " ".join(report["warnings"]))
+
+    def test_process_event_rejects_prepared_action_mismatch_before_broadcast(self) -> None:
+        engine = AgentEngine(load_config(self.config_path))
+        runtime = engine.runtimes()[0]
+        event_payload = engine.config.sources[0].options["dry_run_events"][0]
+        event = ChangeEvent(
+            source_id=runtime.config.id,
+            source_type="postgresql",
+            source_instance=runtime.config.source_instance,
+            database_name=runtime.config.database_name,
+            **event_payload,
+        )
+
+        register_calls: list[tuple[str, str]] = []
+        chain_calls: list[dict[str, object]] = []
+        engine.ingress = SimpleNamespace(
+            prepare_single=lambda payload: SimpleNamespace(
+                request_id="request-mismatch-1",
+                trace_id="trace-mismatch-1",
+                external_ref_hash=str(payload["external_ref"]),
+                object_hash="2" * 64,
+                root_hash=None,
+                manifest_hash=None,
+                leaf_count=None,
+                verification_account="verifbill",
+                prepared_action={
+                    "contract": "verifbill",
+                    "action": "submit",
+                    "data": {
+                        "payer": payload["submitter"],
+                        "submitter": payload["submitter"],
+                        "schema_id": 999,
+                        "policy_id": int(payload["policy"]["id"]),
+                        "object_hash": "2" * 64,
+                        "external_ref": str(payload["external_ref"]),
+                    },
+                },
+                raw={},
+            )
+        )
+        engine.watcher = SimpleNamespace(
+            register=lambda prepared_obj, envelope: register_calls.append((prepared_obj.request_id, prepared_obj.trace_id)),
+            mark_failed=lambda request_id, reason, details=None: None,
+        )
+
+        class RecordingChain:
+            def push_prepared_action(self, prepared_action):
+                chain_calls.append(prepared_action)
+                return SimpleNamespace(tx_id="a" * 64, block_num=321)
+
+        engine.chain = RecordingChain()
+
+        with self.assertRaisesRegex(RuntimeError, "prepared_action schema_id does not match"):
+            engine._process_event(runtime, event)
+
+        self.assertEqual(register_calls, [])
+        self.assertEqual(chain_calls, [])
 
     def test_doctor_accepts_cleos_wallet_backend_when_wallet_is_unlocked(self) -> None:
         config = json.loads(self.config_path.read_text(encoding="utf-8"))

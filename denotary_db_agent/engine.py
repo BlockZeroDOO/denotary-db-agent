@@ -521,7 +521,9 @@ class AgentEngine:
         wallet_command_effective = wallet_command or ["cleos"]
         chain_ready = bool(self.config.denotary.chain_rpc_url)
         if permission in {"owner", "active"}:
-            warnings.append(f"submitter_permission is {permission}; a dedicated hot permission such as dnanchor is recommended")
+            errors.append(
+                f"submitter_permission is {permission}; use a dedicated hot permission such as dnanchor for runtime notarization"
+            )
         wallet_probe: dict[str, object] | None = None
         signer_material_ready = False
         if effective_backend == "private_key":
@@ -654,6 +656,8 @@ class AgentEngine:
                 errors.append(f"unable to load billing account {self.config.denotary.billing_account}: {exc}")
 
         if signer_material_ready and effective_backend in {"private_key", "private_key_env"} and private_key_present:
+            if str(key_info.get("source") or "") == "inline":
+                warnings.append("inline submitter_private_key is configured; prefer env_file or a secret mount for the hot key")
             try:
                 derived_public_keys = derive_public_key_candidates(str(key_info.get("private_key") or ""))
             except Exception as exc:  # noqa: BLE001

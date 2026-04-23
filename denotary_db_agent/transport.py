@@ -21,6 +21,31 @@ from cryptos import changebase, encode_pubkey, privtopub
 from denotary_db_agent.models import CanonicalEnvelope
 
 
+def _safe_path_component(value: str, field_name: str) -> str:
+    component = str(value or "").strip()
+    if not component:
+        raise RuntimeError(f"{field_name} must not be empty")
+    if component in {".", ".."}:
+        raise RuntimeError(f"{field_name} must not be . or ..")
+    if component != Path(component).name:
+        raise RuntimeError(f"{field_name} must not contain path separators or drive prefixes")
+    return component
+
+
+def _build_export_path(proof_dir: str, source_id: str, request_id: str) -> Path:
+    export_root = Path(proof_dir).expanduser().resolve()
+    safe_source_id = _safe_path_component(source_id, "source_id")
+    safe_request_id = _safe_path_component(request_id, "request_id")
+    export_root.mkdir(parents=True, exist_ok=True)
+    export_path = (export_root / safe_source_id / f"{safe_request_id}.json").resolve(strict=False)
+    try:
+        export_path.relative_to(export_root)
+    except ValueError as exc:
+        raise RuntimeError("proof export path escapes proof_dir") from exc
+    export_path.parent.mkdir(parents=True, exist_ok=True)
+    return export_path
+
+
 def _parse_env_file(path: str) -> dict[str, str]:
     values: dict[str, str] = {}
     env_path = Path(path)
@@ -669,10 +694,7 @@ def export_proof_bundle(
     receipt: dict[str, Any],
     audit_chain: dict[str, Any],
 ) -> str:
-    export_root = Path(proof_dir)
-    export_root.mkdir(parents=True, exist_ok=True)
-    export_path = export_root / source_id / f"{request_id}.json"
-    export_path.parent.mkdir(parents=True, exist_ok=True)
+    export_path = _build_export_path(proof_dir, source_id, request_id)
     payload = {
         "request_id": request_id,
         "trace_id": prepared.trace_id,
@@ -714,10 +736,7 @@ def export_batch_proof_bundle(
     receipt: dict[str, Any],
     audit_chain: dict[str, Any],
 ) -> str:
-    export_root = Path(proof_dir)
-    export_root.mkdir(parents=True, exist_ok=True)
-    export_path = export_root / source_id / f"{request_id}.json"
-    export_path.parent.mkdir(parents=True, exist_ok=True)
+    export_path = _build_export_path(proof_dir, source_id, request_id)
     payload = {
         "request_id": request_id,
         "trace_id": prepared.trace_id,

@@ -41,6 +41,70 @@ class NotarizationPipeline:
         self.chain = chain
         self.retry_delays = retry_delays
 
+    @staticmethod
+    def _prepared_action_name(prepared_action: dict[str, Any]) -> str:
+        return str(prepared_action.get("action") or prepared_action.get("name") or "")
+
+    @staticmethod
+    def _prepared_action_contract(prepared_action: dict[str, Any]) -> str:
+        return str(prepared_action.get("contract") or prepared_action.get("account") or "")
+
+    @classmethod
+    def _validate_prepared_action_common(
+        cls,
+        prepared: PreparedRequest,
+        payload: dict[str, object],
+        expected_action: str,
+    ) -> dict[str, Any]:
+        prepared_action = dict(prepared.prepared_action or {})
+        data = prepared_action.get("data")
+        if not isinstance(data, dict):
+            raise RuntimeError("prepared_action.data must be an object")
+        actual_contract = cls._prepared_action_contract(prepared_action)
+        if actual_contract != str(prepared.verification_account or ""):
+            raise RuntimeError("prepared_action contract does not match verification_account")
+        actual_action = cls._prepared_action_name(prepared_action)
+        if actual_action != expected_action:
+            raise RuntimeError(f"prepared_action action mismatch: expected {expected_action}, got {actual_action or 'empty'}")
+        if str(prepared.external_ref_hash or "") != str(payload.get("external_ref") or ""):
+            raise RuntimeError("prepared_action external_ref_hash does not match the locally expected external_ref")
+        submitter = str(payload.get("submitter") or "")
+        schema = payload.get("schema") if isinstance(payload.get("schema"), dict) else {}
+        policy = payload.get("policy") if isinstance(payload.get("policy"), dict) else {}
+        if str(data.get("submitter") or "") != submitter:
+            raise RuntimeError("prepared_action submitter does not match the locally expected submitter")
+        if int(data.get("schema_id") or 0) != int(schema.get("id") or 0):
+            raise RuntimeError("prepared_action schema_id does not match the locally expected schema id")
+        if int(data.get("policy_id") or 0) != int(policy.get("id") or 0):
+            raise RuntimeError("prepared_action policy_id does not match the locally expected policy id")
+        if str(data.get("external_ref") or "") != str(payload.get("external_ref") or ""):
+            raise RuntimeError("prepared_action external_ref does not match the locally expected external_ref")
+        return data
+
+    @classmethod
+    def validate_prepared_single(cls, prepared: PreparedRequest, payload: dict[str, object]) -> None:
+        data = cls._validate_prepared_action_common(prepared, payload, "submit")
+        expected_object_hash = str(prepared.object_hash or "")
+        if not expected_object_hash:
+            raise RuntimeError("prepared single request is missing object_hash")
+        if str(data.get("object_hash") or "") != expected_object_hash:
+            raise RuntimeError("prepared_action object_hash does not match the prepared single request")
+
+    @classmethod
+    def validate_prepared_batch(cls, prepared: PreparedRequest, payload: dict[str, object]) -> None:
+        data = cls._validate_prepared_action_common(prepared, payload, "submitroot")
+        expected_root_hash = str(prepared.root_hash or "")
+        expected_manifest_hash = str(prepared.manifest_hash or "")
+        expected_leaf_count = prepared.leaf_count
+        if not expected_root_hash or not expected_manifest_hash or expected_leaf_count is None:
+            raise RuntimeError("prepared batch request is missing root_hash, manifest_hash, or leaf_count")
+        if str(data.get("root_hash") or "") != expected_root_hash:
+            raise RuntimeError("prepared_action root_hash does not match the prepared batch request")
+        if str(data.get("manifest_hash") or "") != expected_manifest_hash:
+            raise RuntimeError("prepared_action manifest_hash does not match the prepared batch request")
+        if int(data.get("leaf_count") or -1) != int(expected_leaf_count):
+            raise RuntimeError("prepared_action leaf_count does not match the prepared batch request")
+
     def process_event(self, runtime: SourceRuntime, event: Any) -> None:
         envelope = canonicalize_event(event)
         payload = envelope.to_prepare_payload(
@@ -67,6 +131,7 @@ class NotarizationPipeline:
             try:
                 if prepared is None:
                     prepared = self.ingress.prepare_single(payload)
+                self.validate_prepared_single(prepared, payload)
                 if existing_delivery is None:
                     self.watcher.register(prepared, envelope)
                     now = utc_now().isoformat()
@@ -224,6 +289,7 @@ class NotarizationPipeline:
             try:
                 if prepared is None:
                     prepared = self.ingress.prepare_batch(payload)
+                self.validate_prepared_batch(prepared, payload)
                 if existing_delivery is None:
                     self.watcher.register(prepared, envelopes[0])
                     now = utc_now().isoformat()
