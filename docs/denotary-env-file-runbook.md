@@ -11,7 +11,31 @@ The target model is:
 - the hot key is loaded from a local `env_file`
 - `owner` stays offline
 - `active` stays off the application host
+- `Ingress`, `Watcher`, `Receipt`, and `Audit` stay inside the same trusted
+  deployment boundary as the agent
 - no dependency on `cleos wallet` in daemon mode
+
+## Why Local deNotary Services Matter
+
+The current production baseline assumes that the deNotary off-chain services are
+local to the host, local to the deployment stack, or at least private to the
+same trusted network segment.
+
+Why:
+
+- `Ingress` participates in constructing the request that the enterprise signer
+  later authorizes
+- `Watcher`, `Receipt`, and `Audit` are part of the proof-finalization path
+- moving these services outside the trusted operator boundary increases
+  tampering and exposure risk
+
+Recommended model:
+
+- private-only endpoints for `Ingress`, `Watcher`, `Receipt`, and `Audit`
+- no public internet exposure for those services in the default enterprise
+  deployment model
+- chain RPC may be remote, but the off-chain deNotary services should remain in
+  the same trusted zone as the agent
 
 ## Preconditions
 
@@ -42,6 +66,7 @@ Use:
 - `submitter_permission = "dnanchor"`
 - `submitter_private_key_env = "DENOTARY_SUBMITTER_PRIVATE_KEY"`
 - `env_file = "/path/to/agent.secrets.env"`
+- local or private-only deNotary service URLs
 
 Minimal `denotary` section:
 
@@ -202,6 +227,10 @@ Typical causes:
 
 - keep one dedicated hot key per enterprise submitter, not a shared admin key
 - do not put `owner` or `active` into the agent config
+- do not place `Ingress`, `Watcher`, `Receipt`, or `Audit` on public endpoints
+  in the default enterprise topology
 - do not use `cleos wallet` for daemon mode
 - keep `doctor --strict` in service pre-start hooks
 - archive `doctor` and `report` snapshots for rollout evidence when promoting to new environments
+- treat `state_db`, `proof_dir`, and saved evidence snapshots as sensitive local
+  operator data

@@ -18,6 +18,23 @@ The supported source model today is:
 The current `scylladb` adapter reuses the Cassandra-compatible watermark
 baseline. Native Scylla-specific CDC is not part of the current baseline.
 
+## Security Baseline
+
+For enterprise production use:
+
+- keep `Ingress`, `Watcher`, `Receipt`, and `Audit` in the same trusted
+  deployment boundary as the agent
+- use a dedicated hot permission such as `dnanchor`
+- do not use `owner` or `active` as the runtime signer permission
+- keep the hot key in `env_file` or a secret mount
+- treat `state_db`, `proof_dir`, and saved evidence snapshots as sensitive
+  local artifacts
+
+Reference:
+
+- [security-baseline.md](security-baseline.md)
+- [denotary-env-file-runbook.md](denotary-env-file-runbook.md)
+
 ## Recommended Fit
 
 Use the `ScyllaDB` adapter when:
@@ -44,6 +61,7 @@ Starter config:
 Reference docs:
 
 - [scylladb-config-reference.md](scylladb-config-reference.md)
+- [security-baseline.md](security-baseline.md)
 - [storage-config-reference.md](storage-config-reference.md)
 - [denotary-service-config-reference.md](denotary-service-config-reference.md)
 - [denotary-env-file-runbook.md](denotary-env-file-runbook.md)

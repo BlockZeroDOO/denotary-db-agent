@@ -21,6 +21,26 @@ Current scope:
 - receipt / audit-chain retrieval and local proof bundle export
 - CLI for run / validate / status / health / doctor / metrics / diagnostics / bootstrap / inspect / refresh / pause / resume / replay / checkpoint / proof
 
+## Security Baseline
+
+Production operators should treat the DB Agent and the local deNotary backend
+as one trusted deployment boundary.
+
+Minimum baseline:
+
+- keep `Ingress`, `Watcher`, `Receipt`, and `Audit` on the same host, private
+  cluster, or private network segment as the agent
+- use a dedicated hot permission such as `dnanchor`
+- do not use `owner` or `active` as the runtime signer permission
+- keep the hot key in `env_file` or a secret mount, not inline in config
+- treat `state_db`, `proof_dir`, and saved evidence snapshots as sensitive
+  local artifacts
+
+See:
+
+- [docs/security-baseline.md](docs/security-baseline.md)
+- [docs/security-minimal-roadmap.md](docs/security-minimal-roadmap.md)
+
 The first wave of database targets is:
 
 - PostgreSQL
@@ -255,6 +275,8 @@ See:
 - [scripts/run-live-cassandra-integration.ps1](scripts/run-live-cassandra-integration.ps1)
 - [scripts/run-live-elasticsearch-integration.ps1](scripts/run-live-elasticsearch-integration.ps1)
 - [docs/architecture.md](docs/architecture.md)
+- [docs/security-baseline.md](docs/security-baseline.md)
+- [docs/security-minimal-roadmap.md](docs/security-minimal-roadmap.md)
 - [docs/adapter-separation-architecture.md](docs/adapter-separation-architecture.md)
 - [docs/wave2-roadmap.md](docs/wave2-roadmap.md)
 - [docs/wave-readiness-summary.md](docs/wave-readiness-summary.md)

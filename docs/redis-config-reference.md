@@ -15,6 +15,21 @@ Current supported model:
 Native keyspace notifications or stream-style CDC are not part of the current
 baseline.
 
+## Security Note
+
+For enterprise production use:
+
+- keep `Ingress`, `Watcher`, `Receipt`, and `Audit` in the same trusted
+  deployment boundary as the agent
+- use a dedicated hot permission such as `dnanchor`
+- do not use `owner` or `active`
+- keep signer material in `env_file` or a secret mount
+
+Reference:
+
+- [security-baseline.md](security-baseline.md)
+- [denotary-env-file-runbook.md](denotary-env-file-runbook.md)
+
 ## Source Example
 
 ```json
@@ -161,6 +176,7 @@ The current baseline does not provide:
 
 ## Related Docs
 
+- [security-baseline.md](security-baseline.md)
 - [wave2-redis-runbook.md](wave2-redis-runbook.md)
 - [wave2-redis-validation.md](wave2-redis-validation.md)
 - [wave2-redis-validation-report.md](wave2-redis-validation-report.md)

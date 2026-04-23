@@ -18,6 +18,23 @@ while keeping:
 - `active` out of the application server
 - token transfers outside the hot broadcaster key
 
+## Why `owner` and `active` Must Not Be Used
+
+Enterprise DB Agent deployments should not run with:
+
+- `submitter_permission = "owner"`
+- `submitter_permission = "active"`
+
+Why:
+
+- `owner` is the recovery and ultimate-control permission
+- `active` is usually broad enough to affect unrelated enterprise account
+  operations
+- compromise of the application host would then become compromise of the
+  enterprise account, not only the notarization path
+- a dedicated permission such as `dnanchor` keeps the runtime blast radius
+  narrow and auditable
+
 ## Recommended Enterprise Account Layout
 
 For an enterprise payer account such as `enterpriseac1`:
@@ -99,3 +116,6 @@ Recommended value:
 
 This makes the intended runtime permission explicit even before full on-chain signing is implemented inside the agent.
 
+For the broader deployment trust boundary, see:
+
+- [security-baseline.md](security-baseline.md)

@@ -3,6 +3,33 @@
 [BlockZero DOO, Serbia https://blockzero.rs](https://blockzero.rs)
 Telegram group: [DeNotaryGroup](https://t.me/DeNotaryGroup)
 
+## Security Baseline
+
+For enterprise production use, assume the trusted runtime boundary includes:
+
+- the DB Agent process
+- `Ingress`
+- `Finality Watcher`
+- `Receipt`
+- `Audit`
+
+Recommended deployment model:
+
+- keep those services on the same host, private cluster, or private network
+  segment
+- use `submitter_permission = "dnanchor"` or another dedicated narrow hot
+  permission
+- do not use `owner` or `active` as the runtime signer permission
+- keep the hot key in `env_file` or a secret mount
+- treat `state_db`, `proof_dir`, and saved evidence snapshots as sensitive
+  local operator artifacts
+
+Reference:
+
+- [security-baseline.md](security-baseline.md)
+- [denotary-env-file-runbook.md](denotary-env-file-runbook.md)
+- [verifbill-permission-model.md](verifbill-permission-model.md)
+
 ## Commands
 
 ### Validate
@@ -100,6 +127,7 @@ Returns one compact live preflight report for deploy readiness with:
   - linked account permissions
   - delayed waits
   - threshold above `1`
+- warnings when `owner` or `active` is used as the runtime permission
 
 Use this before:
 
@@ -117,6 +145,14 @@ This is intended for:
 - CI/CD pre-deploy gates
 - `systemd` `ExecStartPre`
 - Windows service pre-start wrappers
+
+For enterprise production rollout, `doctor --strict` should be treated as
+mandatory before:
+
+- first start on a new host
+- key rotation
+- backend topology changes
+- enabling a new source in a live environment
 
 For PostgreSQL hot-key rotation, see:
 
@@ -161,6 +197,9 @@ All saved `diagnostics`, `doctor`, and `report` snapshots are also indexed in th
 The manifest itself is capped by:
 
 - `storage.evidence_manifest_retention`
+
+Saved evidence files should be treated as sensitive local artifacts and stored
+only in controlled operator locations.
 
 ### Artifacts
 

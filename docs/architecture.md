@@ -42,6 +42,35 @@ For each enabled source, the runtime flow is:
 If a request was already prepared or broadcast earlier, the agent can resume
 from stored delivery state instead of rebuilding the whole flow from scratch.
 
+## Security Model
+
+The live trust boundary for `denotary-db-agent` includes more than the agent
+process itself.
+
+In a live notarization deployment, the agent:
+
+- sends canonical request payloads to `Ingress`
+- receives a `prepared_action` back from `Ingress`
+- signs and broadcasts that action with an enterprise hot key
+- relies on `Watcher`, `Receipt`, and `Audit` to finalize and export proof
+
+That means the following components should be treated as part of the same
+trusted operational zone:
+
+- the agent
+- `Ingress`
+- `Finality Watcher`
+- `Receipt`
+- `Audit`
+
+The current production-style baseline is:
+
+- local or private-only deNotary backend services
+- a dedicated enterprise hot permission such as `dnanchor`
+- no use of `owner` or `active` on the DB Agent host
+- local state, proof directories, and evidence snapshots treated as sensitive
+  operator artifacts
+
 ## Main Layers
 
 ### Source Layer
@@ -263,6 +292,8 @@ Current platform-wide boundaries:
 - [config-reference.md](config-reference.md)
 - [denotary-service-config-reference.md](denotary-service-config-reference.md)
 - [storage-config-reference.md](storage-config-reference.md)
+- [security-baseline.md](security-baseline.md)
+- [security-minimal-roadmap.md](security-minimal-roadmap.md)
 - [adapter-separation-architecture.md](adapter-separation-architecture.md)
 - [wave-readiness-summary.md](wave-readiness-summary.md)
 - [wave1-readiness-matrix.md](wave1-readiness-matrix.md)
