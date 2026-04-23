@@ -14,10 +14,10 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import patch
 
-from denotary_db_agent.canonical import build_batch_external_ref
+from denotary_db_agent.canonical import build_batch_external_ref, canonicalize_event
 from denotary_db_agent.config import load_config
 from denotary_db_agent.engine import AgentEngine, SourceRuntime
-from denotary_db_agent.models import ChangeEvent, DeliveryAttempt, ProofArtifact
+from denotary_db_agent.models import ChangeEvent, DeliveryAttempt, ProofArtifact, event_debug_dict
 
 
 def free_port() -> int:
@@ -388,6 +388,75 @@ class EngineTest(unittest.TestCase):
         delivery = engine.store.list_deliveries(runtime.config.id)[0]
         self.assertEqual(delivery["status"], "finalized_exported")
         self.assertEqual(delivery["tx_id"], "c" * 64)
+        checkpoints = engine.checkpoint_summary()
+        self.assertEqual(len(checkpoints), 1)
+        self.assertEqual(checkpoints[0]["token"], "lsn:1")
+
+    def test_reconcile_pending_finality_exports_proof_from_stored_event_context(self) -> None:
+        engine = AgentEngine(load_config(self.config_path))
+        runtime = engine.runtimes()[0]
+        engine.config.denotary.wait_for_finality = False
+        event_payload = engine.config.sources[0].options["dry_run_events"][0]
+        event = ChangeEvent(
+            source_id=runtime.config.id,
+            source_type="postgresql",
+            source_instance=runtime.config.source_instance,
+            database_name=runtime.config.database_name,
+            **event_payload,
+        )
+        envelope = canonicalize_event(event)
+        prepared_action = {
+            "contract": "verifbill",
+            "action": "submit",
+            "data": {
+                "payer": "enterpriseac1",
+                "submitter": "enterpriseac1",
+                "schema_id": 1,
+                "policy_id": 1,
+                "object_hash": "2" * 64,
+                "external_ref": envelope.external_ref,
+            },
+        }
+        engine.store.upsert_delivery(
+            DeliveryAttempt(
+                request_id="request-reconcile-1",
+                trace_id=envelope.trace_id,
+                source_id=runtime.config.id,
+                external_ref=envelope.external_ref,
+                tx_id="d" * 64,
+                status="broadcast_included",
+                prepared_action=prepared_action,
+                last_error=None,
+                updated_at="2026-04-18T10:00:00Z",
+                event_payload=event_debug_dict(event),
+            )
+        )
+
+        wait_calls: list[str] = []
+        engine.watcher = SimpleNamespace(
+            wait_for_finalized=lambda request_id, timeout_sec, poll_interval_sec: wait_calls.append(request_id),
+        )
+        engine.receipt = SimpleNamespace(
+            get_receipt=lambda request_id: {
+                "request_id": request_id,
+                "tx_id": "d" * 64,
+                "block_num": 999,
+                "finality_flag": True,
+                "trust_state": "finalized_verified",
+                "finalized_at": "2026-04-18T10:00:05Z",
+            }
+        )
+        engine.audit = SimpleNamespace(get_chain=lambda request_id: {"request_id": request_id, "links": []})
+
+        result = engine.reconcile_pending_finality(runtime.config.id)
+
+        self.assertEqual(result, {"checked": 1, "reconciled": 1, "failed": 0})
+        self.assertEqual(wait_calls, ["request-reconcile-1"])
+        proof = engine.store.get_proof("request-reconcile-1")
+        self.assertIsNotNone(proof)
+        delivery = engine.store.list_deliveries_by_external_ref(runtime.config.id, envelope.external_ref)[0]
+        self.assertEqual(delivery["status"], "finalized_exported")
+        self.assertEqual(delivery["tx_id"], "d" * 64)
         checkpoints = engine.checkpoint_summary()
         self.assertEqual(len(checkpoints), 1)
         self.assertEqual(checkpoints[0]["token"], "lsn:1")

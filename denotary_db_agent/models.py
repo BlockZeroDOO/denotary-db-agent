@@ -145,6 +145,7 @@ class DeliveryAttempt:
     prepared_action: dict[str, Any] | None
     last_error: str | None
     updated_at: str
+    event_payload: dict[str, Any] | None = None
 
 
 @dataclass

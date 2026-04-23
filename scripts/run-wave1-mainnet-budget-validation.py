@@ -54,6 +54,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--adapter", choices=["mysql", "mariadb", "sqlserver", "oracle", "mongodb"])
     parser.add_argument("--mongodb-sleep-after-write", type=float, default=DEFAULT_MONGODB_SLEEP_AFTER_WRITE)
     parser.add_argument("--oracle-sleep-after-write", type=float, default=DEFAULT_ORACLE_SLEEP_AFTER_WRITE)
+    parser.add_argument("--output-root", default="", help="Optional persistent run directory.")
     return parser.parse_args()
 
 
@@ -88,6 +89,13 @@ def _batch_enabled_for_mode(mode: str) -> bool:
 
 def _expected_export_count(*, cycles: int, batch_size: int, mode: str) -> int:
     return cycles if mode == "batch" else cycles * batch_size
+
+
+def _denotary_for_mode(denotary: dict[str, Any], mode: str) -> dict[str, Any]:
+    payload = {**denotary, "policy_id": _policy_id_for_mode(mode)}
+    if mode == "single":
+        payload["wait_for_finality"] = False
+    return payload
 
 
 def _load_base_denotary(config_path: Path) -> dict[str, Any]:
@@ -190,6 +198,46 @@ def _drain_cycle(
     return {"processed": total_processed, "failed": total_failed}
 
 
+def _pending_finality_count(engine: AgentEngine, source_id: str) -> int:
+    deliveries = engine.store.list_deliveries(source_id)
+    return sum(1 for item in deliveries if str(item.get("status") or "") in {"prepared_registered", "broadcast_included"})
+
+
+def _reconcile_single_phase(
+    *,
+    engine: AgentEngine,
+    source_id: str,
+    expected_exports: int,
+    max_passes: int = 900,
+    sleep_after_idle: float = 1.0,
+) -> None:
+    stall_passes = 0
+    while max_passes > 0:
+        max_passes -= 1
+        proof_count_before = len(engine.store.list_proofs(source_id))
+        pending_before = _pending_finality_count(engine, source_id)
+        if proof_count_before >= expected_exports and pending_before == 0:
+            return
+        result = engine.reconcile_pending_finality(source_id, limit=256)
+        proof_count_after = len(engine.store.list_proofs(source_id))
+        pending_after = _pending_finality_count(engine, source_id)
+        if proof_count_after >= expected_exports and pending_after == 0:
+            return
+        if result["reconciled"] == 0 and result["failed"] == 0 and proof_count_after == proof_count_before:
+            stall_passes += 1
+            time.sleep(sleep_after_idle)
+        else:
+            stall_passes = 0
+        if stall_passes >= 30 and pending_after > 0:
+            raise RuntimeError(
+                f"single reconcile stalled for {source_id}: proofs={proof_count_after} pending={pending_after}"
+            )
+    raise RuntimeError(
+        f"single reconcile timed out for {source_id}: proofs={len(engine.store.list_proofs(source_id))} "
+        f"pending={_pending_finality_count(engine, source_id)}"
+    )
+
+
 def mysql_budget_run(*, denotary: dict[str, Any], target_kib: int, batch_size: int, run_root: Path, mode: str) -> dict[str, Any]:
     cycles = _cycle_count_for_budget(target_kib, batch_size)
     timestamp = utc_stamp()
@@ -228,7 +276,7 @@ def mysql_budget_run(*, denotary: dict[str, Any], target_kib: int, batch_size: i
 
     source_id = f"mysql-mainnet-budget-{timestamp.lower()}"
     config = _build_runtime_config(
-        denotary={**denotary, "policy_id": _policy_id_for_mode(mode)},
+        denotary=_denotary_for_mode(denotary, mode),
         agent_name=f"denotary-db-agent-{source_id}",
         state_db=state_db,
         proof_dir=proof_dir,
@@ -286,6 +334,12 @@ def mysql_budget_run(*, denotary: dict[str, Any], target_kib: int, batch_size: i
             result = _drain_cycle(engine=engine, expected_processed=batch_size)
             if result["processed"] != batch_size or result["failed"] != 0:
                 raise RuntimeError(f"mysql cycle {cycle} produced unexpected result: {result}")
+        if mode == "single":
+            _reconcile_single_phase(
+                engine=engine,
+                source_id=source_id,
+                expected_exports=_expected_export_count(cycles=cycles, batch_size=batch_size, mode=mode),
+            )
         payload = _finalize_result(
             adapter="mysql",
             capture_mode="binlog",
@@ -343,7 +397,7 @@ def mariadb_budget_run(*, denotary: dict[str, Any], target_kib: int, batch_size:
 
     source_id = f"mariadb-mainnet-budget-{timestamp.lower()}"
     config = _build_runtime_config(
-        denotary={**denotary, "policy_id": _policy_id_for_mode(mode)},
+        denotary=_denotary_for_mode(denotary, mode),
         agent_name=f"denotary-db-agent-{source_id}",
         state_db=state_db,
         proof_dir=proof_dir,
@@ -401,6 +455,12 @@ def mariadb_budget_run(*, denotary: dict[str, Any], target_kib: int, batch_size:
             result = _drain_cycle(engine=engine, expected_processed=batch_size)
             if result["processed"] != batch_size or result["failed"] != 0:
                 raise RuntimeError(f"mariadb cycle {cycle} produced unexpected result: {result}")
+        if mode == "single":
+            _reconcile_single_phase(
+                engine=engine,
+                source_id=source_id,
+                expected_exports=_expected_export_count(cycles=cycles, batch_size=batch_size, mode=mode),
+            )
         payload = _finalize_result(
             adapter="mariadb",
             capture_mode="binlog",
@@ -454,7 +514,7 @@ def sqlserver_budget_run(*, denotary: dict[str, Any], target_kib: int, batch_siz
 
     source_id = f"sqlserver-mainnet-budget-{timestamp.lower()}"
     config = _build_runtime_config(
-        denotary={**denotary, "policy_id": _policy_id_for_mode(mode)},
+        denotary=_denotary_for_mode(denotary, mode),
         agent_name=f"denotary-db-agent-{source_id}",
         state_db=state_db,
         proof_dir=proof_dir,
@@ -521,6 +581,12 @@ def sqlserver_budget_run(*, denotary: dict[str, Any], target_kib: int, batch_siz
             result = _drain_cycle(engine=engine, expected_processed=batch_size)
             if result["processed"] != batch_size or result["failed"] != 0:
                 raise RuntimeError(f"sqlserver cycle {cycle} produced unexpected result: {result}")
+        if mode == "single":
+            _reconcile_single_phase(
+                engine=engine,
+                source_id=source_id,
+                expected_exports=_expected_export_count(cycles=cycles, batch_size=batch_size, mode=mode),
+            )
         payload = _finalize_result(
             adapter="sqlserver",
             capture_mode="change_tracking",
@@ -592,7 +658,7 @@ def oracle_budget_run(
             cycle_source_id = f"{base_source_id}-c{cycle + 1:02d}"
             cycle_state_db = adapter_root / f"agent-state-{cycle + 1:02d}.sqlite3"
             config = _build_runtime_config(
-                denotary={**denotary, "policy_id": _policy_id_for_mode(mode)},
+                denotary=_denotary_for_mode(denotary, mode),
                 agent_name=f"denotary-db-agent-{cycle_source_id}",
                 state_db=cycle_state_db,
                 proof_dir=proof_dir,
@@ -665,6 +731,12 @@ def oracle_budget_run(
                 result = _drain_cycle(engine=engine, expected_processed=batch_size)
                 if result["processed"] != batch_size or result["failed"] != 0:
                     raise RuntimeError(f"oracle cycle {cycle} produced unexpected result: {result}")
+                if mode == "single":
+                    _reconcile_single_phase(
+                        engine=engine,
+                        source_id=cycle_source_id,
+                        expected_exports=batch_size,
+                    )
 
                 cycle_payload = _finalize_result(
                     adapter="oracle",
@@ -739,7 +811,7 @@ def mongodb_budget_run(
 
     source_id = f"mongodb-mainnet-budget-{timestamp.lower()}"
     config = _build_runtime_config(
-        denotary={**denotary, "policy_id": _policy_id_for_mode(mode)},
+        denotary=_denotary_for_mode(denotary, mode),
         agent_name=f"denotary-db-agent-{source_id}",
         state_db=state_db,
         proof_dir=proof_dir,
@@ -794,6 +866,12 @@ def mongodb_budget_run(
             result = _drain_cycle(engine=engine, expected_processed=batch_size)
             if result["processed"] != batch_size or result["failed"] != 0:
                 raise RuntimeError(f"mongodb cycle {cycle} produced unexpected result: {result}")
+        if mode == "single":
+            _reconcile_single_phase(
+                engine=engine,
+                source_id=source_id,
+                expected_exports=_expected_export_count(cycles=cycles, batch_size=batch_size, mode=mode),
+            )
         payload = _finalize_result(
             adapter="mongodb",
             capture_mode="change_streams",
@@ -851,7 +929,11 @@ def main() -> None:
     denotary = _load_base_denotary(Path(args.config))
     _ensure_offchain_services_ready(denotary)
     mode_suffix = "budget" if args.mode == "batch" else "single"
-    run_root = DATA_ROOT / f"wave1-mainnet-{mode_suffix}-{utc_stamp().lower()}"
+    run_root = (
+        Path(args.output_root).resolve()
+        if args.output_root
+        else (DATA_ROOT / f"wave1-mainnet-{mode_suffix}-{utc_stamp().lower()}").resolve()
+    )
     run_root.mkdir(parents=True, exist_ok=True)
     runners = build_runners(
         denotary=denotary,

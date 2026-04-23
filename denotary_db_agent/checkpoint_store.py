@@ -43,6 +43,7 @@ class CheckpointStore:
                     tx_id text,
                     status text not null,
                     prepared_action_json text,
+                    event_payload_json text,
                     last_error text,
                     updated_at text not null
                 );
@@ -77,6 +78,12 @@ class CheckpointStore:
                 );
                 """
             )
+            delivery_columns = {
+                str(row["name"])
+                for row in connection.execute("pragma table_info(deliveries)").fetchall()
+            }
+            if "event_payload_json" not in delivery_columns:
+                connection.execute("alter table deliveries add column event_payload_json text")
 
     def get_checkpoint(self, source_id: str) -> SourceCheckpoint | None:
         with self._connect() as connection:
@@ -117,8 +124,8 @@ class CheckpointStore:
             connection.execute(
                 """
                 insert into deliveries (
-                    request_id, trace_id, source_id, external_ref, tx_id, status, prepared_action_json, last_error, updated_at
-                ) values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    request_id, trace_id, source_id, external_ref, tx_id, status, prepared_action_json, event_payload_json, last_error, updated_at
+                ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 on conflict(request_id) do update set
                     trace_id = excluded.trace_id,
                     source_id = excluded.source_id,
@@ -126,6 +133,7 @@ class CheckpointStore:
                     tx_id = excluded.tx_id,
                     status = excluded.status,
                     prepared_action_json = excluded.prepared_action_json,
+                    event_payload_json = excluded.event_payload_json,
                     last_error = excluded.last_error,
                     updated_at = excluded.updated_at
                 """,
@@ -137,6 +145,7 @@ class CheckpointStore:
                     attempt.tx_id,
                     attempt.status,
                     json.dumps(attempt.prepared_action, sort_keys=True) if attempt.prepared_action else None,
+                    json.dumps(attempt.event_payload, sort_keys=True) if attempt.event_payload else None,
                     attempt.last_error,
                     attempt.updated_at,
                 ),
@@ -168,7 +177,7 @@ class CheckpointStore:
         with self._connect() as connection:
             rows = connection.execute(
                 """
-                select request_id, trace_id, source_id, external_ref, tx_id, status, prepared_action_json, last_error, updated_at
+                select request_id, trace_id, source_id, external_ref, tx_id, status, prepared_action_json, event_payload_json, last_error, updated_at
                 from deliveries
                 where source_id = ? and external_ref = ?
                 order by updated_at desc, request_id desc
@@ -179,7 +188,30 @@ class CheckpointStore:
         for row in rows:
             entry = dict(row)
             prepared_action_raw = entry.pop("prepared_action_json", None)
+            event_payload_raw = entry.pop("event_payload_json", None)
             entry["prepared_action"] = json.loads(prepared_action_raw) if prepared_action_raw else None
+            entry["event_payload"] = json.loads(event_payload_raw) if event_payload_raw else None
+            deliveries.append(entry)
+        return deliveries
+
+    def list_deliveries_for_reconciliation(self, source_id: str) -> list[dict[str, object | None]]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                select request_id, trace_id, source_id, external_ref, tx_id, status, prepared_action_json, event_payload_json, last_error, updated_at
+                from deliveries
+                where source_id = ? and status in ('prepared_registered', 'broadcast_included')
+                order by updated_at asc, request_id asc
+                """,
+                (source_id,),
+            ).fetchall()
+        deliveries: list[dict[str, object | None]] = []
+        for row in rows:
+            entry = dict(row)
+            prepared_action_raw = entry.pop("prepared_action_json", None)
+            event_payload_raw = entry.pop("event_payload_json", None)
+            entry["prepared_action"] = json.loads(prepared_action_raw) if prepared_action_raw else None
+            entry["event_payload"] = json.loads(event_payload_raw) if event_payload_raw else None
             deliveries.append(entry)
         return deliveries
 

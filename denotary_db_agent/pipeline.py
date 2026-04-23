@@ -6,7 +6,7 @@ from typing import Any
 from denotary_db_agent.canonical import build_batch_external_ref, canonicalize_event
 from denotary_db_agent.checkpoint_store import CheckpointStore
 from denotary_db_agent.config import AgentConfig
-from denotary_db_agent.models import DeliveryAttempt, ProofArtifact, utc_now
+from denotary_db_agent.models import CanonicalEnvelope, ChangeEvent, DeliveryAttempt, ProofArtifact, event_debug_dict, utc_now
 from denotary_db_agent.source_runtime import SourceRuntime
 from denotary_db_agent.transport import (
     AuditClient,
@@ -48,6 +48,7 @@ class NotarizationPipeline:
             schema_id=self.config.denotary.schema_id,
             policy_id=self.config.denotary.policy_id,
         )
+        event_payload = event_debug_dict(event)
 
         last_error: str | None = None
         existing_delivery = self.find_resumable_delivery(runtime.config.id, envelope.external_ref)
@@ -80,6 +81,7 @@ class NotarizationPipeline:
                             prepared_action=prepared.prepared_action,
                             last_error=None,
                             updated_at=now,
+                            event_payload=event_payload,
                         )
                     )
                     existing_delivery = {
@@ -90,6 +92,7 @@ class NotarizationPipeline:
                         "tx_id": None,
                         "status": "prepared_registered",
                         "prepared_action": prepared.prepared_action,
+                        "event_payload": event_payload,
                         "last_error": None,
                         "updated_at": now,
                     }
@@ -132,6 +135,7 @@ class NotarizationPipeline:
                             prepared_action=prepared.prepared_action,
                             last_error=None,
                             updated_at=now,
+                            event_payload=event_payload,
                         )
                     )
                     existing_delivery = {
@@ -142,6 +146,7 @@ class NotarizationPipeline:
                         "tx_id": broadcast.tx_id,
                         "status": "broadcast_included",
                         "prepared_action": prepared.prepared_action,
+                        "event_payload": event_payload,
                         "last_error": None,
                         "updated_at": now,
                     }
@@ -463,6 +468,18 @@ class NotarizationPipeline:
         self.store.set_checkpoint(runtime.config.id, token, now)
         runtime.adapter.after_checkpoint_advanced(token)
 
+    @staticmethod
+    def event_from_payload(payload: dict[str, Any]) -> ChangeEvent:
+        event_payload = dict(payload)
+        event_payload.pop("identity_key", None)
+        return ChangeEvent(**event_payload)
+
+    @staticmethod
+    def envelope_from_event(event: ChangeEvent, trace_id: str) -> CanonicalEnvelope:
+        envelope = canonicalize_event(event)
+        envelope.trace_id = trace_id
+        return envelope
+
     def finalize_batch_request(
         self,
         runtime: SourceRuntime,
@@ -588,3 +605,29 @@ class NotarizationPipeline:
         if receipt.get("finalized_at"):
             return True
         return False
+
+    def reconcile_delivery(self, runtime: SourceRuntime, delivery: dict[str, object | None]) -> bool:
+        status = str(delivery.get("status") or "")
+        if status not in {"prepared_registered", "broadcast_included"}:
+            return False
+        prepared_action = delivery.get("prepared_action")
+        event_payload = delivery.get("event_payload")
+        if not isinstance(prepared_action, dict) or not isinstance(event_payload, dict):
+            return False
+        event = self.event_from_payload(event_payload)
+        envelope = self.envelope_from_event(event, str(delivery.get("trace_id") or ""))
+        payload = envelope.to_prepare_payload(
+            submitter=self.config.denotary.submitter,
+            schema_id=self.config.denotary.schema_id,
+            policy_id=self.config.denotary.policy_id,
+        )
+        prepared = self.prepared_from_delivery(delivery, payload)
+        broadcast = None
+        if delivery.get("tx_id"):
+            broadcast = BroadcastResult(
+                tx_id=str(delivery["tx_id"]),
+                block_num=0,
+                raw={"reconciled_delivery": True},
+            )
+        self.finalize_request(runtime, event, envelope, prepared, broadcast)
+        return True

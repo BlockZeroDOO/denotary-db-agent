@@ -119,6 +119,53 @@ def _expected_export_count(*, cycles: int, batch_size: int, mode: str) -> int:
     return cycles if mode == "batch" else cycles * batch_size
 
 
+def _denotary_for_mode(denotary: dict[str, Any], mode: str) -> dict[str, Any]:
+    payload = {**denotary, "policy_id": _policy_id_for_mode(mode)}
+    if mode == "single":
+        payload["wait_for_finality"] = False
+    return payload
+
+
+def _pending_finality_count(engine: AgentEngine, source_id: str) -> int:
+    deliveries = engine.store.list_deliveries(source_id)
+    return sum(1 for item in deliveries if str(item.get("status") or "") in {"prepared_registered", "broadcast_included"})
+
+
+def _reconcile_single_phase(
+    *,
+    engine: AgentEngine,
+    source_id: str,
+    expected_exports: int,
+    max_passes: int = 900,
+    sleep_after_idle: float = 1.0,
+) -> None:
+    stall_passes = 0
+    while max_passes > 0:
+        max_passes -= 1
+        proof_count_before = len(engine.store.list_proofs(source_id))
+        pending_before = _pending_finality_count(engine, source_id)
+        if proof_count_before >= expected_exports and pending_before == 0:
+            return
+        result = engine.reconcile_pending_finality(source_id, limit=256)
+        proof_count_after = len(engine.store.list_proofs(source_id))
+        pending_after = _pending_finality_count(engine, source_id)
+        if proof_count_after >= expected_exports and pending_after == 0:
+            return
+        if result["reconciled"] == 0 and result["failed"] == 0 and proof_count_after == proof_count_before:
+            stall_passes += 1
+            time.sleep(sleep_after_idle)
+        else:
+            stall_passes = 0
+        if stall_passes >= 30 and pending_after > 0:
+            raise RuntimeError(
+                f"single reconcile stalled for {source_id}: proofs={proof_count_after} pending={pending_after}"
+            )
+    raise RuntimeError(
+        f"single reconcile timed out for {source_id}: proofs={len(engine.store.list_proofs(source_id))} "
+        f"pending={_pending_finality_count(engine, source_id)}"
+    )
+
+
 def _proof_payload(proof_entry: dict[str, Any]) -> dict[str, Any]:
     export_path = Path(str(proof_entry["export_path"]))
     return json.loads(export_path.read_text(encoding="utf-8"))
@@ -149,10 +196,7 @@ def _build_sqlite_config(
     config = {
         "agent_name": source_id,
         "log_level": "INFO",
-        "denotary": {
-            **DENOTARY_VALIDATION.build_denotary_config_for_stack(stack),
-            "policy_id": _policy_id_for_mode(mode),
-        },
+        "denotary": _denotary_for_mode(DENOTARY_VALIDATION.build_denotary_config_for_stack(stack), mode),
         "storage": {
             "state_db": str((temp_dir / "state.sqlite3").resolve()),
             "proof_dir": str((temp_dir / "proofs").resolve()),
@@ -196,10 +240,7 @@ def _build_redis_config(
     config = {
         "agent_name": source_id,
         "log_level": "INFO",
-        "denotary": {
-            **DENOTARY_VALIDATION.build_denotary_config_for_stack(stack),
-            "policy_id": _policy_id_for_mode(mode),
-        },
+        "denotary": _denotary_for_mode(DENOTARY_VALIDATION.build_denotary_config_for_stack(stack), mode),
         "storage": {
             "state_db": str((temp_dir / "state.sqlite3").resolve()),
             "proof_dir": str((temp_dir / "proofs").resolve()),
@@ -242,10 +283,7 @@ def _build_scylladb_config(
     config = {
         "agent_name": source_id,
         "log_level": "INFO",
-        "denotary": {
-            **DENOTARY_VALIDATION.build_denotary_config_for_stack(stack),
-            "policy_id": _policy_id_for_mode(mode),
-        },
+        "denotary": _denotary_for_mode(DENOTARY_VALIDATION.build_denotary_config_for_stack(stack), mode),
         "storage": {
             "state_db": str((temp_dir / "state.sqlite3").resolve()),
             "proof_dir": str((temp_dir / "proofs").resolve()),
@@ -290,10 +328,7 @@ def _build_cassandra_config(
     config = {
         "agent_name": source_id,
         "log_level": "INFO",
-        "denotary": {
-            **DENOTARY_VALIDATION.build_denotary_config_for_stack(stack),
-            "policy_id": _policy_id_for_mode(mode),
-        },
+        "denotary": _denotary_for_mode(DENOTARY_VALIDATION.build_denotary_config_for_stack(stack), mode),
         "storage": {
             "state_db": str((temp_dir / "state.sqlite3").resolve()),
             "proof_dir": str((temp_dir / "proofs").resolve()),
@@ -338,10 +373,7 @@ def _build_db2_config(
     config = {
         "agent_name": source_id,
         "log_level": "INFO",
-        "denotary": {
-            **DENOTARY_VALIDATION.build_denotary_config_for_stack(stack),
-            "policy_id": _policy_id_for_mode(mode),
-        },
+        "denotary": _denotary_for_mode(DENOTARY_VALIDATION.build_denotary_config_for_stack(stack), mode),
         "storage": {
             "state_db": str((temp_dir / "state.sqlite3").resolve()),
             "proof_dir": str((temp_dir / "proofs").resolve()),
@@ -386,10 +418,7 @@ def _build_elasticsearch_config(
     config = {
         "agent_name": source_id,
         "log_level": "INFO",
-        "denotary": {
-            **DENOTARY_VALIDATION.build_denotary_config_for_stack(stack),
-            "policy_id": _policy_id_for_mode(mode),
-        },
+        "denotary": _denotary_for_mode(DENOTARY_VALIDATION.build_denotary_config_for_stack(stack), mode),
         "storage": {
             "state_db": str((temp_dir / "state.sqlite3").resolve()),
             "proof_dir": str((temp_dir / "proofs").resolve()),
@@ -503,6 +532,12 @@ def run_sqlite_budget(*, run_root: Path, target_kib: int, batch_size: int, mode:
                 result = engine.run_once()
                 if result["processed"] != batch_size or result["failed"] != 0:
                     raise RuntimeError(f"sqlite budget cycle {cycle + 1} produced unexpected result: {result}")
+            if mode == "single":
+                _reconcile_single_phase(
+                    engine=engine,
+                    source_id=source_id,
+                    expected_exports=_expected_export_count(cycles=cycles, batch_size=batch_size, mode=mode),
+                )
             payload = _finalize_result(
                 adapter="sqlite",
                 capture_mode="watermark",
@@ -567,6 +602,12 @@ def run_redis_budget(*, run_root: Path, target_kib: int, batch_size: int, mode: 
                 result = engine.run_once()
                 if result["processed"] != batch_size or result["failed"] != 0:
                     raise RuntimeError(f"redis budget cycle {cycle + 1} produced unexpected result: {result}")
+            if mode == "single":
+                _reconcile_single_phase(
+                    engine=engine,
+                    source_id=source_id,
+                    expected_exports=_expected_export_count(cycles=cycles, batch_size=batch_size, mode=mode),
+                )
             payload = _finalize_result(
                 adapter="redis",
                 capture_mode="scan",
@@ -759,6 +800,12 @@ def run_scylladb_budget(*, run_root: Path, target_kib: int, batch_size: int, mod
                         result = engine.run_once()
                         if result["processed"] != batch_size or result["failed"] != 0:
                             raise RuntimeError(f"scylladb budget cycle {cycle + 1} produced unexpected result: {result}")
+                        if mode == "single":
+                            _reconcile_single_phase(
+                                engine=engine,
+                                source_id=source_id,
+                                expected_exports=batch_size,
+                            )
                         cycle_payloads.append(
                             _finalize_result(
                                 adapter="scylladb",
@@ -900,6 +947,12 @@ def run_cassandra_budget(*, run_root: Path, target_kib: int, batch_size: int, mo
                         result = engine.run_once()
                         if result["processed"] != batch_size or result["failed"] != 0:
                             raise RuntimeError(f"cassandra budget cycle {cycle + 1} produced unexpected result: {result}")
+                        if mode == "single":
+                            _reconcile_single_phase(
+                                engine=engine,
+                                source_id=source_id,
+                                expected_exports=batch_size,
+                            )
                         cycle_payloads.append(
                             _finalize_result(
                                 adapter="cassandra",
@@ -1103,6 +1156,12 @@ def run_db2_budget(*, run_root: Path, target_kib: int, batch_size: int, mode: st
                         result = engine.run_once()
                         if result["processed"] != batch_size or result["failed"] != 0:
                             raise RuntimeError(f"db2 budget cycle {cycle + 1} produced unexpected result: {result}")
+                        if mode == "single":
+                            _reconcile_single_phase(
+                                engine=engine,
+                                source_id=source_id,
+                                expected_exports=batch_size,
+                            )
                         cycle_payloads.append(
                             _finalize_result(
                                 adapter="db2",
@@ -1223,6 +1282,12 @@ def run_elasticsearch_budget(*, run_root: Path, target_kib: int, batch_size: int
                         result = engine.run_once()
                         if result["processed"] != batch_size or result["failed"] != 0:
                             raise RuntimeError(f"elasticsearch budget cycle {cycle + 1} produced unexpected result: {result}")
+                        if mode == "single":
+                            _reconcile_single_phase(
+                                engine=engine,
+                                source_id=source_id,
+                                expected_exports=batch_size,
+                            )
                         cycle_payloads.append(
                             _finalize_result(
                                 adapter="elasticsearch",

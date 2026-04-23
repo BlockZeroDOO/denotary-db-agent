@@ -1180,6 +1180,40 @@ class AgentEngine:
         self._sync_pipeline_dependencies()
         self.pipeline.process_batch(runtime, events)
 
+    def reconcile_pending_finality(self, source_id: str | None = None, limit: int | None = None) -> dict[str, int]:
+        self._sync_pipeline_dependencies()
+        reconciled = 0
+        failed = 0
+        checked = 0
+        for runtime in self.runtimes():
+            if source_id and runtime.config.id != source_id:
+                continue
+            deliveries = self.store.list_deliveries_for_reconciliation(runtime.config.id)
+            for delivery in deliveries:
+                if limit is not None and checked >= limit:
+                    return {"checked": checked, "reconciled": reconciled, "failed": failed}
+                checked += 1
+                try:
+                    if self.pipeline.reconcile_delivery(runtime, delivery):
+                        reconciled += 1
+                except Exception as exc:  # noqa: BLE001
+                    failed += 1
+                    self.store.upsert_delivery(
+                        DeliveryAttempt(
+                            request_id=str(delivery["request_id"]),
+                            trace_id=str(delivery["trace_id"]),
+                            source_id=str(delivery["source_id"]),
+                            external_ref=str(delivery["external_ref"]),
+                            tx_id=str(delivery["tx_id"]) if delivery.get("tx_id") else None,
+                            status=str(delivery["status"]),
+                            prepared_action=delivery.get("prepared_action") if isinstance(delivery.get("prepared_action"), dict) else None,
+                            last_error=str(exc),
+                            updated_at=utc_now().isoformat(),
+                            event_payload=delivery.get("event_payload") if isinstance(delivery.get("event_payload"), dict) else None,
+                        )
+                    )
+        return {"checked": checked, "reconciled": reconciled, "failed": failed}
+
     def reset_checkpoint(self, source_id: str) -> None:
         self.store.reset_checkpoint(source_id)
 
