@@ -10,7 +10,7 @@ Telegram group: [DeNotaryGroup](https://t.me/DeNotaryGroup)
 1. `data source layer`
 2. `notarization pipeline layer`
 
-This keeps PostgreSQL-specific CDC/runtime behavior isolated and makes it faster to plug in MySQL, MariaDB, SQL Server, Oracle, or MongoDB without copying delivery/finality logic.
+This allows you to isolate CDC/runtime behavior specific to the attached databases and speed up attaching new databases without copying the delivery/completion logic.
 
 ## Current Split
 
@@ -122,7 +122,7 @@ This split gives us:
 
 - faster onboarding of new databases
 - less duplicated delivery/finality code
-- safer PostgreSQL changes, because source work is isolated
+- safer CDC changes, because source work is isolated
 - clearer testing:
   - adapter tests focus on CDC behavior
   - pipeline tests focus on delivery/proof behavior
@@ -140,8 +140,7 @@ The shared harness for scaffold adapters now lives in:
 
 - `tests/test_adapter_contract.py`
 
-Its role is to keep non-PostgreSQL adapters aligned on the same minimal source-runtime
-contract before any database-specific CDC implementation lands.
+Its purpose is to ensure consistency across adapters other than those already integrated, based on a single minimal contract between source code and runtime, before any database-specific CDC implementation is introduced.
 
 The harness verifies that every scaffold adapter:
 
@@ -152,8 +151,7 @@ The harness verifies that every scaffold adapter:
 - serializes checkpoint progress consistently
 - raises a clear `NotImplementedError` for unimplemented CDC streaming
 
-That gives us one reusable baseline for MySQL, MariaDB, SQL Server, Oracle, MongoDB,
-and additional adapters without coupling those tests to PostgreSQL behavior.
+This gives us a single reusable base model for new databases and additional adapters, without coupling these tests to the behavior of already integrated databases.
 
 Capabilities now also declare:
 
