@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import ipaddress
 import os
+import stat
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 from time import monotonic
@@ -176,10 +179,10 @@ class AgentEngine:
 
     def doctor(self, source_id: str | None = None) -> dict:
         services = {
-            "ingress": self._probe_service_url(self.config.denotary.ingress_url, "/healthz"),
-            "watcher": self._probe_service_url(self.config.denotary.watcher_url, "/healthz"),
-            "receipt": self._probe_service_url(self.config.denotary.receipt_url, "/healthz"),
-            "audit": self._probe_service_url(self.config.denotary.audit_url, "/healthz"),
+            "ingress": self._probe_service_url(self.config.denotary.ingress_url, "/healthz", require_private=True),
+            "watcher": self._probe_service_url(self.config.denotary.watcher_url, "/healthz", require_private=True),
+            "receipt": self._probe_service_url(self.config.denotary.receipt_url, "/healthz", require_private=True),
+            "audit": self._probe_service_url(self.config.denotary.audit_url, "/healthz", require_private=True),
             "chain_rpc": self._probe_chain_rpc(),
         }
         signer = self._doctor_signer()
@@ -405,22 +408,123 @@ class AgentEngine:
         proof_dir = Path(self.config.storage.proof_dir).expanduser()
         state_parent = state_db.parent
         warnings: list[str] = []
+        state_parent_permissions = self._inspect_local_artifact_path(state_parent, "state_db parent directory")
+        proof_dir_permissions = self._inspect_local_artifact_path(proof_dir, "proof_dir")
         if not state_parent.exists():
             warnings.append(f"state_db parent directory does not exist yet: {state_parent}")
         if not proof_dir.exists():
             warnings.append(f"proof_dir does not exist yet: {proof_dir}")
+        if state_parent_permissions["severity"] == "critical":
+            warnings.append(
+                f"state_db parent directory permissions are too broad ({state_parent_permissions['mode_octal']}); "
+                "keep sensitive local artifacts in a service-owned directory"
+            )
+        elif state_parent_permissions["severity"] == "degraded":
+            warnings.append(
+                f"state_db parent directory permissions are broader than recommended ({state_parent_permissions['mode_octal']}); "
+                "restrict access to the service account or a tightly controlled group"
+            )
+        if proof_dir_permissions["severity"] == "critical":
+            warnings.append(
+                f"proof_dir permissions are too broad ({proof_dir_permissions['mode_octal']}); "
+                "proof exports should stay in a service-owned directory"
+            )
+        elif proof_dir_permissions["severity"] == "degraded":
+            warnings.append(
+                f"proof_dir permissions are broader than recommended ({proof_dir_permissions['mode_octal']}); "
+                "restrict access to the service account or a tightly controlled group"
+            )
+        severity = self._max_severity(
+            [
+                "degraded" if not state_parent.exists() or not proof_dir.exists() else "healthy",
+                str(state_parent_permissions["severity"]),
+                str(proof_dir_permissions["severity"]),
+            ]
+        )
         return {
-            "severity": "degraded" if warnings else "healthy",
+            "severity": severity,
             "state_db": str(state_db),
             "state_db_parent": str(state_parent),
             "state_db_parent_exists": state_parent.exists(),
+            "state_db_parent_permissions_checked": bool(state_parent_permissions["checked"]),
+            "state_db_parent_permission_severity": state_parent_permissions["severity"],
+            "state_db_parent_mode_octal": state_parent_permissions["mode_octal"],
+            "state_db_parent_permission_issues": list(state_parent_permissions["issues"]),
             "proof_dir": str(proof_dir),
             "proof_dir_exists": proof_dir.exists(),
+            "proof_dir_permissions_checked": bool(proof_dir_permissions["checked"]),
+            "proof_dir_permission_severity": proof_dir_permissions["severity"],
+            "proof_dir_mode_octal": proof_dir_permissions["mode_octal"],
+            "proof_dir_permission_issues": list(proof_dir_permissions["issues"]),
             "wait_for_finality": self.config.denotary.wait_for_finality,
             "warnings": warnings,
         }
 
-    def _probe_service_url(self, base_url: str, probe_path: str) -> dict[str, object]:
+    def _inspect_local_artifact_path(self, path: Path, label: str) -> dict[str, object]:
+        result: dict[str, object] = {
+            "path": str(path),
+            "exists": path.exists(),
+            "checked": False,
+            "mode_octal": None,
+            "severity": "healthy",
+            "issues": [],
+        }
+        if not path.exists() or os.name != "posix":
+            return result
+        mode = stat.S_IMODE(path.stat().st_mode)
+        issues: list[str] = []
+        severity = "healthy"
+        if mode & 0o022:
+            severity = "critical"
+            if mode & 0o020:
+                issues.append(f"{label} is group-writable")
+            if mode & 0o002:
+                issues.append(f"{label} is world-writable")
+        if mode & 0o055:
+            if severity != "critical":
+                severity = "degraded"
+            if mode & 0o050:
+                issues.append(f"{label} is group-readable or traversable")
+            if mode & 0o005:
+                issues.append(f"{label} is world-readable or traversable")
+        result.update(
+            {
+                "checked": True,
+                "mode_octal": f"{mode:04o}",
+                "severity": severity,
+                "issues": issues,
+            }
+        )
+        return result
+
+    def _service_boundary_warnings(self, base_url: str, require_private: bool) -> tuple[list[str], str | None, str | None]:
+        warnings: list[str] = []
+        parsed = urllib.parse.urlparse(base_url)
+        hostname = str(parsed.hostname or "")
+        scheme = str(parsed.scheme or "")
+        if not hostname:
+            return warnings, scheme or None, None
+
+        host_lc = hostname.lower()
+        is_local = host_lc in {"localhost", "127.0.0.1", "::1"}
+        is_private = False
+        try:
+            address = ipaddress.ip_address(host_lc)
+            is_private = bool(address.is_private or address.is_loopback or address.is_link_local)
+        except ValueError:
+            is_private = host_lc.endswith((".local", ".internal", ".lan", ".corp"))
+
+        if require_private and not (is_local or is_private):
+            warnings.append(
+                "service host is not obviously local/private; keep deNotary backend services in the same trusted boundary as the agent"
+            )
+        if require_private and scheme == "http" and not (is_local or is_private):
+            warnings.append(
+                "service uses plaintext HTTP outside a local/private trusted boundary; use private networking or HTTPS"
+            )
+        return warnings, scheme or None, hostname
+
+    def _probe_service_url(self, base_url: str, probe_path: str, *, require_private: bool = False) -> dict[str, object]:
         if not base_url:
             return {
                 "configured": False,
@@ -430,6 +534,7 @@ class AgentEngine:
                 "errors": [],
             }
         url = f"{base_url.rstrip('/')}{probe_path}"
+        policy_warnings, scheme, hostname = self._service_boundary_warnings(base_url, require_private)
         request = urllib.request.Request(url, method="GET")
         try:
             with urllib.request.urlopen(request, timeout=10) as response:
@@ -437,20 +542,26 @@ class AgentEngine:
             return {
                 "configured": True,
                 "reachable": True,
-                "severity": "healthy",
+                "severity": "degraded" if policy_warnings else "healthy",
                 "probe_url": url,
+                "scheme": scheme,
+                "hostname": hostname,
+                "trusted_boundary_expected": require_private,
                 "status_code": status_code,
-                "warnings": [],
+                "warnings": policy_warnings,
                 "errors": [],
             }
         except urllib.error.HTTPError as exc:
             return {
                 "configured": True,
                 "reachable": True,
-                "severity": "healthy",
+                "severity": "degraded" if policy_warnings else "healthy",
                 "probe_url": url,
+                "scheme": scheme,
+                "hostname": hostname,
+                "trusted_boundary_expected": require_private,
                 "status_code": int(exc.code),
-                "warnings": [f"probe endpoint returned HTTP {exc.code} but the service is reachable"],
+                "warnings": [*policy_warnings, f"probe endpoint returned HTTP {exc.code} but the service is reachable"],
                 "errors": [],
             }
         except Exception as exc:  # noqa: BLE001
@@ -459,6 +570,9 @@ class AgentEngine:
                 "reachable": False,
                 "severity": "critical",
                 "probe_url": url,
+                "scheme": scheme,
+                "hostname": hostname,
+                "trusted_boundary_expected": require_private,
                 "warnings": [],
                 "errors": [str(exc)],
             }

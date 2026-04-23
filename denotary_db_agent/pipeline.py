@@ -105,6 +105,10 @@ class NotarizationPipeline:
         if int(data.get("leaf_count") or -1) != int(expected_leaf_count):
             raise RuntimeError("prepared_action leaf_count does not match the prepared batch request")
 
+    def require_chain_ready(self) -> None:
+        if self.chain is None:
+            raise RuntimeError("live broadcast path is not ready: chain signer/broadcaster is not configured")
+
     def process_event(self, runtime: SourceRuntime, event: Any) -> None:
         envelope = canonicalize_event(event)
         payload = envelope.to_prepare_payload(
@@ -129,6 +133,7 @@ class NotarizationPipeline:
                 time.sleep(delay)
             broadcast: BroadcastResult | None = None
             try:
+                self.require_chain_ready()
                 if prepared is None:
                     prepared = self.ingress.prepare_single(payload)
                 self.validate_prepared_single(prepared, payload)
@@ -163,12 +168,6 @@ class NotarizationPipeline:
                     }
                 else:
                     now = utc_now().isoformat()
-
-                if self.chain is None:
-                    token = runtime.adapter.serialize_checkpoint(event)
-                    self.store.set_checkpoint(runtime.config.id, token, now)
-                    runtime.adapter.after_checkpoint_advanced(token)
-                    return
 
                 broadcast: BroadcastResult | None = None
                 if existing_delivery is not None and existing_delivery.get("status") == "broadcast_included" and existing_delivery.get("tx_id"):
@@ -287,6 +286,7 @@ class NotarizationPipeline:
                 time.sleep(delay)
             broadcast: BroadcastResult | None = None
             try:
+                self.require_chain_ready()
                 if prepared is None:
                     prepared = self.ingress.prepare_batch(payload)
                 self.validate_prepared_batch(prepared, payload)
@@ -319,12 +319,6 @@ class NotarizationPipeline:
                     }
                 else:
                     now = utc_now().isoformat()
-
-                if self.chain is None:
-                    token = runtime.adapter.serialize_checkpoint(events[-1])
-                    self.store.set_checkpoint(runtime.config.id, token, now)
-                    runtime.adapter.after_checkpoint_advanced(token)
-                    return
 
                 broadcast: BroadcastResult | None = None
                 if existing_delivery is not None and existing_delivery.get("status") == "broadcast_included" and existing_delivery.get("tx_id"):

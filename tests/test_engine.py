@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import socket
+import stat
 import tempfile
 import threading
 import unittest
@@ -62,24 +63,40 @@ class MockIngressHandler(BaseHTTPRequestHandler):
 
 class MockWatcherHandler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:  # noqa: N802
-        if self.path != "/v1/watch/register":
+        if self.path == "/v1/watch/register":
+            body = self.rfile.read(int(self.headers.get("Content-Length", "0"))).decode("utf-8")
+            payload = json.loads(body)
+            response = {"ok": True, "request_id": payload["request_id"]}
+            body_out = json.dumps(response).encode("utf-8")
+            self.send_response(HTTPStatus.OK)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body_out)))
+            self.end_headers()
+            self.wfile.write(body_out)
+            return
+        if self.path.endswith("/included") or self.path.endswith("/failed"):
+            body_out = json.dumps({"ok": True}).encode("utf-8")
+            self.send_response(HTTPStatus.OK)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body_out)))
+            self.end_headers()
+            self.wfile.write(body_out)
+            return
+        else:
             self.send_error(HTTPStatus.NOT_FOUND)
             return
-        body = self.rfile.read(int(self.headers.get("Content-Length", "0"))).decode("utf-8")
-        payload = json.loads(body)
-        response = {"ok": True, "request_id": payload["request_id"]}
-        body_out = json.dumps(response).encode("utf-8")
-        self.send_response(HTTPStatus.OK)
-        self.send_header("Content-Type", "application/json")
-        self.send_header("Content-Length", str(len(body_out)))
-        self.end_headers()
-        self.wfile.write(body_out)
 
     def log_message(self, format: str, *args: Any) -> None:
         return
 
 
 class EngineTest(unittest.TestCase):
+    @staticmethod
+    def _install_ready_chain(engine: AgentEngine, tx_id: str = "a" * 64, block_num: int = 321) -> None:
+        engine.chain = SimpleNamespace(
+            push_prepared_action=lambda prepared_action: SimpleNamespace(tx_id=tx_id, block_num=block_num)
+        )
+
     def setUp(self) -> None:
         self.temp_dir = tempfile.TemporaryDirectory()
         ingress_port = free_port()
@@ -154,6 +171,7 @@ class EngineTest(unittest.TestCase):
 
     def test_run_once_processes_event_and_updates_checkpoint(self) -> None:
         engine = AgentEngine(load_config(self.config_path))
+        self._install_ready_chain(engine)
         result = engine.run_once()
         self.assertEqual(result["processed"], 1)
         self.assertEqual(result["failed"], 0)
@@ -162,10 +180,11 @@ class EngineTest(unittest.TestCase):
         self.assertEqual(checkpoints[0]["token"], "lsn:1")
         deliveries = engine.store.list_deliveries("pg-core-ledger")
         self.assertEqual(len(deliveries), 1)
-        self.assertEqual(deliveries[0]["status"], "prepared_registered")
+        self.assertEqual(deliveries[0]["status"], "broadcast_included")
 
     def test_run_forever_stops_after_max_loops(self) -> None:
         engine = AgentEngine(load_config(self.config_path))
+        self._install_ready_chain(engine)
         result = engine.run_forever(interval_sec=0.01, max_loops=2)
         self.assertEqual(result["processed"], 2)
         self.assertEqual(result["failed"], 0)
@@ -185,16 +204,31 @@ class EngineTest(unittest.TestCase):
         resumed_status = engine.health()
         self.assertFalse(resumed_status["sources"][0]["paused"])
 
+        self._install_ready_chain(engine)
         resumed_result = engine.run_once()
         self.assertEqual(resumed_result["processed"], 1)
         self.assertEqual(resumed_result["failed"], 0)
 
     def test_run_once_stores_runtime_signature(self) -> None:
         engine = AgentEngine(load_config(self.config_path))
+        self._install_ready_chain(engine)
         self.assertIsNone(engine.store.get_runtime_signature("pg-core-ledger"))
         result = engine.run_once()
         self.assertEqual(result["processed"], 1)
         self.assertIsNotNone(engine.store.get_runtime_signature("pg-core-ledger"))
+
+    def test_run_once_fails_closed_without_ready_broadcaster(self) -> None:
+        engine = AgentEngine(load_config(self.config_path))
+
+        result = engine.run_once()
+
+        self.assertEqual(result["processed"], 0)
+        self.assertEqual(result["failed"], 1)
+        self.assertEqual(engine.checkpoint_summary(), [])
+        deliveries = engine.store.list_deliveries("pg-core-ledger")
+        self.assertEqual(len(deliveries), 1)
+        self.assertEqual(deliveries[0]["status"], "failed")
+        self.assertIn("live broadcast path is not ready", str(deliveries[0]["last_error"] or ""))
 
     def test_run_once_uses_adapter_event_iteration_contract(self) -> None:
         engine = AgentEngine(load_config(self.config_path))
@@ -1395,6 +1429,79 @@ class EngineTest(unittest.TestCase):
         self.assertEqual(len(report["sources"]), 1)
         self.assertTrue(report["sources"][0]["connectivity_ok"])
         self.assertIn("submitter_private_key is not configured", report["errors"])
+
+    def test_doctor_warns_when_denotary_backend_is_not_obviously_private(self) -> None:
+        config = json.loads(self.config_path.read_text(encoding="utf-8"))
+        config["denotary"]["ingress_url"] = "http://8.8.8.8:8080"
+        config["denotary"]["watcher_url"] = "http://8.8.4.4:8081"
+        config["denotary"]["receipt_url"] = "https://api.example.com/receipt"
+        config["denotary"]["audit_url"] = "https://api.example.com/audit"
+        self.config_path.write_text(json.dumps(config), encoding="utf-8")
+
+        engine = AgentEngine(load_config(self.config_path))
+
+        class FakeResponse:
+            def __init__(self, status: int = 200) -> None:
+                self.status = status
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+        with patch("denotary_db_agent.engine.urllib.request.urlopen", return_value=FakeResponse()):
+            report = engine.doctor("pg-core-ledger")
+
+        self.assertEqual(report["services"]["ingress"]["severity"], "degraded")
+        self.assertEqual(report["services"]["watcher"]["severity"], "degraded")
+        self.assertEqual(report["services"]["receipt"]["severity"], "degraded")
+        self.assertEqual(report["services"]["audit"]["severity"], "degraded")
+        self.assertTrue(report["services"]["ingress"]["trusted_boundary_expected"])
+        self.assertIn("not obviously local/private", " ".join(report["services"]["ingress"]["warnings"]))
+        self.assertIn("plaintext HTTP", " ".join(report["services"]["ingress"]["warnings"]))
+
+    def test_doctor_flags_broad_permissions_on_local_artifact_directories(self) -> None:
+        config = json.loads(self.config_path.read_text(encoding="utf-8"))
+        runtime_dir = Path(self.temp_dir.name) / "runtime"
+        proof_dir = runtime_dir / "proofs"
+        runtime_dir.mkdir(parents=True, exist_ok=True)
+        proof_dir.mkdir(parents=True, exist_ok=True)
+        config["storage"]["state_db"] = str(runtime_dir / "state.sqlite3")
+        config["storage"]["proof_dir"] = str(proof_dir)
+        self.config_path.write_text(json.dumps(config), encoding="utf-8")
+
+        engine = AgentEngine(load_config(self.config_path))
+
+        with patch.object(
+            engine,
+            "_inspect_local_artifact_path",
+            side_effect=[
+                {
+                    "path": str(runtime_dir),
+                    "exists": True,
+                    "checked": True,
+                    "mode_octal": "0777",
+                    "severity": "critical",
+                    "issues": ["state_db parent directory is world-writable"],
+                },
+                {
+                    "path": str(proof_dir),
+                    "exists": True,
+                    "checked": True,
+                    "mode_octal": "0777",
+                    "severity": "critical",
+                    "issues": ["proof_dir is world-writable"],
+                },
+            ],
+        ):
+            report = engine.doctor("pg-core-ledger")
+
+        self.assertEqual(report["config"]["severity"], "critical")
+        self.assertEqual(report["config"]["state_db_parent_permission_severity"], "critical")
+        self.assertEqual(report["config"]["proof_dir_permission_severity"], "critical")
+        self.assertIn("state_db parent directory permissions are too broad", " ".join(report["config"]["warnings"]))
+        self.assertIn("proof_dir permissions are too broad", " ".join(report["config"]["warnings"]))
 
     def test_doctor_marks_owner_permission_as_degraded_when_otherwise_ready(self) -> None:
         config = json.loads(self.config_path.read_text(encoding="utf-8"))
