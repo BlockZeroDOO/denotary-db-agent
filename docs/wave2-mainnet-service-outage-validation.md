@@ -132,7 +132,7 @@ Passing this validation means:
 - the event is not lost after the first failed attempt
 - a second run with healthy service URLs still reaches finalized proof export
 
-It does not yet mean:
+It does not confirm:
 
 - every `Wave 2` adapter has mainnet degraded-service coverage
 - `Wave 2` already matches full `Wave 1` validation depth across every adapter

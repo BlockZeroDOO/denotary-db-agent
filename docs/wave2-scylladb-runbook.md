@@ -170,7 +170,7 @@ Reference:
 
 ## Current Limits
 
-The current baseline does not yet provide:
+The current baseline does not provide:
 
 - native Scylla-specific CDC
 - delete tombstone reconstruction after a row disappears between polls

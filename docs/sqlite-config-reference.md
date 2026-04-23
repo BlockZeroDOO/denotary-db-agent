@@ -139,7 +139,7 @@ The current `SQLite` validation already confirms:
 
 ## Current Limits
 
-The current baseline does not yet provide:
+The current baseline does not provide:
 
 - native SQLite CDC
 - file-watch driven wakeups

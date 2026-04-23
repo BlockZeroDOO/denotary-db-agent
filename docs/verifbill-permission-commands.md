@@ -82,7 +82,7 @@ Check:
 
 ## 5. Agent runtime target
 
-When the DB Agent later signs on-chain transactions, it should use:
+When the DB Agent signs on-chain transactions, it should use:
 
 - `enterpriseac1@dnanchor`
 
@@ -98,4 +98,3 @@ not:
 - do not link `dnanchor` to `eosio.token::transfer`
 - buy plans and packs through a separate finance workflow
 - periodically rotate the `dnanchor` key with `updateauth`
-

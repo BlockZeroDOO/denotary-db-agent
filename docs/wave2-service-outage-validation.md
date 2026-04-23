@@ -91,8 +91,8 @@ Passing this validation means:
 - the retry path preserves enough local state to complete proof export on the next run
 - the current `Wave 2` local story is stronger than baseline-only snapshot validation
 
-It does not yet mean:
+It does not confirm:
 
 - long outage durability is fully characterized
 - mainnet degraded-service behavior is validated
-- every future `Wave 2` adapter will automatically inherit the same outage coverage
+- adapters outside this validated set have the same outage coverage

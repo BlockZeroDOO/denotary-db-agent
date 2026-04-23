@@ -88,7 +88,7 @@ Passing this validation means:
 - the current Wave 2 signer model can use an unlocked wallet on testnet
 - the local off-chain services accept the on-chain inclusion handoff for this testnet path
 
-It does not yet mean:
+It does not confirm:
 
 - every Wave 2 adapter is Jungle4-validated
 - the same adapter is already mainnet-validated

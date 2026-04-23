@@ -34,10 +34,6 @@ Supported now:
 - `row_limit`
 - optional `change_stream_max_await_ms`
 
-Planned next:
-
-- MongoDB-specific change stream settings
-
 ## Notes
 
 - current baseline expects explicit tracked collections in `include`

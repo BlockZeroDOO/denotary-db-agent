@@ -160,7 +160,7 @@ The current `Elasticsearch` validation already confirms:
 
 ## Current Limits
 
-The current baseline does not yet provide:
+The current baseline does not provide:
 
 - native change-stream style CDC
 - delete tombstone reconstruction after a document disappears between polls

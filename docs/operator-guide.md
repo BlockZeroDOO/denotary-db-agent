@@ -435,9 +435,9 @@ Helper scripts that print `updateauth` / `linkauth` commands:
 - [scripts/print-verifbill-permission-commands.ps1](../scripts/print-verifbill-permission-commands.ps1)
 - [scripts/print-verifbill-permission-commands.sh](../scripts/print-verifbill-permission-commands.sh)
 
-## Permissions Planning
+## Permissions Scope
 
-Per-database operator docs still need to be expanded in later waves, but the expected direction is:
+Per-database operator docs assume this baseline:
 
 - read-only access to the target objects
 - CDC-specific privileges where required

@@ -164,7 +164,7 @@ Reference:
 
 ## Current Limits
 
-The current baseline does not yet provide:
+The current baseline does not provide:
 
 - keyspace notification CDC
 - Redis Streams consumption

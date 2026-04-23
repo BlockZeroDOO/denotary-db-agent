@@ -16,7 +16,7 @@ It complements the detailed validation reports and is intended to answer one pra
 
 - what is already validated
 - on which layer it was validated
-- what still remains outside the confirmed production baseline
+- where validation depth differs across the current Wave 1 set
 
 For the combined rollout view across both implementation waves, see:
 
@@ -59,14 +59,6 @@ For the combined rollout view across both implementation waves, see:
   - source restart recovery
   - short soak
   - long soak
-
-## Remaining Gaps
-
-The biggest remaining items are no longer adapter baselines. They are mostly operational:
-
-- longer endurance runs beyond the current bounded long-soak profile
-- optional per-adapter mainnet source-backed degraded drills if we want to validate outage recovery with live database mutations instead of `dry_run_events`
-- an executive rollout summary for operators and stakeholders
 
 ## Supporting Reports
 

@@ -97,7 +97,7 @@ Passing this validation means:
 - the current `Wave 2` signer model matches the production-style `private_key_env` baseline
 - the local off-chain services, the real chain, and the finality/receipt/audit path agree enough to export a finalized proof bundle
 
-It does not yet mean:
+It does not confirm:
 
 - every `Wave 2` adapter is mainnet-validated
 - restart, soak, and outage depth already matches `Wave 1`

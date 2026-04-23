@@ -127,20 +127,9 @@ This split gives us:
   - adapter tests focus on CDC behavior
   - pipeline tests focus on delivery/proof behavior
 
-## Next Recommended Refactor Direction
+## Current Architectural Rule
 
-To push this separation further, future work should prefer:
-
-- source-specific docs under `docs/sources/`
-- adapter contract tests shared across non-PostgreSQL adapters
-- optional source capability flags for:
-  - snapshot only
-  - polling CDC
-  - trigger CDC
-  - logical/stream CDC
-- database-neutral source fixtures for contract testing
-
-The main architectural rule going forward:
+The main architectural rule is:
 
 - new data sources should extend the **source layer**
 - not reimplement the **notarization pipeline**
@@ -164,7 +153,7 @@ The harness verifies that every scaffold adapter:
 - raises a clear `NotImplementedError` for unimplemented CDC streaming
 
 That gives us one reusable baseline for MySQL, MariaDB, SQL Server, Oracle, MongoDB,
-and future adapters without coupling those tests to PostgreSQL behavior.
+and additional adapters without coupling those tests to PostgreSQL behavior.
 
 Capabilities now also declare:
 
@@ -175,7 +164,7 @@ Capabilities now also declare:
 - `checkpoint_strategy`
 - `activity_model`
 
-This makes adapter behavior more declarative for operator tooling and for future adapter
+This makes adapter behavior more declarative for operator tooling and for additional adapter
 work, instead of forcing every new database integration to infer those expectations from
 implementation details alone.
 
@@ -186,7 +175,7 @@ These two newer flags make CDC-capable adapters easier to reason about consisten
 - `activity_model`
   - examples: `polling`, `notification_polling`, `stream`
 
-That gives `inspect` and future operator automation a database-neutral way to answer:
+That gives `inspect` and operator automation a database-neutral way to answer:
 
 - what kind of cursor/checkpoint this source persists
 - whether the source waits on notifications/streams or is purely poll-based
@@ -208,7 +197,7 @@ And it now also owns the common shape of source-facing bootstrap and inspect pay
 - `build_inspect_result(...)`
 
 That keeps `AgentEngine` out of source-specific mode branching such as
-`trigger/logical/change_streams`, so future CDC-capable adapters can plug in by declaring
+`trigger/logical/change_streams`, so CDC-capable adapters can plug in by declaring
 capabilities instead of extending orchestrator conditionals. It also keeps adapters focused
 on their tracked objects and CDC state instead of hand-assembling the same bootstrap/inspect
 JSON envelopes over and over again.
@@ -218,7 +207,7 @@ Those shared envelopes now also include a database-neutral `tracked_objects` lis
 whether a given adapter exposes tables, collections, or other source-native object types.
 
 `AgentEngine` now also turns that into a shared `coverage` view in operator outputs, so
-`doctor`, `diagnostics`, and later rollout/report tooling can consume one stable coverage
+`doctor`, `diagnostics`, and rollout/report tooling can consume one stable coverage
 contract instead of branching on `tracked_tables` vs `tracked_collections`.
 
 `report` is now moving onto the same model as well through a shared `source_reports` view,

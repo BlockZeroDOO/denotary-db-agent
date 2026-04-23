@@ -34,7 +34,6 @@ Supported now:
 - `watermark_column`
 - `commit_timestamp_column`
 - `row_limit`
-- optional SQL Server-specific tracking settings may be added later
 
 ## Notes
 

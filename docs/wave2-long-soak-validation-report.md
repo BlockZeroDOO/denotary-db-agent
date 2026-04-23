@@ -28,13 +28,7 @@ Artifact:
 
 ## Interpretation
 
-This closes the biggest remaining validation-depth gap in the active `Wave 2` set:
+This report confirms the current bounded long-soak profile for the active `Wave 2` set:
 
 - the adapters now have bounded long-soak confirmation, not only restart and short-soak coverage
 - the local sustained-load story is now materially closer to the stronger `Wave 1` baseline
-
-What still remains after this step is mostly selective production hardening:
-
-- additional endurance depth beyond the bounded long-soak profile where commercially justified
-- optional extra symmetry for local service-outage drills across every `Wave 2` adapter
-- future re-entry of `Snowflake` only when a real credentialed environment is available again

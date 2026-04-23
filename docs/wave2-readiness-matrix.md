@@ -8,11 +8,7 @@ This document summarizes the current implementation state of `Wave 2` adapters i
 For the combined rollout view across both implementation waves, see:
 
 - [wave-readiness-summary.md](wave-readiness-summary.md)
-
-This matrix started narrower than the `Wave 1` readiness matrix, but the active
-`Wave 2` set now has broad restart, soak, local service-outage, and real-mainnet
-validation coverage. The main remaining work is selective production hardening,
-not baseline adapter implementation.
+- [wave2-release-roadmap.md](wave2-release-roadmap.md)
 
 ## Current Matrix
 
@@ -65,25 +61,6 @@ Additionally implemented where applicable:
 - real `denotary` mainnet validation for `SQLite` and `Redis`
 - bounded `denotary` mainnet batch validation for `SQLite` and `Redis`
 - real `denotary` mainnet degraded-service recovery validation for `SQLite` and `Redis`
-
-## Remaining Validation Layers
-
-The main remaining work is now selective hardening rather than baseline coverage:
-
-1. longer endurance runs beyond the current bounded long-soak profile
-2. additional outage duration and recovery-shape exploration beyond the current bounded local drills
-3. optional additional mainnet source-backed degraded drills where we want live source mutations instead of the current outage pattern
-4. merge planning for `wave-2 -> main`
-5. future re-entry of `Snowflake` only when a real credentialed environment becomes available again
-
-## Suggested Next Steps
-
-Priority after the baseline phase:
-
-1. deeper endurance runs where commercially justified
-2. deeper outage-duration drills beyond the current bounded recovery profile
-3. merge preparation and packaging for `main`
-4. future credential-backed re-entry for deferred sources if needed
 
 Mainnet-confirmed references:
 

@@ -74,6 +74,9 @@ These items should be completed before any release promotion.
 - add one release-oriented `Wave 2` summary that states what is already proven,
   what is supported in `GA`, and what remains post-release
 - remove old wording that still implies earlier pre-validation stages
+- keep runbooks, config references, and readiness summaries descriptive only:
+  current state, supported configuration, and current limits belong there;
+  release sequencing and future work belong in roadmap documents
 
 ### 4. Define a release gate
 
@@ -154,6 +157,8 @@ release unless product scope changes.
 - broader degraded-service scenarios with live source mutations rather than the
   current bounded outage model
 - expansion to new `Wave 2` targets before the current set is fully released
+- deferred credential-gated targets such as `Snowflake` until real validation
+  environments are available again
 
 ## Recommended Delivery Sequence
 

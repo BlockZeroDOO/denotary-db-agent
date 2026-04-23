@@ -13,13 +13,13 @@ It is meant to answer three questions quickly:
 
 - which adapters are already validated deeply enough to treat as strong production candidates
 - which adapters are already anchored on real `denotary` mainnet
-- where the remaining validation depth is still uneven
+- how validation depth differs across the current adapter set
 
 ## Executive View
 
 - `Wave 1` is operationally mature.
 - `Wave 2` now has broad adapter coverage and several adapters already validated through the same mainnet and recovery layers as the stronger `Wave 1` paths.
-- The largest remaining gaps are no longer baseline adapter implementation; they are mostly selective hardening and endurance extension beyond the current bounded long-soak profile.
+- `Wave 2` currently represents a validated polling-based expansion set across six active adapters.
 
 ## Combined Matrix
 
@@ -27,7 +27,7 @@ Legend:
 
 - `yes`: confirmed
 - `shared`: confirmed through a shared pipeline-level drill
-- `partial`: validated, but not yet at the same depth as the strongest adapters
+- `partial`: validated, but at narrower depth than the strongest adapters
 
 | Wave | Adapter | Local full cycle | Live harness | Restart | Short soak | Long soak | Mainnet happy path | Mainnet budget | Local service outage | Mainnet degraded-service | Current status |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -78,14 +78,6 @@ It now has:
   - `Elasticsearch`
 - local restart, short-soak, and long-soak validation for all currently active `Wave 2` adapters
 - local service-outage validation for all currently active `Wave 2` adapters
-
-## Remaining Gaps
-
-The main remaining work is now selective depth, not core platform coverage:
-
-- longer endurance runs for `Wave 2` beyond the current bounded long-soak and budget profiles
-- optional deeper outage-duration drills beyond the current bounded local and mainnet degraded-service profiles
-- eventual return to `Snowflake` if a real credentialed environment becomes available again
 
 ## Recommended Packaging
 

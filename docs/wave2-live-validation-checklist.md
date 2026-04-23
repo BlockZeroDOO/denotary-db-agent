@@ -130,7 +130,7 @@ Passing this checklist means:
 - the adapter can be validated against a real target environment using the current live harness
 - operators have one consistent entry point for `Wave 2` live validation
 
-It does not yet mean:
+It does not confirm:
 
 - the adapter is already validated on `Jungle4` or `denotary`
 - restart, soak, service-outage, or mainnet depth is complete for every `Wave 2` adapter

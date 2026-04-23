@@ -172,7 +172,7 @@ Reference:
 
 ## Current Limits
 
-The current baseline does not yet provide:
+The current baseline does not provide:
 
 - native Cassandra CDC integration
 - delete tombstone reconstruction after a row disappears between polls

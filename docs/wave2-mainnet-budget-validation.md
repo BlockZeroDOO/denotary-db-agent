@@ -102,7 +102,7 @@ Passing this validation means:
 - the current `Wave 2` signer model is good enough for repeated batch deliveries on `denotary`
 - finality, receipt, and audit export remain stable across a small mainnet budget profile
 
-It does not yet mean:
+It does not confirm:
 
 - `Wave 2` has full `Wave 1`-depth soak coverage
 - every `Wave 2` adapter is mainnet-batch-validated

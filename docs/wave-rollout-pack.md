@@ -12,7 +12,7 @@ Its purpose is to answer four practical questions:
 - what is already strong enough for production-oriented rollout conversations
 - what is strong enough for pilots and controlled deployments
 - what is already confirmed on real `denotary` mainnet
-- what still remains before broader production packaging
+- what level of rollout each adapter set supports today
 
 ## Executive Position
 
@@ -94,18 +94,6 @@ Real `denotary` mainnet confirmation now exists for:
   - IBM Db2
   - Apache Cassandra
   - Elasticsearch
-
-## What Is Still Open
-
-The remaining work is no longer about missing adapter baselines.
-
-The main remaining items are:
-
-- longer endurance runs beyond the current bounded long-soak profiles
-- deeper outage-duration drills beyond the current bounded local and mainnet degraded-service patterns
-- optional source-backed degraded drills where we want live source mutations to be part of the failure exercise
-- merge planning for `wave-2 -> main`
-- eventual return to `Snowflake` once a real credentialed environment exists again
 
 ## Recommended External Positioning
 
